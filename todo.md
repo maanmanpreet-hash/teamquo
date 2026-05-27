@@ -83,8 +83,8 @@
 - [x] Implement toggle between kanban and list views
 - [x] Add operator selection with badge display
 - [x] Display job count per status column
-- [ ] Add search/filter functionality
-- [ ] Add operator assignment view
+- [x] Add search/filter functionality
+- [x] Add operator assignment view
 - [ ] Test dashboard performance with many jobs
 - [ ] Optimize for tablet viewing
 

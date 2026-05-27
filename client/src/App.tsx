@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import QuoteForm from "./pages/QuoteForm";
 import Jobs from "./pages/Jobs";
 import AdminProducts from "./pages/AdminProducts";
+import Admin from "./pages/Admin";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -18,7 +19,7 @@ function Router() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/stage1" component={QuoteForm} />
       <Route path="/jobs" component={Jobs} />
-      <Route path="/admin" component={AdminProducts} />
+      <Route path="/admin" component={Admin} />
       <Route path="/admin/products" component={AdminProducts} />
       <Route path="/404" component={NotFound} />
       {/* Final fallback route */}

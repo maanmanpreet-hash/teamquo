@@ -34,6 +34,8 @@ export default function Dashboard() {
   const [selectedOperator, setSelectedOperator] = useState<string>("");
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [downloadingJobId, setDownloadingJobId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<JobStatus | "all">("all");
 
   const { data: operators, isLoading: operatorsLoading } = trpc.operators.list.useQuery();
   const { data: jobs, isLoading: jobsLoading, refetch } = trpc.jobs.list.useQuery();
@@ -113,13 +115,23 @@ export default function Dashboard() {
     return null;
   }
 
-  // Group jobs by status
-  const jobsByStatus: Record<JobStatus, typeof jobs> = {
-    quoted: jobs?.filter(j => j.status === "quoted") || [],
-    booked: jobs?.filter(j => j.status === "booked") || [],
-    commenced: jobs?.filter(j => j.status === "commenced") || [],
-    completed: jobs?.filter(j => j.status === "completed") || [],
-    cancelled: jobs?.filter(j => j.status === "cancelled") || [],
+  // Filter and search jobs
+  const filteredJobs = jobs?.filter(job => {
+    const matchesSearch = searchQuery === "" || 
+      job.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (job.clientPhone && job.clientPhone.includes(searchQuery)) ||
+      (job.suburb && job.suburb.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesStatus = filterStatus === "all" || job.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  }) || [];
+
+  // Group filtered jobs by status
+  const jobsByStatus: Record<JobStatus, typeof filteredJobs> = {
+    quoted: filteredJobs.filter(j => j.status === "quoted") || [],
+    booked: filteredJobs.filter(j => j.status === "booked") || [],
+    commenced: filteredJobs.filter(j => j.status === "commenced") || [],
+    completed: filteredJobs.filter(j => j.status === "completed") || [],
+    cancelled: filteredJobs.filter(j => j.status === "cancelled") || [],
   };
 
   const statuses: JobStatus[] = ["quoted", "booked", "commenced", "completed"];
@@ -171,6 +183,31 @@ export default function Dashboard() {
               </Badge>
             )}
           </div>
+        </div>
+
+        {/* Search and Filter */}
+        <div className="mb-6 flex gap-4 flex-wrap">
+          <div className="flex-1 min-w-64">
+            <input
+              type="text"
+              placeholder="Search by name, phone, or suburb..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as JobStatus | "all")}>
+            <SelectTrigger className="w-40 h-10">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="quoted">Quoted</SelectItem>
+              <SelectItem value="booked">Booked</SelectItem>
+              <SelectItem value="commenced">Commenced</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* View Mode Toggle */}
@@ -278,8 +315,8 @@ export default function Dashboard() {
               <div className="flex items-center justify-center h-32">
                 <Loader2 className="animate-spin w-8 h-8" />
               </div>
-            ) : jobs && jobs.length > 0 ? (
-              jobs.map((job) => (
+            ) : filteredJobs && filteredJobs.length > 0 ? (
+              filteredJobs.map((job) => (
                 <Card key={job.id} className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
