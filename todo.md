@@ -5,7 +5,7 @@
 - [x] Appointment: Change to date picker + time dropdown (rename to "Appointment")
 - [x] Address: Add autocomplete dropdown with suburb auto-population
 - [x] Operators: Seed with Manpreet, Ginni, Roopjit, Simar
-- [ ] Multiple walls: Make walls visible and manageable in quote form
+- [x] Multiple walls: Make walls visible and manageable in quote form
 
 ## Phase 1: Partial Client Save + Quote Queue
 - [x] Add "Save Draft" button to client details tab
@@ -18,14 +18,17 @@
 - [x] Add suburb field with dropdown (Kalkallo, Donnybrook, Mickleham, Craigieburn, Beveridge)
 - [x] Sort queue by appointment date/time
 - [x] Filter queue by suburb for field operators
+- [x] Appointment renamed to "Appointment Date/Time" with dropdown selector
+- [x] Address autocomplete with suburb auto-population
+- [x] Seed operators table: Manpreet, Ginni, Roopjit, Simar
 - [ ] Add edit functionality for draft quotes
-- [ ] Seed operators table: Manpreet, Ginni, Roopjit, Simar
 - [ ] Allow custom operator name entry
 - [ ] Write tests for partial save workflow
 
 ## Phase 2: Acoustic Panel Dimensions + Graphical Indicators
 - [x] Add length and width fields for acoustic panels
 - [x] Add graphical dimension indicators (icons for width, length, height)
+- [x] Show wall dimensions fields alongside acoustic length/width
 - [ ] Create visual guide showing which dimension is which
 - [ ] Update quantity calculation for acoustic panels (length x width)
 - [ ] Add validation for acoustic panel dimensions
@@ -48,8 +51,10 @@
 - [x] Implement wall type selection (regular wall, garage wall, custom)
 - [x] Create tRPC walls router with CRUD operations
 - [x] Allow editing/deleting individual walls
-- [ ] Add "Add Wall" button to products tab UI
-- [ ] Create wall summary showing all walls in project
+- [x] Add "Add Wall" button to walls tab UI
+- [x] Create wall summary showing all walls in project
+- [x] Wall type selection auto-shows dimension form
+- [x] Dimension input with visual indicators (width/height icons)
 - [ ] Update cost calculation to sum all walls
 - [ ] Implement wall-specific product selection
 - [ ] Test multi-wall quote creation

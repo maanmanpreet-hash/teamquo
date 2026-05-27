@@ -45,6 +45,21 @@ export default function Stage1QuotingWorkspace() {
   const [referenceImagePreview, setReferenceImagePreview] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
+  // Walls
+  interface WallItem {
+    id: string;
+    wallType: string;
+    wallName: string;
+    wallWidthMm: number;
+    wallHeightMm: number;
+  }
+  const [walls, setWalls] = useState<WallItem[]>([]);
+  const [tempWallType, setTempWallType] = useState("regular");
+  const [tempWallName, setTempWallName] = useState("");
+  const [tempWallDimWidth, setTempWallDimWidth] = useState("");
+  const [tempWallDimHeight, setTempWallDimHeight] = useState("");
+  const [showWallDimensionForm, setShowWallDimensionForm] = useState(false);
+
   // Line Items
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [tempProductTypeId, setTempProductTypeId] = useState<number | null>(null);
@@ -368,8 +383,9 @@ export default function Stage1QuotingWorkspace() {
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="max-w-2xl mx-auto space-y-4">
           <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="client">Client</TabsTrigger>
+              <TabsTrigger value="walls">Walls</TabsTrigger>
               <TabsTrigger value="products">Products</TabsTrigger>
               <TabsTrigger value="summary">Summary</TabsTrigger>
             </TabsList>
@@ -592,6 +608,131 @@ export default function Stage1QuotingWorkspace() {
                   Save Draft
                 </Button>
               </div>
+            </TabsContent>
+
+            {/* Walls Tab */}
+            <TabsContent value="walls" className="space-y-4">
+              <Card className="p-6">
+                <h2 className="text-lg font-semibold mb-4">Manage Walls</h2>
+                <div className="space-y-4">
+                  {/* Add Wall Form */}
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 space-y-4">
+                    <h3 className="font-medium">Add New Wall</h3>
+                    <div>
+                      <Label htmlFor="wallType" className="text-sm font-medium">Wall Type *</Label>
+                      <Select value={tempWallType} onValueChange={(val) => {
+                        setTempWallType(val);
+                        setShowWallDimensionForm(true);
+                      }}>
+                        <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
+                          <SelectValue placeholder="Select wall type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="regular">Hallway Wall</SelectItem>
+                          <SelectItem value="garage">Garage Wall</SelectItem>
+                          <SelectItem value="custom">TV Wall</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {showWallDimensionForm && (
+                      <>
+                        <div>
+                          <Label htmlFor="wallName" className="text-sm font-medium">Wall Name (e.g., Living Room)</Label>
+                          <Input
+                            id="wallName"
+                            value={tempWallName}
+                            onChange={(e) => setTempWallName(e.target.value)}
+                            placeholder="e.g., Living Room, Master Bedroom"
+                            className="mt-1 h-12 text-base border-2 border-gray-200"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="wallDimWidth" className="text-sm font-medium flex items-center gap-2">
+                              <span>Width (m) *</span>
+                              <span className="text-lg">↔️</span>
+                            </Label>
+                            <Input
+                              id="wallDimWidth"
+                              type="number"
+                              step="0.1"
+                              value={tempWallDimWidth}
+                              onChange={(e) => setTempWallDimWidth(e.target.value)}
+                              placeholder="e.g., 3.5"
+                              className="mt-1 h-12 text-base border-2 border-gray-200"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="wallDimHeight" className="text-sm font-medium flex items-center gap-2">
+                              <span>Height (m) *</span>
+                              <span className="text-lg">↕️</span>
+                            </Label>
+                            <Input
+                              id="wallDimHeight"
+                              type="number"
+                              step="0.1"
+                              value={tempWallDimHeight}
+                              onChange={(e) => setTempWallDimHeight(e.target.value)}
+                              placeholder="e.g., 2.4"
+                              className="mt-1 h-12 text-base border-2 border-gray-200"
+                            />
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            if (!tempWallDimWidth || !tempWallDimHeight) {
+                              toast.error("Please enter wall dimensions");
+                              return;
+                            }
+                            const newWall: WallItem = {
+                              id: Math.random().toString(),
+                              wallType: tempWallType,
+                              wallName: tempWallName || tempWallType,
+                              wallWidthMm: Math.round(parseFloat(tempWallDimWidth) * 1000),
+                              wallHeightMm: Math.round(parseFloat(tempWallDimHeight) * 1000),
+                            };
+                            setWalls([...walls, newWall]);
+                            setTempWallType("regular");
+                            setTempWallName("");
+                            setTempWallDimWidth("");
+                            setTempWallDimHeight("");
+                            setShowWallDimensionForm(false);
+                            toast.success("Wall added!");
+                          }}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Wall
+                        </Button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Walls List */}
+                  {walls.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="font-medium">Added Walls ({walls.length})</h3>
+                      {walls.map((wall) => (
+                        <div key={wall.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                          <div>
+                            <p className="font-medium">{wall.wallName}</p>
+                            <p className="text-sm text-gray-600">{wall.wallType} • {(wall.wallWidthMm / 1000).toFixed(1)}m × {(wall.wallHeightMm / 1000).toFixed(1)}m</p>
+                          </div>
+                          <Button
+                            onClick={() => setWalls(walls.filter(w => w.id !== wall.id))}
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Card>
             </TabsContent>
 
             {/* Products Tab */}
