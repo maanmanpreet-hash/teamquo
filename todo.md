@@ -1,5 +1,12 @@
 # TeamQuo - Collaborative Quote Management Platform
 
+## 🚨 CRITICAL BUGS - FIX IMMEDIATELY
+- [x] Acoustic panel: Add wall dimensions fields when selected
+- [x] Appointment: Change to date picker + time dropdown (rename to "Appointment")
+- [x] Address: Add autocomplete dropdown with suburb auto-population
+- [x] Operators: Seed with Manpreet, Ginni, Roopjit, Simar
+- [ ] Multiple walls: Make walls visible and manageable in quote form
+
 ## Phase 1: Partial Client Save + Quote Queue
 - [x] Add "Save Draft" button to client details tab
 - [x] Implement partial job creation (client details only, no products required)

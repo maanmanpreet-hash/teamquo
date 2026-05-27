@@ -411,14 +411,28 @@ export default function Stage1QuotingWorkspace() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="clientAddress" className="text-sm font-medium">Address</Label>
+                    <Label htmlFor="clientAddress" className="text-sm font-medium">Address *</Label>
                     <Input
                       id="clientAddress"
                       value={clientAddress}
-                      onChange={(e) => setClientAddress(e.target.value)}
-                      placeholder="123 Main St, City"
+                      onChange={(e) => {
+                        const addr = e.target.value;
+                        setClientAddress(addr);
+                        const suburbs = ["Kalkallo", "Donnybrook", "Mickleham", "Craigieburn", "Beveridge"];
+                        const detectedSuburb = suburbs.find(s => addr.toLowerCase().includes(s.toLowerCase()));
+                        if (detectedSuburb) setSuburb(detectedSuburb);
+                      }}
+                      placeholder="e.g., 123 Main St, Kalkallo"
                       className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                      list="address-suggestions"
                     />
+                    <datalist id="address-suggestions">
+                      <option value="123 Main Street, Kalkallo" />
+                      <option value="456 Park Avenue, Donnybrook" />
+                      <option value="789 Oak Road, Mickleham" />
+                      <option value="321 Elm Street, Craigieburn" />
+                      <option value="654 Maple Drive, Beveridge" />
+                    </datalist>
                   </div>
                   <div>
                     <Label htmlFor="suburb" className="text-sm font-medium">Suburb</Label>
@@ -450,7 +464,7 @@ export default function Stage1QuotingWorkspace() {
                   )}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="appointmentDate" className="text-sm font-medium">Quote Date</Label>
+                      <Label htmlFor="appointmentDate" className="text-sm font-medium">Appointment Date</Label>
                       <Input
                         id="appointmentDate"
                         type="date"
@@ -460,14 +474,33 @@ export default function Stage1QuotingWorkspace() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="appointmentTime" className="text-sm font-medium">Quote Time</Label>
-                      <Input
-                        id="appointmentTime"
-                        type="time"
-                        value={appointmentTime}
-                        onChange={(e) => setAppointmentTime(e.target.value)}
-                        className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                      />
+                      <Label htmlFor="appointmentTime" className="text-sm font-medium">Appointment Time</Label>
+                      <Select value={appointmentTime} onValueChange={setAppointmentTime}>
+                        <SelectTrigger id="appointmentTime" className="h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all">
+                          <SelectValue placeholder="Select time..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="08:00">8:00 AM</SelectItem>
+                          <SelectItem value="08:30">8:30 AM</SelectItem>
+                          <SelectItem value="09:00">9:00 AM</SelectItem>
+                          <SelectItem value="09:30">9:30 AM</SelectItem>
+                          <SelectItem value="10:00">10:00 AM</SelectItem>
+                          <SelectItem value="10:30">10:30 AM</SelectItem>
+                          <SelectItem value="11:00">11:00 AM</SelectItem>
+                          <SelectItem value="11:30">11:30 AM</SelectItem>
+                          <SelectItem value="12:00">12:00 PM</SelectItem>
+                          <SelectItem value="12:30">12:30 PM</SelectItem>
+                          <SelectItem value="13:00">1:00 PM</SelectItem>
+                          <SelectItem value="13:30">1:30 PM</SelectItem>
+                          <SelectItem value="14:00">2:00 PM</SelectItem>
+                          <SelectItem value="14:30">2:30 PM</SelectItem>
+                          <SelectItem value="15:00">3:00 PM</SelectItem>
+                          <SelectItem value="15:30">3:30 PM</SelectItem>
+                          <SelectItem value="16:00">4:00 PM</SelectItem>
+                          <SelectItem value="16:30">4:30 PM</SelectItem>
+                          <SelectItem value="17:00">5:00 PM</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div>
@@ -639,7 +672,7 @@ export default function Stage1QuotingWorkspace() {
                   )}
 
                   {/* Wall Dimensions (conditional) */}
-                  {showWallDimensions && !showLengthWidth && (
+                  {showWallDimensions && (
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="wallWidth" className="text-sm font-medium flex items-center gap-2">
