@@ -7,15 +7,17 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import QuoteForm from "./pages/QuoteForm";
 import Jobs from "./pages/Jobs";
+import AdminProducts from "./pages/AdminProducts";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"="} component={Home} />
-      <Route path={"/quote"} component={QuoteForm} />
-      <Route path={"/jobs"} component={Jobs} />
-      <Route path={"/404"} component={NotFound} />
+      <Route path="" component={Home} />
+      <Route path="/quote" component={QuoteForm} />
+      <Route path="/jobs" component={Jobs} />
+      <Route path="/admin/products" component={AdminProducts} />
+      <Route path="/404" component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>

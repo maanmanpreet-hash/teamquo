@@ -186,8 +186,55 @@ export const appRouter = router({
       }),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(({ input }) => db.deleteJobItem(input.id)),
+            .mutation(({ input }) => db.deleteJobItem(input.id)),
   }),
-});
 
+  products: router({
+    listTypes: publicProcedure.query(() => db.getAllProductTypes()),
+    listByType: publicProcedure
+      .input(z.object({ productTypeId: z.number() }))
+      .query(({ input }) => db.getAllProducts(input.productTypeId)),
+    getById: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .query(({ input }) => db.getProductById(input.id)),
+    create: protectedProcedure
+      .input(z.object({
+        productTypeId: z.number(),
+        name: z.string().min(1),
+        design: z.string().optional(),
+        widthMm: z.number().int().positive().optional(),
+        heightMm: z.number().int().positive().optional(),
+        depthMm: z.number().int().positive().optional(),
+        pricePerUnit: z.number().int().nonnegative(),
+        description: z.string().optional(),
+      }))
+      .mutation(({ input }) => db.createProduct(input)),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        design: z.string().optional(),
+        widthMm: z.number().int().positive().optional(),
+        heightMm: z.number().int().positive().optional(),
+        depthMm: z.number().int().positive().optional(),
+        pricePerUnit: z.number().int().nonnegative().optional(),
+        description: z.string().optional(),
+        isActive: z.number().optional(),
+      }))
+      .mutation(({ input }) => {
+        const { id, ...updates } = input;
+        return db.updateProduct(id, updates);
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ input }) => db.deleteProduct(input.id)),
+    getDiscounts: publicProcedure
+      .input(z.object({ productTypeId: z.number() }))
+      .query(({ input }) => db.getVolumeDiscounts(input.productTypeId)),
+    calculateDiscount: publicProcedure
+      .input(z.object({ productTypeId: z.number(), quantity: z.number().int().positive() }))
+      .query(({ input }) => db.calculateDiscount(input.productTypeId, input.quantity)),
+  }),
+
+});
 export type AppRouter = typeof appRouter;
