@@ -26,12 +26,12 @@
 - [ ] Write tests for acoustic panel workflows
 
 ## Phase 3: Reference Image Upload
-- [ ] Add image upload field to client details tab
-- [ ] Implement image preview in client details
-- [ ] Store image reference in job record
+- [x] Add image upload field to client details tab
+- [x] Implement image preview in client details
+- [x] Store image reference in job record
 - [ ] Display reference image in quote summary
 - [ ] Include reference image in PDF export
-- [ ] Add image size/format validation
+- [x] Add image size/format validation (5MB limit)
 - [ ] Test image upload and storage
 
 ## Phase 4: Multiple Walls Support

@@ -1,0 +1,1 @@
+ALTER TABLE `jobs` ADD `reference_image_url` text;

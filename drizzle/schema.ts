@@ -110,6 +110,7 @@ export const jobs = mysqlTable("jobs", {
   suburb: varchar("suburb", { length: 100 }), // Suburb for location-based queue sorting
   appointmentDate: date("appointment_date"), // Date agreed to provide quote
   appointmentTime: varchar("appointment_time", { length: 5 }), // Time in HH:MM format
+  referenceImageUrl: text("reference_image_url"), // URL to reference image from site visit
   status: mysqlEnum("status", ["quoted", "booked", "commenced", "completed", "cancelled"]).default("quoted").notNull(),
   stage: mysqlEnum("stage", ["quoting", "procurement", "installation", "invoicing"]).default("quoting").notNull(),
   stageStatus: varchar("stage_status", { length: 100 }).default("in_progress"),

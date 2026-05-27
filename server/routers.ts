@@ -85,6 +85,7 @@ export const appRouter = router({
         suburb: z.string().optional(),
         appointmentDate: z.string().optional(), // YYYY-MM-DD format
         appointmentTime: z.string().optional(), // HH:MM format
+        referenceImageUrl: z.string().optional(),
         notes: z.string().optional(),
       }))
       .mutation(({ input, ctx }) =>
@@ -97,6 +98,7 @@ export const appRouter = router({
           suburb: input.suburb,
           appointmentDate: input.appointmentDate ? new Date(input.appointmentDate) : null,
           appointmentTime: input.appointmentTime,
+          referenceImageUrl: input.referenceImageUrl,
           notes: input.notes,
           status: "quoted",
         })
@@ -123,6 +125,7 @@ export const appRouter = router({
         suburb: z.string().optional(),
         appointmentDate: z.string().optional(),
         appointmentTime: z.string().optional(),
+        referenceImageUrl: z.string().optional(),
         notes: z.string().optional(),
         totalEstimate: z.number().int().nonnegative().optional(),
       }))
@@ -272,6 +275,35 @@ export const appRouter = router({
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(({ input }) => db.deleteOperator(input.id)),
+  }),
+
+  storage: router({
+    uploadImage: protectedProcedure
+      .input(z.object({
+        fileName: z.string(),
+        base64Data: z.string(),
+        mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { storagePut } = await import("./storage");
+        
+        // Decode base64 to buffer
+        const buffer = Buffer.from(input.base64Data, "base64");
+        
+        // Validate size (5MB limit)
+        if (buffer.length > 5 * 1024 * 1024) {
+          throw new Error("Image exceeds 5MB limit");
+        }
+        
+        // Upload to storage
+        const { url } = await storagePut(
+          `reference-images/${ctx.user.id}/${Date.now()}-${input.fileName}`,
+          buffer,
+          input.mimeType
+        );
+        
+        return { url };
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;

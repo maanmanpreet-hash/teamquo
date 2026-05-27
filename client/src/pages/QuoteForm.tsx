@@ -41,6 +41,9 @@ export default function Stage1QuotingWorkspace() {
   const [suburb, setSuburb] = useState("");
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
+  const [referenceImageUrl, setReferenceImageUrl] = useState("");
+  const [referenceImagePreview, setReferenceImagePreview] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Line Items
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
@@ -67,6 +70,7 @@ export default function Stage1QuotingWorkspace() {
   const createJobMutation = trpc.jobs.create.useMutation();
   const createJobItemMutation = trpc.jobItems.create.useMutation();
   const updateJobMutation = trpc.jobs.update.useMutation();
+  const uploadImageMutation = trpc.storage.uploadImage.useMutation();
 
   const selectedOperator = localStorage.getItem("selectedOperator");
 
@@ -93,6 +97,10 @@ export default function Stage1QuotingWorkspace() {
         setAppointmentDate(date.toISOString().split('T')[0]);
       }
       setAppointmentTime(draftJob.appointmentTime || "");
+      if (draftJob.referenceImageUrl) {
+        setReferenceImageUrl(draftJob.referenceImageUrl);
+        setReferenceImagePreview(draftJob.referenceImageUrl);
+      }
       setIsLoadingDraft(false);
     }
   }, [draftJob, isLoadingDraft]);
@@ -265,6 +273,7 @@ export default function Stage1QuotingWorkspace() {
         suburb: suburb || undefined,
         appointmentDate: appointmentDate || undefined,
         appointmentTime: appointmentTime || undefined,
+        referenceImageUrl: referenceImageUrl || undefined,
       });
       toast.success("Draft saved! You can continue later.");
       // Reset form
@@ -275,6 +284,8 @@ export default function Stage1QuotingWorkspace() {
       setSuburb("");
       setAppointmentDate("");
       setAppointmentTime("");
+      setReferenceImageUrl("");
+      setReferenceImagePreview(null);
       setLineItems([]);
     } catch (error) {
       toast.error("Failed to save draft");
@@ -459,6 +470,80 @@ export default function Stage1QuotingWorkspace() {
                       />
                     </div>
                   </div>
+                  <div>
+                    <Label htmlFor="referenceImage" className="text-sm font-medium">📸 Reference Image</Label>
+                    <Input
+                      id="referenceImage"
+                      type="file"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        
+                        if (file.size > 5 * 1024 * 1024) {
+                          toast.error("Image must be less than 5MB");
+                          return;
+                        }
+
+                        const validMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+                        if (!validMimes.includes(file.type)) {
+                          toast.error("Only JPEG, PNG, WebP, and GIF images are supported");
+                          return;
+                        }
+
+                        setIsUploadingImage(true);
+                        try {
+                          const reader = new FileReader();
+                          reader.onload = async () => {
+                            try {
+                              const base64 = (reader.result as string).split(",")[1];
+                              const result = await uploadImageMutation.mutateAsync({
+                                fileName: file.name,
+                                base64Data: base64,
+                                mimeType: file.type as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
+                              });
+                              setReferenceImageUrl(result.url);
+                              setReferenceImagePreview(result.url);
+                              toast.success("Image uploaded successfully");
+                            } catch (error) {
+                              toast.error("Failed to upload image");
+                              console.error(error);
+                            } finally {
+                              setIsUploadingImage(false);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        } catch (error) {
+                          toast.error("Failed to read image file");
+                          console.error(error);
+                          setIsUploadingImage(false);
+                        }
+                      }}
+                      disabled={isUploadingImage}
+                      className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                    />
+                  </div>
+                  {referenceImagePreview && (
+                    <div>
+                      <Label className="text-sm font-medium">Preview</Label>
+                      <div className="mt-2 relative">
+                        <img 
+                          src={referenceImagePreview} 
+                          alt="Reference" 
+                          className="max-h-48 rounded border-2 border-gray-200"
+                        />
+                        <button
+                          onClick={() => {
+                            setReferenceImageUrl("");
+                            setReferenceImagePreview(null);
+                          }}
+                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </Card>
 

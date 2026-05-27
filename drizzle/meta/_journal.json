@@ -43,6 +43,13 @@
       "when": 1779917411309,
       "tag": "0005_light_marvel_zombies",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1779917736156,
+      "tag": "0006_spicy_vertigo",
+      "breakpoints": true
     }
   ]
 }
