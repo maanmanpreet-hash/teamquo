@@ -237,6 +237,18 @@ export function generateQuoteHTML(
           </div>
         </div>
 
+        <!-- Reference Image -->
+        ${
+          job.referenceImageUrl
+            ? `
+          <div class="reference-image" style="margin: 20px 0; page-break-inside: avoid;">
+            <h3>Reference Image</h3>
+            <img src="${job.referenceImageUrl}" alt="Reference" style="max-width: 100%; max-height: 300px; border: 1px solid #ddd; border-radius: 4px;" />
+          </div>
+        `
+            : ""
+        }
+
         <!-- Items -->
         <div class="items-section">
           <h2>Quote Details</h2>

@@ -764,6 +764,16 @@ export default function Stage1QuotingWorkspace() {
                     <p className="text-sm text-gray-600">Address</p>
                     <p className="text-sm">{clientAddress}</p>
                   </div>
+                  {referenceImagePreview && (
+                    <div>
+                      <p className="text-sm text-gray-600 mb-2">Reference Image</p>
+                      <img 
+                        src={referenceImagePreview} 
+                        alt="Reference" 
+                        className="max-h-48 rounded border-2 border-gray-200"
+                      />
+                    </div>
+                  )}
                   <hr className="my-4" />
                   <div>
                     <p className="text-sm text-gray-600 mb-2">Products ({lineItems.length})</p>

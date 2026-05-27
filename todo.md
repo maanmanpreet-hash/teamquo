@@ -29,10 +29,11 @@
 - [x] Add image upload field to client details tab
 - [x] Implement image preview in client details
 - [x] Store image reference in job record
-- [ ] Display reference image in quote summary
-- [ ] Include reference image in PDF export
 - [x] Add image size/format validation (5MB limit)
-- [ ] Test image upload and storage
+- [x] Implement tRPC backend upload with S3 storage
+- [x] Display reference image in quote summary
+- [x] Include reference image in PDF export
+- [x] Test image upload and storage
 
 ## Phase 4: Multiple Walls Support
 - [ ] Refactor job structure to support multiple walls
