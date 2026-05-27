@@ -1,5 +1,6 @@
 /**
  * Download HTML content as PDF using html2pdf with reliable mobile support
+ * Ensures file appears in Downloads folder across browsers
  */
 export async function downloadPDF(html: string, filename: string) {
   // Dynamically load html2pdf library
@@ -12,11 +13,14 @@ export async function downloadPDF(html: string, filename: string) {
         const element = document.createElement('div');
         element.innerHTML = html;
         
+        // Ensure filename has .pdf extension
+        const pdfFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+        
         const opt = {
           margin: 10,
-          filename: filename,
+          filename: pdfFilename,
           image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2 },
+          html2canvas: { scale: 2, useCORS: true },
           jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
         };
         
@@ -27,26 +31,34 @@ export async function downloadPDF(html: string, filename: string) {
           .toPdf()
           .get('pdf')
           .then((pdf: any) => {
-            // Create blob from PDF
+            // Create blob from PDF with proper MIME type
             const blob = pdf.output('blob');
+            const pdfBlob = new Blob([blob], { type: 'application/pdf' });
             
-            // Create download link
-            const url = URL.createObjectURL(blob);
+            // Create download link with proper attributes
+            const url = URL.createObjectURL(pdfBlob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = filename;
+            link.download = pdfFilename;
+            link.type = 'application/pdf';
             link.style.display = 'none';
             
             // Append to body and trigger click
             document.body.appendChild(link);
-            link.click();
             
-            // Cleanup
-            setTimeout(() => {
-              document.body.removeChild(link);
-              URL.revokeObjectURL(url);
-              resolve(true);
-            }, 100);
+            // Use requestAnimationFrame to ensure proper timing
+            requestAnimationFrame(() => {
+              link.click();
+              
+              // Cleanup after download completes
+              setTimeout(() => {
+                if (document.body.contains(link)) {
+                  document.body.removeChild(link);
+                }
+                URL.revokeObjectURL(url);
+                resolve(true);
+              }, 500);
+            });
           })
           .catch((error: any) => {
             reject(error);

@@ -57,12 +57,17 @@
 - [x] Dimension input with visual indicators (width/height icons)
 - [x] Persist walls to backend via tRPC mutations
 - [x] Load saved walls when resuming job
-- [ ] Update cost calculation to sum all walls
+- [x] Update cost calculation to sum all walls
+- [x] Display cost breakdown by wall in summary
+- [x] Calculate per-wall totals
 - [ ] Implement wall-specific product selection
 - [ ] Test multi-wall quote creation
 
 ## Phase 5: PDF Download Fix + Job Pack with Drawings
-- [ ] Fix PDF download so files appear in Downloads folder
+- [x] Fix PDF download so files appear in Downloads folder
+- [x] Ensure proper MIME type for PDF blobs
+- [x] Add .pdf extension validation
+- [x] Use requestAnimationFrame for reliable downloads
 - [ ] Implement job pack generation with wall drawings
 - [ ] Add wall measurements to drawings
 - [ ] Include product specifications in job pack
@@ -71,11 +76,14 @@
 - [ ] Verify drawings render correctly
 
 ## Phase 6: Dashboard Redesign (Monday.com Inspired)
-- [ ] Implement collapsed 1-line view for jobs
-- [ ] Add color coding for job status (quoted, booked, commenced, completed)
-- [ ] Create kanban-style board view
-- [ ] Add quick actions (edit, view PDF, change status)
-- [ ] Implement search/filter functionality
+- [x] Implement kanban-style board view with 4 columns
+- [x] Add color coding for job status (quoted, booked, commenced, completed)
+- [x] Create job cards with client info, suburb, appointment
+- [x] Add quick actions (edit, view PDF)
+- [x] Implement toggle between kanban and list views
+- [x] Add operator selection with badge display
+- [x] Display job count per status column
+- [ ] Add search/filter functionality
 - [ ] Add operator assignment view
 - [ ] Test dashboard performance with many jobs
 - [ ] Optimize for tablet viewing

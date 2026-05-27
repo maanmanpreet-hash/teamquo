@@ -274,10 +274,26 @@ export default function Stage1QuotingWorkspace() {
     setLineItems(lineItems.filter(item => item.id !== id));
   }, [lineItems]);
 
+  // Calculate total cost by wall
+  const costByWall = useMemo(() => {
+    const costs: Record<string, number> = {};
+    lineItems.forEach((item) => {
+      const wallKey = item.wallWidthMm && item.wallHeightMm ? `${item.wallWidthMm}x${item.wallHeightMm}` : "default";
+      costs[wallKey] = (costs[wallKey] || 0) + item.totalPrice;
+    });
+    return costs;
+  }, [lineItems]);
+
   // Calculate total
   const totalCost = useMemo(() => {
     return lineItems.reduce((sum, item) => sum + item.totalPrice, 0);
   }, [lineItems]);
+
+  // Get wall info for display
+  const getWallInfo = (wallWidthMm: number, wallHeightMm: number) => {
+    const wall = walls.find(w => w.wallWidthMm === wallWidthMm && w.wallHeightMm === wallHeightMm);
+    return wall ? wall.wallName : `${(wallWidthMm / 1000).toFixed(1)}m × ${(wallHeightMm / 1000).toFixed(1)}m`;
+  };
 
   // Validate form
   const isFormValid = clientName && clientEmail && clientPhone && clientAddress && lineItems.length > 0;
@@ -982,13 +998,43 @@ export default function Stage1QuotingWorkspace() {
                   )}
                   <hr className="my-4" />
                   <div>
-                    <p className="text-sm text-gray-600 mb-2">Products ({lineItems.length})</p>
-                    {lineItems.map((item) => (
-                      <div key={item.id} className="flex justify-between text-sm mb-2">
-                        <span>{item.productName} ({item.quantityRequired} units){item.ledStripQuantity ? ` + ${item.ledStripQuantity} LED` : ""}</span>
-                        <span className="font-semibold">${(item.totalPrice / 100).toFixed(2)}</span>
+                    <p className="text-sm text-gray-600 mb-3 font-semibold">Cost Breakdown by Wall</p>
+                    {walls.length > 0 ? (
+                      <div className="space-y-3">
+                        {walls.map((wall) => {
+                          const wallKey = `${wall.wallWidthMm}x${wall.wallHeightMm}`;
+                          const wallCost = costByWall[wallKey] || 0;
+                          const wallItems = lineItems.filter(item => item.wallWidthMm === wall.wallWidthMm && item.wallHeightMm === wall.wallHeightMm);
+                          return (
+                            <div key={wall.id} className="bg-gray-50 p-3 rounded-lg">
+                              <p className="font-medium text-gray-900">{wall.wallName}</p>
+                              <p className="text-xs text-gray-600 mb-2">{(wall.wallWidthMm / 1000).toFixed(1)}m × {(wall.wallHeightMm / 1000).toFixed(1)}m</p>
+                              <div className="space-y-1 mb-2">
+                                {wallItems.map((item) => (
+                                  <div key={item.id} className="flex justify-between text-xs text-gray-700">
+                                    <span>{item.productName} ({item.quantityRequired})</span>
+                                    <span>${(item.totalPrice / 100).toFixed(2)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="flex justify-between text-sm font-semibold border-t pt-1">
+                                <span>Wall Total</span>
+                                <span className="text-blue-600">${(wallCost / 100).toFixed(2)}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    ))}
+                    ) : (
+                      <div className="space-y-2">
+                        {lineItems.map((item) => (
+                          <div key={item.id} className="flex justify-between text-sm">
+                            <span>{item.productName} ({item.quantityRequired} units){item.ledStripQuantity ? ` + ${item.ledStripQuantity} LED` : ""}</span>
+                            <span className="font-semibold">${(item.totalPrice / 100).toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <hr className="my-4" />
                   <div className="flex justify-between text-lg font-bold">
