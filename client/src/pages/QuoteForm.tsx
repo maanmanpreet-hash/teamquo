@@ -170,25 +170,27 @@ export default function Stage1QuotingWorkspace() {
                 <h2 className="text-lg font-semibold mb-4">Client Information</h2>
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="clientName">Client Name *</Label>
+                    <Label htmlFor="clientName" className="text-sm font-medium">Client Name *</Label>
                     <Input
                       id="clientName"
                       value={clientName}
                       onChange={(e) => setClientName(e.target.value)}
                       placeholder="Enter client name"
-                      className="mt-1 h-10 text-base"
+                      className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                     />
+                    {clientName && <p className="text-xs text-green-600 mt-1">✓ Entered</p>}
                   </div>
                   <div>
-                    <Label htmlFor="clientEmail">Email *</Label>
+                    <Label htmlFor="clientEmail" className="text-sm font-medium">Email *</Label>
                     <Input
                       id="clientEmail"
                       type="email"
                       value={clientEmail}
                       onChange={(e) => setClientEmail(e.target.value)}
                       placeholder="client@example.com"
-                      className="mt-1 h-10 text-base"
+                      className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                     />
+                    {clientEmail && <p className="text-xs text-green-600 mt-1">✓ Entered</p>}
                   </div>
                   <div>
                     <Label htmlFor="clientPhone">Phone</Label>
@@ -221,26 +223,26 @@ export default function Stage1QuotingWorkspace() {
                 <h2 className="text-lg font-semibold mb-4">Wall Dimensions</h2>
                 <div className="grid grid-cols-2 gap-4 mb-6">
                   <div>
-                    <Label htmlFor="wallWidth">Width (m) *</Label>
+                    <Label htmlFor="wallWidth" className="text-sm font-medium">Width (m) *</Label>
                     <Input
                       id="wallWidth"
                       type="number"
                       value={wallWidth}
                       onChange={(e) => setWallWidth(e.target.value)}
                       placeholder="0.00"
-                      className="mt-1 h-10 text-base"
+                      className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                       step="0.01"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="wallHeight">Height (m) *</Label>
+                    <Label htmlFor="wallHeight" className="text-sm font-medium">Height (m) *</Label>
                     <Input
                       id="wallHeight"
                       type="number"
                       value={wallHeight}
                       onChange={(e) => setWallHeight(e.target.value)}
                       placeholder="0.00"
-                      className="mt-1 h-10 text-base"
+                      className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                       step="0.01"
                     />
                   </div>

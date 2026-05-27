@@ -31,13 +31,13 @@
 - [ ] Add visual feedback for form interactions
 - [ ] Write Stage 1 workflow tests
 
-## In Progress: Phase 4 - Stage 1 Polish & Testing
-- [ ] Add "Save Quote" and "Generate PDF" buttons
-- [ ] Implement PDF generation for quotes
-- [ ] Add success/error toast notifications
+## Completed: Phase 4 - Stage 1 Polish & Testing
+- [x] Add "Save Quote" and "Generate PDF" buttons
+- [x] Implement PDF generation for quotes (via Jobs page)
+- [x] Add success/error toast notifications
 - [ ] Test on actual Android tablet
 - [ ] Optimize for landscape/portrait modes
-- [ ] Add visual feedback for form interactions
+- [x] Add visual feedback for form interactions
 - [ ] Write comprehensive Stage 1 workflow tests
 
 ## Planned: Phase 5 - Stage 2: Procurement & Materials
