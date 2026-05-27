@@ -148,6 +148,24 @@ export type JobItem = typeof jobItems.$inferSelect;
 export type InsertJobItem = typeof jobItems.$inferInsert;
 
 /**
+ * Walls table: stores individual walls within a job
+ */
+export const walls = mysqlTable("walls", {
+  id: int("id").autoincrement().primaryKey(),
+  jobId: int("job_id").notNull(), // Reference to the job
+  wallType: mysqlEnum("wall_type", ["regular", "garage", "custom"]).default("regular").notNull(),
+  wallName: varchar("wall_name", { length: 255 }), // e.g., "Living Room", "Garage", "Master Bedroom"
+  wallWidthMm: int("wall_width_mm"), // Wall width in millimeters
+  wallHeightMm: int("wall_height_mm"), // Wall height in millimeters
+  notes: text("notes"), // Wall-specific notes
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Wall = typeof walls.$inferSelect;
+export type InsertWall = typeof walls.$inferInsert;
+
+/**
  * Operators table: stores field service operators/technicians
  */
 export const operators = mysqlTable("operators", {

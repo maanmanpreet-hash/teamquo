@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, claddingVariants, jobs, jobItems, CladdingVariant, Job, JobItem, InsertCladdingVariant, InsertJob, InsertJobItem, productTypes, products, volumeDiscounts, ProductType, Product, VolumeDiscount, InsertProduct, InsertProductType, InsertVolumeDiscount, operators, stageTransitions, Operator, InsertOperator, StageTransition, InsertStageTransition } from "../drizzle/schema";
+import { InsertUser, users, claddingVariants, jobs, jobItems, CladdingVariant, Job, JobItem, InsertCladdingVariant, InsertJob, InsertJobItem, productTypes, products, volumeDiscounts, ProductType, Product, VolumeDiscount, InsertProduct, InsertProductType, InsertVolumeDiscount, operators, stageTransitions, Operator, InsertOperator, StageTransition, InsertStageTransition, walls, Wall, InsertWall } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -563,6 +563,80 @@ export async function getStageTransitionsByJobId(jobId: number) {
     return await db.select().from(stageTransitions).where(eq(stageTransitions.jobId, jobId));
   } catch (error) {
     console.error("[Database] Failed to get stage transitions:", error);
+    throw error;
+  }
+}
+
+// ===== WALLS =====
+
+export async function createWall(data: InsertWall) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot create wall: database not available");
+    return undefined;
+  }
+  try {
+    const result = await db.insert(walls).values(data);
+    return result;
+  } catch (error) {
+    console.error("[Database] Failed to create wall:", error);
+    throw error;
+  }
+}
+
+export async function getWallsByJobId(jobId: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get walls: database not available");
+    return [];
+  }
+  try {
+    return await db.select().from(walls).where(eq(walls.jobId, jobId));
+  } catch (error) {
+    console.error("[Database] Failed to get walls:", error);
+    throw error;
+  }
+}
+
+export async function getWallById(id: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get wall: database not available");
+    return undefined;
+  }
+  try {
+    const result = await db.select().from(walls).where(eq(walls.id, id)).limit(1);
+    return result.length > 0 ? result[0] : undefined;
+  } catch (error) {
+    console.error("[Database] Failed to get wall:", error);
+    throw error;
+  }
+}
+
+export async function updateWall(id: number, updates: Partial<InsertWall>) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot update wall: database not available");
+    return undefined;
+  }
+  try {
+    return await db.update(walls).set(updates).where(eq(walls.id, id));
+  } catch (error) {
+    console.error("[Database] Failed to update wall:", error);
+    throw error;
+  }
+}
+
+export async function deleteWall(id: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot delete wall: database not available");
+    return undefined;
+  }
+  try {
+    return await db.delete(walls).where(eq(walls.id, id));
+  } catch (error) {
+    console.error("[Database] Failed to delete wall:", error);
     throw error;
   }
 }

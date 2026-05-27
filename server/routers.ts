@@ -305,5 +305,46 @@ export const appRouter = router({
         return { url };
       }),
   }),
+
+  walls: router({
+    create: protectedProcedure
+      .input(z.object({
+        jobId: z.number(),
+        wallType: z.enum(["regular", "garage", "custom"]).default("regular"),
+        wallName: z.string().optional(),
+        wallWidthMm: z.number().int().positive().optional(),
+        wallHeightMm: z.number().int().positive().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(({ input, ctx }) => {
+        return db.createWall({
+          jobId: input.jobId,
+          wallType: input.wallType,
+          wallName: input.wallName,
+          wallWidthMm: input.wallWidthMm,
+          wallHeightMm: input.wallHeightMm,
+          notes: input.notes,
+        });
+      }),
+    getByJobId: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(({ input }) => db.getWallsByJobId(input.jobId)),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        wallType: z.enum(["regular", "garage", "custom"]).optional(),
+        wallName: z.string().optional(),
+        wallWidthMm: z.number().int().positive().optional(),
+        wallHeightMm: z.number().int().positive().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(({ input }) => {
+        const { id, ...updates } = input;
+        return db.updateWall(id, updates);
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ input }) => db.deleteWall(input.id)),
+  }),
 });
 export type AppRouter = typeof appRouter;

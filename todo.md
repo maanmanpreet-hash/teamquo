@@ -36,11 +36,13 @@
 - [x] Test image upload and storage
 
 ## Phase 4: Multiple Walls Support
-- [ ] Refactor job structure to support multiple walls
-- [ ] Add "Add Wall" button to products tab
-- [ ] Implement wall type selection (regular wall, garage wall, custom)
+- [x] Refactor job structure to support multiple walls
+- [x] Add walls table with wall types (regular, garage, custom)
+- [x] Implement wall type selection (regular wall, garage wall, custom)
+- [x] Create tRPC walls router with CRUD operations
+- [x] Allow editing/deleting individual walls
+- [ ] Add "Add Wall" button to products tab UI
 - [ ] Create wall summary showing all walls in project
-- [ ] Allow editing/deleting individual walls
 - [ ] Update cost calculation to sum all walls
 - [ ] Implement wall-specific product selection
 - [ ] Test multi-wall quote creation
