@@ -3,10 +3,10 @@
 ## Phase 1: Partial Client Save + Quote Queue
 - [x] Add "Save Draft" button to client details tab
 - [x] Implement partial job creation (client details only, no products required)
-- [ ] Create quote queue view showing all pending/draft quotes
-- [ ] Add ability to view and resume incomplete quotes
-- [ ] Display quote status (draft, in-progress, completed)
-- [ ] Show which operator created each draft
+- [x] Create quote queue view showing all pending/draft quotes
+- [x] Add ability to view and resume incomplete quotes
+- [x] Display quote status (draft, in-progress, completed)
+- [x] Show which operator created each draft
 - [ ] Add edit functionality for draft quotes
 - [ ] Seed operators table: Manpreet, Ginni, Roopjit, Simar
 - [ ] Allow custom operator name entry

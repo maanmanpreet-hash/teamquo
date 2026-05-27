@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,8 @@ export default function Stage1QuotingWorkspace() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [currentTab, setCurrentTab] = useState("client");
+  const [resumeJobId, setResumeJobId] = useState<number | null>(null);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(false);
 
   // Client Details
   const [clientName, setClientName] = useState("");
@@ -55,10 +57,36 @@ export default function Stage1QuotingWorkspace() {
     { enabled: !!tempProductTypeId }
   );
   const { data: operators } = trpc.operators.list.useQuery();
+  const { data: draftJob } = trpc.jobs.getById.useQuery(
+    { id: resumeJobId || 0 },
+    { enabled: resumeJobId !== null }
+  );
   const createJobMutation = trpc.jobs.create.useMutation();
   const createJobItemMutation = trpc.jobItems.create.useMutation();
+  const updateJobMutation = trpc.jobs.update.useMutation();
 
   const selectedOperator = localStorage.getItem("selectedOperator");
+
+  // Load draft on mount if resumeJobId is in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const jobId = params.get("resumeJobId");
+    if (jobId) {
+      setResumeJobId(parseInt(jobId));
+      setIsLoadingDraft(true);
+    }
+  }, []);
+
+  // Populate form when draft is loaded
+  useEffect(() => {
+    if (draftJob && isLoadingDraft) {
+      setClientName(draftJob.clientName === "[Draft]" ? "" : draftJob.clientName);
+      setClientEmail(draftJob.clientEmail || "");
+      setClientPhone(draftJob.clientPhone || "");
+      setClientAddress(draftJob.clientAddress || "");
+      setIsLoadingDraft(false);
+    }
+  }, [draftJob, isLoadingDraft]);
 
   // Determine if product requires wall dimensions
   const requiresWallDimensions = (productTypeSlug: string) => {

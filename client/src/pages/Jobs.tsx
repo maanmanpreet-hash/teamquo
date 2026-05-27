@@ -5,8 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
-import { Loader2, Plus, Eye, FileText } from "lucide-react";
-import { Link } from "wouter";
+import { Loader2, Plus, Eye, FileText, Edit } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import { downloadPDF } from "@/lib/pdf";
 import { toast } from "sonner";
 
@@ -22,6 +22,7 @@ const statusColors: Record<JobStatus, string> = {
 
 export default function Jobs() {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const [selectedStatus, setSelectedStatus] = useState<JobStatus | "all">("all");
   const [downloadingJobId, setDownloadingJobId] = useState<number | null>(null);
 
@@ -184,20 +185,30 @@ export default function Jobs() {
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold">{job.clientName}</h3>
+                        <h3 className="text-lg font-semibold">{job.clientName === "[Draft]" ? "📋 Draft Quote" : job.clientName}</h3>
                         <Badge className={statusColors[job.status as JobStatus]}>
                           {job.status}
                         </Badge>
+                        {job.clientName === "[Draft]" && (
+                          <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-200">
+                            Incomplete
+                          </Badge>
+                        )}
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-muted-foreground">
                         {job.clientEmail && (
                           <div>
-                            <span className="font-medium">Email:</span> {job.clientEmail}
+                            <span className="font-medium">Email:</span> {job.clientEmail || "—"}
                           </div>
                         )}
                         {job.clientPhone && (
                           <div>
-                            <span className="font-medium">Phone:</span> {job.clientPhone}
+                            <span className="font-medium">Phone:</span> {job.clientPhone || "—"}
+                          </div>
+                        )}
+                        {job.operatorName && (
+                          <div>
+                            <span className="font-medium">Operator:</span> {job.operatorName}
                           </div>
                         )}
                         <div>
@@ -219,8 +230,25 @@ export default function Jobs() {
                     </div>
                   </div>
 
-                  {/* Status Update Buttons */}
+                  {/* Action Buttons */}
                   <div className="mt-4 flex gap-2 flex-wrap">
+                    {job.clientName === "[Draft]" && (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          localStorage.setItem("selectedOperator", job.operatorName || "");
+                          navigate(`/stage1?resumeJobId=${job.id}`);
+                        }}
+                        className="bg-amber-600 hover:bg-amber-700"
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Resume Draft
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Status Update Buttons */}
+                  <div className="mt-2 flex gap-2 flex-wrap">
                     {job.status !== "quoted" && (
                       <Button
                         variant="outline"
