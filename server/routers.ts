@@ -231,10 +231,34 @@ export const appRouter = router({
     getDiscounts: publicProcedure
       .input(z.object({ productTypeId: z.number() }))
       .query(({ input }) => db.getVolumeDiscounts(input.productTypeId)),
-    calculateDiscount: publicProcedure
+        calculateDiscount: publicProcedure
       .input(z.object({ productTypeId: z.number(), quantity: z.number().int().positive() }))
       .query(({ input }) => db.calculateDiscount(input.productTypeId, input.quantity)),
   }),
 
+  operators: router({
+    list: publicProcedure.query(() => db.getAllOperators()),
+    getById: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .query(({ input }) => db.getOperatorById(input.id)),
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1, "Operator name is required"),
+      }))
+      .mutation(({ input }) => db.createOperator({ name: input.name, isActive: 1 })),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        isActive: z.number().optional(),
+      }))
+      .mutation(({ input }) => {
+        const { id, ...updates } = input;
+        return db.updateOperator(id, updates);
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ input }) => db.deleteOperator(input.id)),
+  }),
 });
 export type AppRouter = typeof appRouter;

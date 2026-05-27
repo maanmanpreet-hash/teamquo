@@ -1,82 +1,88 @@
-# Cladding Quote App - Project TODO
+# Cladding Quote App - 4-Stage Operational Platform Refactor
 
-## Phase 1: Project Setup & Architecture
-- [x] Review existing project scaffold (web-db-user template)
-- [x] Plan database schema (users, cladding_variants, jobs, job_items)
-- [x] Set up development environment and verify dependencies
+## Previous Phases (Completed)
+- [x] Phase 1-9: Initial MVP with quoting form, product management, job tracking, PDF generation
 
-## Phase 2: Data Models & Admin Panel
-- [x] Create database schema for cladding variants (name, dimensions, price per unit, design)
-- [x] Create database schema for jobs (client info, status, created_at, updated_at)
-- [x] Create database schema for job items (wall dimensions, cladding selected, cabinet dimensions)
-- [x] Build admin panel to manage cladding variants (CRUD operations)
-- [x] Seed initial cladding variant data
-- [x] Write vitest tests for cladding variant management
+## NEW: Phase 1 - Database Schema Refactor for 4-Stage Workflow
+- [x] Add `operator_name` field to jobs table
+- [x] Create operators table (id, name, created_at, updated_at)
+- [x] Add `stage` field to jobs table (enum: 'quoting', 'procurement', 'installation', 'invoicing')
+- [x] Add `stage_status` field to jobs table to track progress within each stage
+- [x] Create stage_transitions table to log stage changes with timestamps
+- [x] Generate and execute Drizzle migration
+- [x] Write vitest tests for operator queries
 
-## Phase 3: Main Quoting Form
-- [x] Build client details form (name, address, phone, email)
-- [x] Build wall dimensions input (width, height)
-- [x] Build cladding selection dropdown (populated from database)
-- [x] Implement real-time area calculation (width × height)
-- [x] Implement real-time cost estimation based on cladding variant pricing
-- [x] Add optional floating cabinet dimensions input
-- [x] Add manual price override field for quick quotes
-- [x] Build form submission and job record creation
-- [x] Write vitest tests for form calculations and submission
-- [x] Fix form submission hook usage (move mutations to component scope)
-- [x] Add empty/error states for cladding selector
-- [x] Display real-time wall area calculation to user
-- [x] Validate all items before creating job record
+## NEW: Phase 2 - Professional Home Screen & Operator Management
+- [ ] Create professional home screen with company logo placeholder
+- [ ] Build operator selection dropdown (populated from operators table)
+- [ ] Add operator management CRUD in admin panel
+- [ ] Implement operator add/remove functionality
+- [ ] Add form validation for operator names
+- [ ] Style home screen for tablet/PC with fixed viewport
+- [ ] Write vitest tests for operator selection logic
 
-## Phase 4: PDF Quote Generation & Job Recording
-- [x] Implement PDF generation with client details and quote summary
-- [ ] Include logo upload and display on PDF
-- [x] Add job record saving to database
-- [x] Implement PDF download functionality
-- [ ] Test PDF generation with various input scenarios
+## NEW: Phase 3 - Stage 1: Quoting Workspace (Self-Contained)
+- [ ] Refactor QuoteForm to be Stage 1 specific
+- [ ] Remove procurement/installation fields from Stage 1
+- [ ] Add operator name display in Stage 1 header
+- [ ] Implement real-time cost estimation with volume discounts
+- [ ] Add "Save Quote" and "Generate PDF" buttons
+- [ ] Implement quote status transition to "Booked"
+- [ ] Optimize form layout for tablet (no scrolling)
+- [ ] Write vitest tests for Stage 1 workflow
 
-## Phase 5: Multi-Product Type Support with Volume Discounts
-- [x] Extend database schema to support multiple product types (acoustic panels, marble sheet, mirrors, fireplace)
-- [x] Create product variants table with dimensions, pricing, and discount tiers
-- [x] Implement volume discount calculation logic
-- [x] Fetch and integrate excelhome.com.au product catalogue
-- [x] Add product type selection to quoting form
-- [x] Implement dimension dropdown with custom dimension option
-- [ ] Display applicable discounts in real-time estimates
-- [ ] Write vitest tests for discount calculations
+## NEW: Phase 4 - Stage 2: Procurement & Materials
+- [ ] Create Bill of Materials (BOM) generator
+- [ ] Auto-calculate required materials from Stage 1 dimensions
+- [ ] Generate printable material checklist
+- [ ] Create Stage 2 UI with BOM display
+- [ ] Add print functionality for material list
+- [ ] Implement stage transition from "Booked" to "Procurement"
+- [ ] Write vitest tests for BOM calculation
 
-## Phase 6: Product Management Admin Panel
-- [x] Build admin dashboard for product management
-- [x] Implement CRUD operations for products and variants
-- [x] Add pricing override functionality
-- [x] Allow custom dimension addition
-- [ ] Implement product availability toggle
-- [ ] Add bulk import/export for products
-- [x] Build tablet-optimized admin interface
-- [ ] Write vitest tests for admin operations
+## NEW: Phase 5 - Stage 3: Installation & Operations
+- [ ] Create Stage 3 UI with job details display
+- [ ] Add installation notes field
+- [ ] Implement completion checklist
+- [ ] Add photo/documentation upload capability
+- [ ] Display original dimensions from Stage 1
+- [ ] Implement stage transition to "Installation"
+- [ ] Write vitest tests for Stage 3 workflow
 
-## Phase 7: Job Status Dashboard
-- [x] Build dashboard to display all jobs with status at a glance
-- [x] Implement job status filters (quoted, booked, commenced)
-- [ ] Add ability to update job status from dashboard
-- [ ] Add quick follow-up actions (edit, view quote, delete)
-- [ ] Implement search/filter by client name or date range
-- [ ] Write vitest tests for dashboard functionality
+## NEW: Phase 6 - Stage 4: Invoicing & Closeout
+- [ ] Create financial summary display
+- [ ] Show price override history
+- [ ] Calculate final balance due
+- [ ] Add manual price adjustment capability
+- [ ] Implement job completion marking
+- [ ] Generate final invoice/receipt
+- [ ] Implement stage transition to "Completed"
+- [ ] Write vitest tests for invoicing logic
 
-## Phase 8: UI Polish & Tablet Optimization
-- [x] Optimize form layout for Android tablet (landscape and portrait)
-- [ ] Implement logo upload feature with preview
-- [x] Add responsive design for all pages
-- [ ] Test touch interactions and button sizing for tablet use
-- [x] Optimize form spacing and font sizes for readability on tablet
-- [x] Add loading states and error handling
-- [ ] Test on actual Android tablet device
+## NEW: Phase 7 - Operator Management & Stage Gating
+- [ ] Implement operator selection persistence (session/local storage)
+- [ ] Add stage-gated access control (users can only see their current stage)
+- [ ] Create operator profile/context provider
+- [ ] Add operator name to all stage headers
+- [ ] Implement stage navigation (forward only, no backtracking)
+- [ ] Add stage progress indicator
+- [ ] Write vitest tests for stage gating
 
-## Phase 9: Final Testing & Delivery
-- [ ] End-to-end testing (create quote → generate PDF → update status)
+## NEW: Phase 8 - UI/UX Optimization for Tablet/PC
+- [ ] Implement fixed viewport layout (no scrolling)
+- [ ] Create responsive grid system for tablet/PC
+- [ ] Add touch-friendly button sizing (min 48px)
+- [ ] Implement tabbed navigation for stages
+- [ ] Remove pinch-zoom capability
+- [ ] Optimize font sizes for readability on tablet
+- [ ] Test on actual Android tablet and iPad
+- [ ] Test on desktop PC browser
+
+## NEW: Phase 9 - Final Testing & Delivery
+- [ ] End-to-end testing of all 4 stages
+- [ ] Cross-browser testing (Chrome, Safari, Firefox)
 - [ ] Performance testing on tablet
-- [ ] Cross-browser testing
-- [ ] Create user documentation or help section
-- [ ] Prepare project for deployment
-- [x] Write comprehensive CRUD tests for cladding variant management flows (create, list, update, delete)
-
+- [ ] Accessibility testing
+- [ ] Create user documentation
+- [ ] Prepare for deployment
+- [ ] Final checkpoint and delivery

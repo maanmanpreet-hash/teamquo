@@ -101,14 +101,17 @@ export type InsertCladdingVariant = typeof claddingVariants.$inferInsert;
  */
 export const jobs = mysqlTable("jobs", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").notNull(), // Reference to the user who created the quote
+  userId: int("user_id").notNull(),
+  operatorName: varchar("operator_name", { length: 255 }),
   clientName: varchar("client_name", { length: 255 }).notNull(),
   clientEmail: varchar("client_email", { length: 320 }),
   clientPhone: varchar("client_phone", { length: 20 }),
   clientAddress: text("client_address"),
   status: mysqlEnum("status", ["quoted", "booked", "commenced", "completed", "cancelled"]).default("quoted").notNull(),
-  totalEstimate: int("total_estimate"), // Total quote price in cents
-  notes: text("notes"), // Additional notes about the job
+  stage: mysqlEnum("stage", ["quoting", "procurement", "installation", "invoicing"]).default("quoting").notNull(),
+  stageStatus: varchar("stage_status", { length: 100 }).default("in_progress"),
+  totalEstimate: int("total_estimate"),
+  notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -139,3 +142,33 @@ export const jobItems = mysqlTable("job_items", {
 
 export type JobItem = typeof jobItems.$inferSelect;
 export type InsertJobItem = typeof jobItems.$inferInsert;
+
+/**
+ * Operators table: stores field service operators/technicians
+ */
+export const operators = mysqlTable("operators", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  isActive: int("is_active").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Operator = typeof operators.$inferSelect;
+export type InsertOperator = typeof operators.$inferInsert;
+
+/**
+ * Stage transitions table: logs when jobs move between stages
+ */
+export const stageTransitions = mysqlTable("stage_transitions", {
+  id: int("id").autoincrement().primaryKey(),
+  jobId: int("job_id").notNull(),
+  fromStage: mysqlEnum("from_stage", ["quoting", "procurement", "installation", "invoicing"]),
+  toStage: mysqlEnum("to_stage", ["quoting", "procurement", "installation", "invoicing"]).notNull(),
+  transitionedBy: int("transitioned_by"), // User ID who made the transition
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type StageTransition = typeof stageTransitions.$inferSelect;
+export type InsertStageTransition = typeof stageTransitions.$inferInsert;

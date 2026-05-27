@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, claddingVariants, jobs, jobItems, CladdingVariant, Job, JobItem, InsertCladdingVariant, InsertJob, InsertJobItem, productTypes, products, volumeDiscounts, ProductType, Product, VolumeDiscount, InsertProduct, InsertProductType, InsertVolumeDiscount } from "../drizzle/schema";
+import { InsertUser, users, claddingVariants, jobs, jobItems, CladdingVariant, Job, JobItem, InsertCladdingVariant, InsertJob, InsertJobItem, productTypes, products, volumeDiscounts, ProductType, Product, VolumeDiscount, InsertProduct, InsertProductType, InsertVolumeDiscount, operators, stageTransitions, Operator, InsertOperator, StageTransition, InsertStageTransition } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -462,4 +462,107 @@ export async function calculateDiscount(productTypeId: number, quantity: number)
   }
   
   return applicableDiscount;
+}
+
+// ===== OPERATOR MANAGEMENT =====
+export async function getAllOperators() {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get operators: database not available");
+    return [];
+  }
+  try {
+    return await db.select().from(operators).where(eq(operators.isActive, 1));
+  } catch (error) {
+    console.error("[Database] Failed to get operators:", error);
+    throw error;
+  }
+}
+
+export async function getOperatorById(id: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get operator: database not available");
+    return undefined;
+  }
+  try {
+    const result = await db.select().from(operators).where(eq(operators.id, id)).limit(1);
+    return result.length > 0 ? result[0] : undefined;
+  } catch (error) {
+    console.error("[Database] Failed to get operator:", error);
+    throw error;
+  }
+}
+
+export async function createOperator(data: InsertOperator) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot create operator: database not available");
+    return undefined;
+  }
+  try {
+    const result = await db.insert(operators).values(data);
+    return result;
+  } catch (error) {
+    console.error("[Database] Failed to create operator:", error);
+    throw error;
+  }
+}
+
+export async function updateOperator(id: number, updates: Partial<InsertOperator>) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot update operator: database not available");
+    return undefined;
+  }
+  try {
+    return await db.update(operators).set(updates).where(eq(operators.id, id));
+  } catch (error) {
+    console.error("[Database] Failed to update operator:", error);
+    throw error;
+  }
+}
+
+export async function deleteOperator(id: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot delete operator: database not available");
+    return undefined;
+  }
+  try {
+    return await db.update(operators).set({ isActive: 0 }).where(eq(operators.id, id));
+  } catch (error) {
+    console.error("[Database] Failed to delete operator:", error);
+    throw error;
+  }
+}
+
+// ===== STAGE TRANSITIONS =====
+export async function createStageTransition(data: InsertStageTransition) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot create stage transition: database not available");
+    return undefined;
+  }
+  try {
+    const result = await db.insert(stageTransitions).values(data);
+    return result;
+  } catch (error) {
+    console.error("[Database] Failed to create stage transition:", error);
+    throw error;
+  }
+}
+
+export async function getStageTransitionsByJobId(jobId: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get stage transitions: database not available");
+    return [];
+  }
+  try {
+    return await db.select().from(stageTransitions).where(eq(stageTransitions.jobId, jobId));
+  } catch (error) {
+    console.error("[Database] Failed to get stage transitions:", error);
+    throw error;
+  }
 }
