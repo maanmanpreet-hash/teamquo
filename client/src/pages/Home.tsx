@@ -32,7 +32,7 @@ export default function Home() {
             Create accurate job quotes in minutes. Track client details, dimensions, and costs all in one place.
           </p>
           <a href={getLoginUrl()} className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors">
-            Sign In to Get Started
+            Sign In
           </a>
         </div>
       </div>

@@ -169,14 +169,14 @@ export default function Stage1QuotingWorkspace() {
 
         await createJobItemMutation.mutateAsync({
           jobId: job.id,
-          itemType: (item.productType === "cladding" ? "cladding" : "cabinet") as "cladding" | "cabinet",
-          claddingVariantId: item.productType === "cladding" ? parseInt(item.productId) : undefined,
+          itemType: "cabinet", // Use cabinet type for all products temporarily
+          claddingVariantId: undefined,
           wallWidthMm: item.wallWidthMm,
           wallHeightMm: item.wallHeightMm,
           quantityRequired: item.quantityRequired,
           unitPrice: item.unitPrice,
           totalPrice: item.totalPrice,
-        });
+        })
       }
 
       toast.success("Quote created successfully!");
