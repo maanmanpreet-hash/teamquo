@@ -125,16 +125,8 @@ export default function Stage1QuotingWorkspace() {
       });
 
       toast.success("Quote created successfully!");
-      // Reset form
-      setClientName("");
-      setClientEmail("");
-      setClientPhone("");
-      setClientAddress("");
-      setProductType("");
-      setSelectedProduct("");
-      setWallWidth("");
-      setWallHeight("");
-      setCurrentTab("client");
+      // Navigate to jobs page to download PDF
+      navigate("/jobs");
     } catch (error) {
       toast.error("Failed to create quote. Please try again.");
       console.error(error);

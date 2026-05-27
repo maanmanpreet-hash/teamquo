@@ -1,9 +1,6 @@
-# Cladding Quote App - 4-Stage Operational Platform Refactor
+# Cladding Quote App - 4-Stage Operational Platform
 
-## Previous Phases (Completed)
-- [x] Phase 1-9: Initial MVP with quoting form, product management, job tracking, PDF generation
-
-## NEW: Phase 1 - Database Schema Refactor for 4-Stage Workflow
+## Completed: Phase 1 - Database Schema Refactor
 - [x] Add `operator_name` field to jobs table
 - [x] Create operators table (id, name, created_at, updated_at)
 - [x] Add `stage` field to jobs table (enum: 'quoting', 'procurement', 'installation', 'invoicing')
@@ -12,26 +9,38 @@
 - [x] Generate and execute Drizzle migration
 - [x] Write vitest tests for operator queries
 
-## NEW: Phase 2 - Professional Home Screen & Operator Management
+## Completed: Phase 2 - Professional Home Screen & Operator Management
 - [x] Create professional home screen with company logo placeholder
 - [x] Build operator selection dropdown (populated from operators table)
+- [x] Style home screen for tablet/PC with fixed viewport
 - [ ] Add operator management CRUD in admin panel
 - [ ] Implement operator add/remove functionality
 - [ ] Add form validation for operator names
-- [x] Style home screen for tablet/PC with fixed viewport
 - [ ] Write vitest tests for operator selection logic
 
-## NEW: Phase 3 - Stage 1: Quoting Workspace (Self-Contained)
-- [ ] Refactor QuoteForm to be Stage 1 specific
-- [ ] Remove procurement/installation fields from Stage 1
-- [ ] Add operator name display in Stage 1 header
-- [ ] Implement real-time cost estimation with volume discounts
-- [ ] Add "Save Quote" and "Generate PDF" buttons
-- [ ] Implement quote status transition to "Booked"
-- [ ] Optimize form layout for tablet (no scrolling)
-- [ ] Write vitest tests for Stage 1 workflow
+## Completed: Phase 3 - Stage 1 Quoting Workspace (Fixed-Viewport MVP)
+- [x] Refactor QuoteForm to be Stage 1 specific
+- [x] Implement fixed-viewport layout (header/footer fixed, scrollable content)
+- [x] Build tabbed interface (Client, Product, Summary tabs)
+- [x] Implement real-time wall area calculation
+- [x] Implement real-time cost estimation
+- [x] Touch-optimize inputs (h-10, h-12 for tablet)
+- [x] Add operator tracking display
+- [x] Add comprehensive validation
+- [ ] Optimize for landscape/portrait on Android tablets
+- [ ] Add visual feedback for form interactions
+- [ ] Write Stage 1 workflow tests
 
-## NEW: Phase 4 - Stage 2: Procurement & Materials
+## In Progress: Phase 4 - Stage 1 Polish & Testing
+- [ ] Add "Save Quote" and "Generate PDF" buttons
+- [ ] Implement PDF generation for quotes
+- [ ] Add success/error toast notifications
+- [ ] Test on actual Android tablet
+- [ ] Optimize for landscape/portrait modes
+- [ ] Add visual feedback for form interactions
+- [ ] Write comprehensive Stage 1 workflow tests
+
+## Planned: Phase 5 - Stage 2: Procurement & Materials
 - [ ] Create Bill of Materials (BOM) generator
 - [ ] Auto-calculate required materials from Stage 1 dimensions
 - [ ] Generate printable material checklist
@@ -40,7 +49,7 @@
 - [ ] Implement stage transition from "Booked" to "Procurement"
 - [ ] Write vitest tests for BOM calculation
 
-## NEW: Phase 5 - Stage 3: Installation & Operations
+## Planned: Phase 6 - Stage 3: Installation & Operations
 - [ ] Create Stage 3 UI with job details display
 - [ ] Add installation notes field
 - [ ] Implement completion checklist
@@ -49,7 +58,7 @@
 - [ ] Implement stage transition to "Installation"
 - [ ] Write vitest tests for Stage 3 workflow
 
-## NEW: Phase 6 - Stage 4: Invoicing & Closeout
+## Planned: Phase 7 - Stage 4: Invoicing & Closeout
 - [ ] Create financial summary display
 - [ ] Show price override history
 - [ ] Calculate final balance due
@@ -59,7 +68,7 @@
 - [ ] Implement stage transition to "Completed"
 - [ ] Write vitest tests for invoicing logic
 
-## NEW: Phase 7 - Operator Management & Stage Gating
+## Planned: Phase 8 - Operator Management & Stage Gating
 - [ ] Implement operator selection persistence (session/local storage)
 - [ ] Add stage-gated access control (users can only see their current stage)
 - [ ] Create operator profile/context provider
@@ -68,17 +77,7 @@
 - [ ] Add stage progress indicator
 - [ ] Write vitest tests for stage gating
 
-## NEW: Phase 8 - UI/UX Optimization for Tablet/PC
-- [ ] Implement fixed viewport layout (no scrolling)
-- [ ] Create responsive grid system for tablet/PC
-- [ ] Add touch-friendly button sizing (min 48px)
-- [ ] Implement tabbed navigation for stages
-- [ ] Remove pinch-zoom capability
-- [ ] Optimize font sizes for readability on tablet
-- [ ] Test on actual Android tablet and iPad
-- [ ] Test on desktop PC browser
-
-## NEW: Phase 9 - Final Testing & Delivery
+## Planned: Phase 9 - Final Testing & Delivery
 - [ ] End-to-end testing of all 4 stages
 - [ ] Cross-browser testing (Chrome, Safari, Firefox)
 - [ ] Performance testing on tablet
