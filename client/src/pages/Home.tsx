@@ -62,64 +62,64 @@ export default function Home() {
         {/* Quick Actions Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {/* Create Quote */}
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setLocation("/quote")}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Quick Quote</CardTitle>
-                <Plus className="h-5 w-5 text-primary" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Create a new job quote with client details and dimensions
-              </p>
-            </CardContent>
-          </Card>
+          <Button 
+            variant="outline" 
+            className="h-auto p-6 flex flex-col items-start gap-3 hover:shadow-lg transition-shadow active:scale-95"
+            onClick={() => setLocation("/quote")}
+          >
+            <div className="flex items-center justify-between w-full">
+              <span className="text-lg font-semibold">Quick Quote</span>
+              <Plus className="h-5 w-5 text-primary" />
+            </div>
+            <p className="text-sm text-muted-foreground text-left">
+              Create a new job quote with client details and dimensions
+            </p>
+          </Button>
 
           {/* View Jobs */}
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setLocation("/jobs")}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Track Jobs</CardTitle>
-                <BarChart3 className="h-5 w-5 text-primary" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                View all quotes, bookings, and job status at a glance
-              </p>
-            </CardContent>
-          </Card>
+          <Button 
+            variant="outline" 
+            className="h-auto p-6 flex flex-col items-start gap-3 hover:shadow-lg transition-shadow active:scale-95"
+            onClick={() => setLocation("/jobs")}
+          >
+            <div className="flex items-center justify-between w-full">
+              <span className="text-lg font-semibold">Track Jobs</span>
+              <BarChart3 className="h-5 w-5 text-primary" />
+            </div>
+            <p className="text-sm text-muted-foreground text-left">
+              View all quotes, bookings, and job status at a glance
+            </p>
+          </Button>
 
           {/* Manage Products */}
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setLocation("/admin/products")}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Products</CardTitle>
-                <Settings className="h-5 w-5 text-primary" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Manage cladding variants, pricing, and product options
-              </p>
-            </CardContent>
-          </Card>
+          <Button 
+            variant="outline" 
+            className="h-auto p-6 flex flex-col items-start gap-3 hover:shadow-lg transition-shadow active:scale-95"
+            onClick={() => setLocation("/admin/products")}
+          >
+            <div className="flex items-center justify-between w-full">
+              <span className="text-lg font-semibold">Products</span>
+              <Settings className="h-5 w-5 text-primary" />
+            </div>
+            <p className="text-sm text-muted-foreground text-left">
+              Manage cladding variants, pricing, and product options
+            </p>
+          </Button>
 
           {/* Settings */}
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer opacity-50">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Settings</CardTitle>
-                <Settings className="h-5 w-5 text-muted-foreground" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Upload logo and configure business settings (coming soon)
-              </p>
-            </CardContent>
-          </Card>
+          <Button 
+            variant="outline" 
+            className="h-auto p-6 flex flex-col items-start gap-3 opacity-50 cursor-not-allowed"
+            disabled
+          >
+            <div className="flex items-center justify-between w-full">
+              <span className="text-lg font-semibold">Settings</span>
+              <Settings className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground text-left">
+              Upload logo and configure business settings (coming soon)
+            </p>
+          </Button>
         </div>
 
         {/* Features Section */}
