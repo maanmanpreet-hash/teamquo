@@ -55,6 +55,8 @@
 - [x] Create wall summary showing all walls in project
 - [x] Wall type selection auto-shows dimension form
 - [x] Dimension input with visual indicators (width/height icons)
+- [x] Persist walls to backend via tRPC mutations
+- [x] Load saved walls when resuming job
 - [ ] Update cost calculation to sum all walls
 - [ ] Implement wall-specific product selection
 - [ ] Test multi-wall quote creation

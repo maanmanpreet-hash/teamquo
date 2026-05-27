@@ -86,6 +86,12 @@ export default function Stage1QuotingWorkspace() {
   const createJobItemMutation = trpc.jobItems.create.useMutation();
   const updateJobMutation = trpc.jobs.update.useMutation();
   const uploadImageMutation = trpc.storage.uploadImage.useMutation();
+  const { data: savedWalls } = trpc.walls.getByJobId.useQuery(
+    { jobId: resumeJobId || 0 },
+    { enabled: resumeJobId !== null }
+  );
+  const createWallMutation = trpc.walls.create.useMutation();
+  const deleteWallMutation = trpc.walls.delete.useMutation();
 
   const selectedOperator = localStorage.getItem("selectedOperator");
 
@@ -116,9 +122,19 @@ export default function Stage1QuotingWorkspace() {
         setReferenceImageUrl(draftJob.referenceImageUrl);
         setReferenceImagePreview(draftJob.referenceImageUrl);
       }
+      if (savedWalls && savedWalls.length > 0) {
+        const loadedWalls: WallItem[] = savedWalls.map(w => ({
+          id: w.id.toString(),
+          wallType: w.wallType,
+          wallName: w.wallName || w.wallType,
+          wallWidthMm: w.wallWidthMm || 0,
+          wallHeightMm: w.wallHeightMm || 0,
+        }));
+        setWalls(loadedWalls);
+      }
       setIsLoadingDraft(false);
     }
-  }, [draftJob, isLoadingDraft]);
+  }, [draftJob, isLoadingDraft, savedWalls]);
 
   // Determine if product requires wall dimensions
   const requiresWallDimensions = (productTypeSlug: string) => {
@@ -693,6 +709,16 @@ export default function Stage1QuotingWorkspace() {
                               wallHeightMm: Math.round(parseFloat(tempWallDimHeight) * 1000),
                             };
                             setWalls([...walls, newWall]);
+                            // If job exists, persist wall to backend
+                            if (resumeJobId) {
+                              createWallMutation.mutate({
+                                jobId: resumeJobId,
+                                wallType: tempWallType as "regular" | "garage" | "custom",
+                                wallName: tempWallName || tempWallType,
+                                wallWidthMm: newWall.wallWidthMm,
+                                wallHeightMm: newWall.wallHeightMm,
+                              });
+                            }
                             setTempWallType("regular");
                             setTempWallName("");
                             setTempWallDimWidth("");
@@ -720,7 +746,13 @@ export default function Stage1QuotingWorkspace() {
                             <p className="text-sm text-gray-600">{wall.wallType} • {(wall.wallWidthMm / 1000).toFixed(1)}m × {(wall.wallHeightMm / 1000).toFixed(1)}m</p>
                           </div>
                           <Button
-                            onClick={() => setWalls(walls.filter(w => w.id !== wall.id))}
+                            onClick={() => {
+                              setWalls(walls.filter(w => w.id !== wall.id));
+                              // Delete from backend if it has a numeric ID
+                              if (!isNaN(parseInt(wall.id))) {
+                                deleteWallMutation.mutate({ id: parseInt(wall.id) });
+                              }
+                            }}
                             variant="ghost"
                             size="sm"
                             className="text-red-600 hover:text-red-700"
