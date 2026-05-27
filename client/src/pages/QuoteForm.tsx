@@ -502,20 +502,60 @@ export default function Stage1QuotingWorkspace() {
         >
           Cancel
         </Button>
-        <Button
-          onClick={handleSubmit}
-          disabled={createJobMutation.isPending || !isFormValid}
-          className="flex-1 h-12 text-base bg-blue-600 hover:bg-blue-700"
-        >
-          {createJobMutation.isPending ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Creating...
-            </>
-          ) : (
-            "Create Quote"
-          )}
-        </Button>
+        
+        {currentTab === "client" && (
+          <Button
+            onClick={() => setCurrentTab("products")}
+            className="flex-1 h-12 text-base bg-blue-600 hover:bg-blue-700"
+          >
+            Next
+          </Button>
+        )}
+        
+        {currentTab === "products" && (
+          <>
+            <Button
+              onClick={() => setCurrentTab("client")}
+              variant="outline"
+              className="flex-1 h-12 text-base"
+            >
+              Back
+            </Button>
+            <Button
+              onClick={() => setCurrentTab("summary")}
+              disabled={lineItems.length === 0}
+              className="flex-1 h-12 text-base bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+            >
+              Next
+            </Button>
+          </>
+        )}
+        
+        {currentTab === "summary" && (
+          <>
+            <Button
+              onClick={() => setCurrentTab("products")}
+              variant="outline"
+              className="flex-1 h-12 text-base"
+            >
+              Back
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={createJobMutation.isPending || !isFormValid}
+              className="flex-1 h-12 text-base bg-green-600 hover:bg-green-700"
+            >
+              {createJobMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create Quote"
+              )}
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );
