@@ -1,5 +1,5 @@
 /**
- * Download HTML content as PDF using html2pdf
+ * Download HTML content as PDF using html2pdf with reliable mobile support
  */
 export async function downloadPDF(html: string, filename: string) {
   // Dynamically load html2pdf library
@@ -21,8 +21,36 @@ export async function downloadPDF(html: string, filename: string) {
         };
         
         // @ts-ignore - html2pdf is loaded dynamically
-        html2pdf().set(opt).from(element).save();
-        resolve(true);
+        html2pdf()
+          .set(opt)
+          .from(element)
+          .toPdf()
+          .get('pdf')
+          .then((pdf: any) => {
+            // Create blob from PDF
+            const blob = pdf.output('blob');
+            
+            // Create download link
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.style.display = 'none';
+            
+            // Append to body and trigger click
+            document.body.appendChild(link);
+            link.click();
+            
+            // Cleanup
+            setTimeout(() => {
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+              resolve(true);
+            }, 100);
+          })
+          .catch((error: any) => {
+            reject(error);
+          });
       } catch (error) {
         reject(error);
       }

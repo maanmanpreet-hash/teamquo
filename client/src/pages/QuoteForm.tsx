@@ -45,6 +45,8 @@ export default function Stage1QuotingWorkspace() {
   const [tempWallHeight, setTempWallHeight] = useState("");
   const [tempLedStrips, setTempLedStrips] = useState(false);
   const [tempLedStripQuantity, setTempLedStripQuantity] = useState("");
+  const [tempLength, setTempLength] = useState("");
+  const [tempWidth, setTempWidth] = useState("");
 
   // Queries
   const { data: productTypes } = trpc.products.listTypes.useQuery();
@@ -61,6 +63,11 @@ export default function Stage1QuotingWorkspace() {
   // Determine if product requires wall dimensions
   const requiresWallDimensions = (productTypeSlug: string) => {
     return ["cladding", "acoustic_panels", "marble_sheet"].includes(productTypeSlug);
+  };
+
+  // Determine if product requires length/width (acoustic panels)
+  const requiresLengthWidth = (productTypeSlug: string) => {
+    return ["acoustic_panels"].includes(productTypeSlug);
   };
 
   // Determine if product can have LED strips
@@ -108,6 +115,8 @@ export default function Stage1QuotingWorkspace() {
     setTempProductId("");
     setTempWallWidth("");
     setTempWallHeight("");
+    setTempLength("");
+    setTempWidth("");
     setTempLedStrips(false);
     setTempLedStripQuantity("");
   }, []);
@@ -122,7 +131,12 @@ export default function Stage1QuotingWorkspace() {
       return;
     }
 
-    if (requiresWallDimensions(productTypeSlug) && (!tempWallWidth || !tempWallHeight)) {
+    if (requiresLengthWidth(productTypeSlug) && (!tempLength || !tempWidth)) {
+      toast.error("Please enter length and width for acoustic panels");
+      return;
+    }
+
+    if (requiresWallDimensions(productTypeSlug) && !requiresLengthWidth(productTypeSlug) && (!tempWallWidth || !tempWallHeight)) {
       toast.error("Please enter wall dimensions");
       return;
     }
@@ -138,8 +152,18 @@ export default function Stage1QuotingWorkspace() {
       return;
     }
 
-    const wallWidthMm = requiresWallDimensions(productTypeSlug) ? Math.round(parseFloat(tempWallWidth) * 1000) : 0;
-    const wallHeightMm = requiresWallDimensions(productTypeSlug) ? Math.round(parseFloat(tempWallHeight) * 1000) : 0;
+    // For acoustic panels, use length/width; otherwise use wall dimensions
+    let wallWidthMm = 0;
+    let wallHeightMm = 0;
+    
+    if (requiresLengthWidth(productTypeSlug)) {
+      wallWidthMm = Math.round(parseFloat(tempLength) * 1000);
+      wallHeightMm = Math.round(parseFloat(tempWidth) * 1000);
+    } else if (requiresWallDimensions(productTypeSlug)) {
+      wallWidthMm = Math.round(parseFloat(tempWallWidth) * 1000);
+      wallHeightMm = Math.round(parseFloat(tempWallHeight) * 1000);
+    }
+
     const quantity = calculateQuantity(wallWidthMm, wallHeightMm, product);
     const totalPrice = quantity * product.pricePerUnit;
 
@@ -162,10 +186,12 @@ export default function Stage1QuotingWorkspace() {
     setTempProductId("");
     setTempWallWidth("");
     setTempWallHeight("");
+    setTempLength("");
+    setTempWidth("");
     setTempLedStrips(false);
     setTempLedStripQuantity("");
     toast.success(`Added ${quantity} units of ${product.name}`);
-  }, [tempProductTypeId, tempProductId, tempWallWidth, tempWallHeight, tempLedStrips, tempLedStripQuantity, getProductDetails, calculateQuantity, getProductTypeSlug]);
+  }, [tempProductTypeId, tempProductId, tempWallWidth, tempWallHeight, tempLength, tempWidth, tempLedStrips, tempLedStripQuantity, getProductDetails, calculateQuantity, getProductTypeSlug, requiresLengthWidth, requiresWallDimensions]);
 
   // Remove line item
   const handleRemoveLineItem = useCallback((id: string) => {
@@ -179,6 +205,39 @@ export default function Stage1QuotingWorkspace() {
 
   // Validate form
   const isFormValid = clientName && clientEmail && clientPhone && clientAddress && lineItems.length > 0;
+  const canSaveDraft = clientName || clientEmail || clientPhone || clientAddress;
+
+  // Handle save draft
+  const handleSaveDraft = async () => {
+    if (!canSaveDraft) {
+      toast.error("Please enter at least some client details");
+      return;
+    }
+
+    if (!selectedOperator) {
+      toast.error("Please select an operator");
+      return;
+    }
+
+    try {
+      await createJobMutation.mutateAsync({
+        clientName: clientName || undefined,
+        clientEmail: clientEmail || undefined,
+        clientPhone: clientPhone || undefined,
+        clientAddress: clientAddress || undefined,
+      });
+      toast.success("Draft saved! You can continue later.");
+      // Reset form
+      setClientName("");
+      setClientEmail("");
+      setClientPhone("");
+      setClientAddress("");
+      setLineItems([]);
+    } catch (error) {
+      toast.error("Failed to save draft");
+      console.error(error);
+    }
+  };
 
   // Handle submit
   const handleSubmit = async () => {
@@ -231,6 +290,7 @@ export default function Stage1QuotingWorkspace() {
   const productTypeSlug = getProductTypeSlug();
   const showWallDimensions = requiresWallDimensions(productTypeSlug);
   const showLedStrips = canHaveLedStrips(productTypeSlug);
+  const showLengthWidth = requiresLengthWidth(productTypeSlug);
 
   return (
     <div className="fixed inset-0 bg-gray-50 flex flex-col overflow-hidden">
@@ -297,7 +357,7 @@ export default function Stage1QuotingWorkspace() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="clientAddress" className="text-sm font-medium">Address *</Label>
+                    <Label htmlFor="clientAddress" className="text-sm font-medium">Address</Label>
                     <Input
                       id="clientAddress"
                       value={clientAddress}
@@ -308,6 +368,19 @@ export default function Stage1QuotingWorkspace() {
                   </div>
                 </div>
               </Card>
+
+              {/* Save Draft Button */}
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSaveDraft}
+                  variant="outline"
+                  className="flex-1 h-12 text-base"
+                  disabled={createJobMutation.isPending || !canSaveDraft}
+                >
+                  {createJobMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Save Draft
+                </Button>
+              </div>
             </TabsContent>
 
             {/* Products Tab */}
@@ -351,11 +424,50 @@ export default function Stage1QuotingWorkspace() {
                     </div>
                   )}
 
-                  {/* Wall Dimensions (conditional) */}
-                  {showWallDimensions && (
+                  {/* Acoustic Panel Length/Width (conditional) */}
+                  {showLengthWidth && (
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="wallWidth" className="text-sm font-medium">Wall Width (m) *</Label>
+                        <Label htmlFor="length" className="text-sm font-medium flex items-center gap-2">
+                          <span>Length (m) *</span>
+                          <span title="Horizontal measurement" className="text-lg">📏</span>
+                        </Label>
+                        <Input
+                          id="length"
+                          type="number"
+                          step="0.1"
+                          value={tempLength}
+                          onChange={(e) => setTempLength(e.target.value)}
+                          placeholder="e.g., 2.4"
+                          className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="width" className="text-sm font-medium flex items-center gap-2">
+                          <span>Width (m) *</span>
+                          <span title="Vertical measurement" className="text-lg">📐</span>
+                        </Label>
+                        <Input
+                          id="width"
+                          type="number"
+                          step="0.1"
+                          value={tempWidth}
+                          onChange={(e) => setTempWidth(e.target.value)}
+                          placeholder="e.g., 1.2"
+                          className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Wall Dimensions (conditional) */}
+                  {showWallDimensions && !showLengthWidth && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="wallWidth" className="text-sm font-medium flex items-center gap-2">
+                          <span>Width (m) *</span>
+                          <span title="Horizontal measurement" className="text-lg">↔️</span>
+                        </Label>
                         <Input
                           id="wallWidth"
                           type="number"
@@ -367,7 +479,10 @@ export default function Stage1QuotingWorkspace() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="wallHeight" className="text-sm font-medium">Wall Height (m) *</Label>
+                        <Label htmlFor="wallHeight" className="text-sm font-medium flex items-center gap-2">
+                          <span>Height (m) *</span>
+                          <span title="Vertical measurement" className="text-lg">↕️</span>
+                        </Label>
                         <Input
                           id="wallHeight"
                           type="number"

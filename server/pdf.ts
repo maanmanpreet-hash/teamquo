@@ -7,7 +7,7 @@ export function generateQuoteHTML(
   job: Job,
   jobItems: JobItem[],
   claddingVariants: Map<number, CladdingVariant>,
-  companyName: string = "Cladding Quote",
+  companyName: string = "TeamQuo",
   logoUrl?: string
 ): string {
   const formatCurrency = (cents: number | null | undefined) => {

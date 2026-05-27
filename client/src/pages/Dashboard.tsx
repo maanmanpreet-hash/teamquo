@@ -62,10 +62,10 @@ export default function Dashboard() {
         <div className="text-center mb-12">
           <div className="mb-6">
             <div className="w-24 h-24 mx-auto bg-white rounded-full shadow-lg flex items-center justify-center">
-              <span className="text-4xl font-bold text-blue-600">CC</span>
+              <span className="text-4xl font-bold text-blue-600">TQ</span>
             </div>
           </div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Cladding Quote</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">TeamQuo</h1>
           <p className="text-lg text-gray-600">Professional Job Quoting Platform</p>
         </div>
 

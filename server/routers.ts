@@ -78,7 +78,7 @@ export const appRouter = router({
       }),
     create: protectedProcedure
       .input(z.object({
-        clientName: z.string().min(1),
+        clientName: z.string().min(1).optional(),
         clientEmail: z.string().email().optional(),
         clientPhone: z.string().optional(),
         clientAddress: z.string().optional(),
@@ -87,7 +87,7 @@ export const appRouter = router({
       .mutation(({ input, ctx }) =>
         db.createJob({
           userId: ctx.user.id,
-          clientName: input.clientName,
+          clientName: input.clientName || "[Draft]",
           clientEmail: input.clientEmail,
           clientPhone: input.clientPhone,
           clientAddress: input.clientAddress,

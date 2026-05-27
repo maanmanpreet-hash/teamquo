@@ -1,95 +1,69 @@
-# Cladding Quote App - 4-Stage Operational Platform
+# TeamQuo - Collaborative Quote Management Platform
 
-## Completed: Phase 1 - Database Schema Refactor
-- [x] Add `operator_name` field to jobs table
-- [x] Create operators table (id, name, created_at, updated_at)
-- [x] Add `stage` field to jobs table (enum: 'quoting', 'procurement', 'installation', 'invoicing')
-- [x] Add `stage_status` field to jobs table to track progress within each stage
-- [x] Create stage_transitions table to log stage changes with timestamps
-- [x] Generate and execute Drizzle migration
-- [x] Write vitest tests for operator queries
+## Phase 1: Partial Client Save + Quote Queue
+- [x] Add "Save Draft" button to client details tab
+- [x] Implement partial job creation (client details only, no products required)
+- [ ] Create quote queue view showing all pending/draft quotes
+- [ ] Add ability to view and resume incomplete quotes
+- [ ] Display quote status (draft, in-progress, completed)
+- [ ] Show which operator created each draft
+- [ ] Add edit functionality for draft quotes
+- [ ] Seed operators table: Manpreet, Ginni, Roopjit, Simar
+- [ ] Allow custom operator name entry
+- [ ] Write tests for partial save workflow
 
-## Completed: Phase 2 - Professional Home Screen & Operator Management
-- [x] Create professional home screen with company logo placeholder
-- [x] Build operator selection dropdown (populated from operators table)
-- [x] Style home screen for tablet/PC with fixed viewport
-- [ ] Add operator management CRUD in admin panel
-- [ ] Implement operator add/remove functionality
-- [ ] Add form validation for operator names
-- [ ] Write vitest tests for operator selection logic
+## Phase 2: Acoustic Panel Dimensions + Graphical Indicators
+- [x] Add length and width fields for acoustic panels
+- [x] Add graphical dimension indicators (icons for width, length, height)
+- [ ] Create visual guide showing which dimension is which
+- [ ] Update quantity calculation for acoustic panels (length x width)
+- [ ] Add validation for acoustic panel dimensions
+- [ ] Test dimension calculations with various inputs
+- [ ] Write tests for acoustic panel workflows
 
-## Completed: Phase 3 - Stage 1 Quoting Workspace (Fixed-Viewport MVP)
-- [x] Refactor QuoteForm to be Stage 1 specific
-- [x] Implement fixed-viewport layout (header/footer fixed, scrollable content)
-- [x] Build tabbed interface (Client, Product, Summary tabs)
-- [x] Implement real-time wall area calculation
-- [x] Implement real-time cost estimation
-- [x] Touch-optimize inputs (h-10, h-12 for tablet)
-- [x] Add operator tracking display
-- [x] Add comprehensive validation
-- [ ] Optimize for landscape/portrait on Android tablets
-- [ ] Add visual feedback for form interactions
-- [ ] Write Stage 1 workflow tests
+## Phase 3: Reference Image Upload
+- [ ] Add image upload field to client details tab
+- [ ] Implement image preview in client details
+- [ ] Store image reference in job record
+- [ ] Display reference image in quote summary
+- [ ] Include reference image in PDF export
+- [ ] Add image size/format validation
+- [ ] Test image upload and storage
 
-## Completed: Phase 4 - Stage 1 Polish & Testing
-- [x] Add "Save Quote" and "Generate PDF" buttons
-- [x] Implement PDF generation for quotes (via Jobs page)
-- [x] Add success/error toast notifications
+## Phase 4: Multiple Walls Support
+- [ ] Refactor job structure to support multiple walls
+- [ ] Add "Add Wall" button to products tab
+- [ ] Implement wall type selection (regular wall, garage wall, custom)
+- [ ] Create wall summary showing all walls in project
+- [ ] Allow editing/deleting individual walls
+- [ ] Update cost calculation to sum all walls
+- [ ] Implement wall-specific product selection
+- [ ] Test multi-wall quote creation
+
+## Phase 5: PDF Download Fix + Job Pack with Drawings
+- [ ] Fix PDF download so files appear in Downloads folder
+- [ ] Implement job pack generation with wall drawings
+- [ ] Add wall measurements to drawings
+- [ ] Include product specifications in job pack
+- [ ] Add operator reference guide to job pack
+- [ ] Test PDF generation and download
+- [ ] Verify drawings render correctly
+
+## Phase 6: Dashboard Redesign (Monday.com Inspired)
+- [ ] Implement collapsed 1-line view for jobs
+- [ ] Add color coding for job status (quoted, booked, commenced, completed)
+- [ ] Create kanban-style board view
+- [ ] Add quick actions (edit, view PDF, change status)
+- [ ] Implement search/filter functionality
+- [ ] Add operator assignment view
+- [ ] Test dashboard performance with many jobs
+- [ ] Optimize for tablet viewing
+
+## Phase 7: Final Testing & Delivery
+- [ ] End-to-end testing of complete workflow
 - [ ] Test on actual Android tablet
-- [ ] Optimize for landscape/portrait modes
-- [x] Add visual feedback for form interactions (blue focus states, green checkmarks, larger touch targets)
-- [ ] Write comprehensive Stage 1 workflow tests
-
-## Planned: Phase 5 - Stage 2: Procurement & Materials
-- [ ] Create Bill of Materials (BOM) generator
-- [ ] Auto-calculate required materials from Stage 1 dimensions
-- [ ] Generate printable material checklist
-- [ ] Create Stage 2 UI with BOM display
-- [ ] Add print functionality for material list
-- [ ] Implement stage transition from "Booked" to "Procurement"
-- [ ] Write vitest tests for BOM calculation
-
-## Planned: Phase 6 - Stage 3: Installation & Operations
-- [ ] Create Stage 3 UI with job details display
-- [ ] Add installation notes field
-- [ ] Implement completion checklist
-- [ ] Add photo/documentation upload capability
-- [ ] Display original dimensions from Stage 1
-- [ ] Implement stage transition to "Installation"
-- [ ] Write vitest tests for Stage 3 workflow
-
-## Planned: Phase 7 - Stage 4: Invoicing & Closeout
-- [ ] Create financial summary display
-- [ ] Show price override history
-- [ ] Calculate final balance due
-- [ ] Add manual price adjustment capability
-- [ ] Implement job completion marking
-- [ ] Generate final invoice/receipt
-- [ ] Implement stage transition to "Completed"
-- [ ] Write vitest tests for invoicing logic
-
-## Planned: Phase 8 - Operator Management & Stage Gating
-- [ ] Implement operator selection persistence (session/local storage)
-- [ ] Add stage-gated access control (users can only see their current stage)
-- [ ] Create operator profile/context provider
-- [ ] Add operator name to all stage headers
-- [ ] Implement stage navigation (forward only, no backtracking)
-- [ ] Add stage progress indicator
-- [ ] Write vitest tests for stage gating
-
-## Planned: Phase 9 - Final Testing & Delivery
-- [ ] End-to-end testing of all 4 stages
-- [ ] Cross-browser testing (Chrome, Safari, Firefox)
-- [ ] Performance testing on tablet
-- [ ] Accessibility testing
-- [ ] Create user documentation
-- [ ] Prepare for deployment
-- [ ] Final checkpoint and delivery
-
-## CRITICAL BUGS TO FIX (User Feedback)
-- [ ] Fix quote generation failure - debug job creation process
-- [ ] Implement automatic quantity calculation based on wall dimensions and product dimensions
-- [ ] Add support for multiple products per quote (allow adding cladding + mirrors, etc.)
-- [ ] Verify and update supplier pricing from excelhome.com.au
-- [ ] Test quote generation end-to-end with multiple product types
-
+- [ ] Performance testing
+- [ ] Cross-browser testing
+- [ ] User acceptance testing
+- [ ] Documentation and help section
+- [ ] Final polish and bug fixes
