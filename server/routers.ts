@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
+import { generateQuoteHTML } from "./pdf";
 
 export const appRouter = router({
   system: systemRouter,
@@ -135,6 +136,19 @@ export const appRouter = router({
           throw new Error("Unauthorized");
         }
         return db.getJobItemsByJobId(input.jobId);
+      }),
+    generatePDF: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const job = await db.getJobById(input.jobId);
+        if (!job || job.userId !== ctx.user.id) {
+          throw new Error("Unauthorized");
+        }
+        const items = await db.getJobItemsByJobId(input.jobId);
+        const variants = await db.getAllCladdingVariants();
+        const variantMap = new Map(variants.map((v) => [v.id, v]));
+        const html = generateQuoteHTML(job, items, variantMap);
+        return { html, jobId: job.id, clientName: job.clientName };
       }),
     create: protectedProcedure
       .input(z.object({

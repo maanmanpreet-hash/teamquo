@@ -7,6 +7,8 @@ import { trpc } from "@/lib/trpc";
 import { useState } from "react";
 import { Loader2, Plus, Eye, FileText } from "lucide-react";
 import { Link } from "wouter";
+import { downloadPDF } from "@/lib/pdf";
+import { toast } from "sonner";
 
 type JobStatus = "quoted" | "booked" | "commenced" | "completed" | "cancelled";
 
@@ -21,6 +23,7 @@ const statusColors: Record<JobStatus, string> = {
 export default function Jobs() {
   const { user } = useAuth();
   const [selectedStatus, setSelectedStatus] = useState<JobStatus | "all">("all");
+  const [downloadingJobId, setDownloadingJobId] = useState<number | null>(null);
 
   // Fetch jobs
   const { data: jobs, isLoading, refetch } = trpc.jobs.list.useQuery();
@@ -31,6 +34,41 @@ export default function Jobs() {
       refetch();
     },
   });
+
+  // PDF generation mutation
+  const generatePDFMutation = trpc.jobItems.generatePDF.useQuery(
+    { jobId: downloadingJobId || 0 },
+    { enabled: downloadingJobId !== null }
+  );
+
+  const handleDownloadPDF = async (jobId: number, clientName: string) => {
+    try {
+      setDownloadingJobId(jobId);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to download PDF");
+      setDownloadingJobId(null);
+    }
+  };
+
+  // Watch for PDF data and download when ready
+  if (downloadingJobId !== null && generatePDFMutation.data) {
+    try {
+      const job = jobs?.find((j) => j.id === downloadingJobId);
+      downloadPDF(
+        generatePDFMutation.data.html,
+        `quote-${job?.clientName || "quote"}-${new Date().toISOString().split('T')[0]}.pdf`
+      ).then(() => {
+        toast.success("PDF downloaded successfully");
+        setDownloadingJobId(null);
+      }).catch((error) => {
+        toast.error("Failed to download PDF");
+        setDownloadingJobId(null);
+      });
+    } catch (error) {
+      toast.error("Failed to process PDF");
+      setDownloadingJobId(null);
+    }
+  }
 
   if (!user) {
     return (
@@ -243,9 +281,18 @@ export default function Jobs() {
                         Cancel
                       </Button>
                     )}
-                    <Button variant="ghost" size="sm">
-                      <FileText className="w-4 h-4 mr-2" />
-                      PDF
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDownloadPDF(job.id, job.clientName)}
+                      disabled={downloadingJobId === job.id}
+                    >
+                      {downloadingJobId === job.id ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <FileText className="w-4 h-4 mr-2" />
+                      )}
+                      {downloadingJobId === job.id ? "Generating..." : "PDF"}
                     </Button>
                   </div>
                 </CardContent>

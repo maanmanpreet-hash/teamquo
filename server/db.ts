@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, claddingVariants, jobs, jobItems, CladdingVariant, Job, JobItem, InsertCladdingVariant, InsertJob, InsertJobItem } from "../drizzle/schema";
+import { InsertUser, users, claddingVariants, jobs, jobItems, CladdingVariant, Job, JobItem, InsertCladdingVariant, InsertJob, InsertJobItem, productTypes, products, volumeDiscounts, ProductType, Product, VolumeDiscount, InsertProduct, InsertProductType, InsertVolumeDiscount } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -326,4 +326,140 @@ export async function deleteJobItem(id: number) {
     console.error("[Database] Failed to delete job item:", error);
     throw error;
   }
+}
+
+// ===== Product Type Helpers =====
+export async function getAllProductTypes() {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get product types: database not available");
+    return [];
+  }
+  try {
+    return await db.select().from(productTypes).where(eq(productTypes.isActive, 1));
+  } catch (error) {
+    console.error("[Database] Failed to get product types:", error);
+    throw error;
+  }
+}
+
+export async function getProductTypeBySlug(slug: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get product type: database not available");
+    return undefined;
+  }
+  try {
+    const result = await db.select().from(productTypes).where(eq(productTypes.slug, slug)).limit(1);
+    return result.length > 0 ? result[0] : undefined;
+  } catch (error) {
+    console.error("[Database] Failed to get product type:", error);
+    throw error;
+  }
+}
+
+// ===== Product Helpers =====
+export async function getAllProducts(productTypeId?: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get products: database not available");
+    return [];
+  }
+  try {
+    if (productTypeId) {
+      return await db.select().from(products).where(and(eq(products.productTypeId, productTypeId), eq(products.isActive, 1)));
+    }
+    return await db.select().from(products).where(eq(products.isActive, 1));
+  } catch (error) {
+    console.error("[Database] Failed to get products:", error);
+    throw error;
+  }
+}
+
+export async function getProductById(id: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get product: database not available");
+    return undefined;
+  }
+  try {
+    const result = await db.select().from(products).where(eq(products.id, id)).limit(1);
+    return result.length > 0 ? result[0] : undefined;
+  } catch (error) {
+    console.error("[Database] Failed to get product:", error);
+    throw error;
+  }
+}
+
+export async function createProduct(data: InsertProduct) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot create product: database not available");
+    return undefined;
+  }
+  try {
+    const result = await db.insert(products).values(data);
+    return result;
+  } catch (error) {
+    console.error("[Database] Failed to create product:", error);
+    throw error;
+  }
+}
+
+export async function updateProduct(id: number, updates: Partial<InsertProduct>) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot update product: database not available");
+    return undefined;
+  }
+  try {
+    await db.update(products).set(updates).where(eq(products.id, id));
+    return getProductById(id);
+  } catch (error) {
+    console.error("[Database] Failed to update product:", error);
+    throw error;
+  }
+}
+
+export async function deleteProduct(id: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot delete product: database not available");
+    return false;
+  }
+  try {
+    await db.update(products).set({ isActive: 0 }).where(eq(products.id, id));
+    return true;
+  } catch (error) {
+    console.error("[Database] Failed to delete product:", error);
+    throw error;
+  }
+}
+
+// ===== Volume Discount Helpers =====
+export async function getVolumeDiscounts(productTypeId: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get volume discounts: database not available");
+    return [];
+  }
+  try {
+    return await db.select().from(volumeDiscounts).where(eq(volumeDiscounts.productTypeId, productTypeId)).orderBy(volumeDiscounts.minQuantity);
+  } catch (error) {
+    console.error("[Database] Failed to get volume discounts:", error);
+    throw error;
+  }
+}
+
+export async function calculateDiscount(productTypeId: number, quantity: number): Promise<number> {
+  const discounts = await getVolumeDiscounts(productTypeId);
+  let applicableDiscount = 0;
+  
+  for (const discount of discounts) {
+    if (quantity >= discount.minQuantity) {
+      applicableDiscount = discount.discountPercent;
+    }
+  }
+  
+  return applicableDiscount;
 }

@@ -29,10 +29,10 @@
 - [ ] Validate all items before creating job record
 
 ## Phase 4: PDF Quote Generation & Job Recording
-- [ ] Implement PDF generation with client details and quote summary
+- [x] Implement PDF generation with client details and quote summary
 - [ ] Include logo upload and display on PDF
-- [ ] Add job record saving to database
-- [ ] Implement PDF download functionality
+- [x] Add job record saving to database
+- [x] Implement PDF download functionality
 - [ ] Test PDF generation with various input scenarios
 
 ## Phase 5: Job Status Dashboard
@@ -59,4 +59,25 @@
 - [ ] Create user documentation or help section
 - [ ] Prepare project for deployment
 - [ ] Write comprehensive CRUD tests for cladding variant management flows (create, list, update, delete)
+
+
+## Phase 5: Multi-Product Type Support with Volume Discounts
+- [ ] Extend database schema to support multiple product types (acoustic panels, marble sheet, mirrors, fireplace)
+- [ ] Create product variants table with dimensions, pricing, and discount tiers
+- [ ] Implement volume discount calculation logic
+- [ ] Fetch and integrate excelhome.com.au product catalogue
+- [ ] Add product type selection to quoting form
+- [ ] Implement dimension dropdown with custom dimension option
+- [ ] Display applicable discounts in real-time estimates
+- [ ] Write vitest tests for discount calculations
+
+## Phase 6: Product Management Admin Panel
+- [ ] Build admin dashboard for product management
+- [ ] Implement CRUD operations for products and variants
+- [ ] Add pricing override functionality
+- [ ] Allow custom dimension addition
+- [ ] Implement product availability toggle
+- [ ] Add bulk import/export for products
+- [ ] Build tablet-optimized admin interface
+- [ ] Write vitest tests for admin operations
 

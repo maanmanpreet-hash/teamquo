@@ -26,7 +26,59 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /**
- * Cladding variants table: stores available cladding options with dimensions and pricing
+ * Product types table: stores different product categories (cladding, acoustic, marble, mirrors, fireplace)
+ */
+export const productTypes = mysqlTable("product_types", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(), // e.g., "Cladding", "Acoustic Panels", "Mirrors"
+  slug: varchar("slug", { length: 100 }).notNull().unique(), // e.g., "cladding", "acoustic-panels"
+  description: text("description"),
+  isActive: int("is_active").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ProductType = typeof productTypes.$inferSelect;
+export type InsertProductType = typeof productTypes.$inferInsert;
+
+/**
+ * Products table: stores product variants with dimensions and pricing
+ */
+export const products = mysqlTable("products", {
+  id: int("id").autoincrement().primaryKey(),
+  productTypeId: int("product_type_id").notNull(), // Reference to product type
+  name: varchar("name", { length: 255 }).notNull(), // e.g., "Timber Look 300x600"
+  design: varchar("design", { length: 255 }), // e.g., "Timber", "Stone", "Modern"
+  widthMm: int("width_mm"), // Width in millimeters (nullable for products without width)
+  heightMm: int("height_mm"), // Height in millimeters (nullable for products without height)
+  depthMm: int("depth_mm"), // Depth in millimeters (nullable)
+  pricePerUnit: int("price_per_unit").notNull(), // Price in cents
+  description: text("description"),
+  isActive: int("is_active").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Product = typeof products.$inferSelect;
+export type InsertProduct = typeof products.$inferInsert;
+
+/**
+ * Volume discounts table: stores discount tiers based on quantity
+ */
+export const volumeDiscounts = mysqlTable("volume_discounts", {
+  id: int("id").autoincrement().primaryKey(),
+  productTypeId: int("product_type_id").notNull(), // Reference to product type
+  minQuantity: int("min_quantity").notNull(), // Minimum quantity for this discount
+  discountPercent: int("discount_percent").notNull(), // Discount percentage (e.g., 10 = 10%)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type VolumeDiscount = typeof volumeDiscounts.$inferSelect;
+export type InsertVolumeDiscount = typeof volumeDiscounts.$inferInsert;
+
+/**
+ * Cladding variants table: stores available cladding options with dimensions and pricing (deprecated, kept for backward compatibility)
  */
 export const claddingVariants = mysqlTable("cladding_variants", {
   id: int("id").autoincrement().primaryKey(),
