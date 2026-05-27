@@ -13,12 +13,12 @@
 - [x] Write vitest tests for operator queries
 
 ## NEW: Phase 2 - Professional Home Screen & Operator Management
-- [ ] Create professional home screen with company logo placeholder
-- [ ] Build operator selection dropdown (populated from operators table)
+- [x] Create professional home screen with company logo placeholder
+- [x] Build operator selection dropdown (populated from operators table)
 - [ ] Add operator management CRUD in admin panel
 - [ ] Implement operator add/remove functionality
 - [ ] Add form validation for operator names
-- [ ] Style home screen for tablet/PC with fixed viewport
+- [x] Style home screen for tablet/PC with fixed viewport
 - [ ] Write vitest tests for operator selection logic
 
 ## NEW: Phase 3 - Stage 1: Quoting Workspace (Self-Contained)

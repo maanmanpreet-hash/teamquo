@@ -1,440 +1,436 @@
+import { useState, useMemo } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
-import { trpc } from "@/lib/trpc";
-import { useState, useMemo } from "react";
-import { Loader2, Plus, Trash2, AlertCircle } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocation } from "wouter";
+import { Loader2, ArrowLeft, Download } from "lucide-react";
+import { toast } from "sonner";
 
-interface QuoteItem {
-  id: string;
-  productTypeId: number;
-  productId: number;
-  quantity: number;
-  wallWidthMm?: number;
-  wallHeightMm?: number;
-  manualPriceOverride?: number;
-}
-
-export default function QuoteForm() {
+export default function Stage1QuotingWorkspace() {
   const { user } = useAuth();
-  const [, setLocation] = useLocation();
+  const [, navigate] = useLocation();
+  const [currentTab, setCurrentTab] = useState("client");
 
-  // Form state
+  // Client Details
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [clientAddress, setClientAddress] = useState("");
-  const [notes, setNotes] = useState("");
 
-  // Quote items
-  const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
+  // Product Selection
+  const [productType, setProductType] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState("");
+  const [selectedDimension, setSelectedDimension] = useState("");
+  const [customDimension, setCustomDimension] = useState("");
+  const [useCustomDimension, setUseCustomDimension] = useState(false);
+  const [quantity, setQuantity] = useState("1");
+  const [priceOverride, setPriceOverride] = useState("");
 
-  // Fetch product types and products
-  const { data: productTypes, isLoading: loadingTypes } = trpc.products.listTypes.useQuery();
-  const [selectedProductTypeId, setSelectedProductTypeId] = useState<number | null>(null);
-  const { data: products, isLoading: loadingProducts } = trpc.products.listByType.useQuery(
-    { productTypeId: selectedProductTypeId! },
-    { enabled: !!selectedProductTypeId }
-  );
+  // Wall Dimensions
+  const [wallWidth, setWallWidth] = useState("");
+  const [wallHeight, setWallHeight] = useState("");
 
-  // Mutations
+  // Queries
+  const { data: products } = trpc.cladding.list.useQuery();
+  const { data: operators } = trpc.operators.list.useQuery();
   const createJobMutation = trpc.jobs.create.useMutation();
   const createJobItemMutation = trpc.jobItems.create.useMutation();
 
-  // Calculate price for a single item with discount
-  const calculateItemPrice = (item: QuoteItem, product: any) => {
-    let basePrice = product.pricePerUnit;
-    let quantity = item.quantity;
+  const selectedOperator = localStorage.getItem("selectedOperator");
 
-    // For cladding-like products with dimensions, calculate quantity from area
-    if (item.wallWidthMm && item.wallHeightMm && product.widthMm && product.heightMm) {
-      const wallAreaMm2 = item.wallWidthMm * item.wallHeightMm;
-      const panelAreaMm2 = product.widthMm * product.heightMm;
-      quantity = Math.ceil(wallAreaMm2 / panelAreaMm2);
-    }
+  // Calculate area and estimate
+  const wallArea = useMemo(() => {
+    const w = parseFloat(wallWidth) || 0;
+    const h = parseFloat(wallHeight) || 0;
+    return w * h;
+  }, [wallWidth, wallHeight]);
 
-    return { quantity, basePrice, totalPrice: quantity * basePrice };
-  };
+  const filteredProducts = useMemo(() => {
+    if (!productType || !products) return [];
+    // For now, return all products since we're using cladding
+    return products;
+  }, [productType, products]);
 
-  // Calculate total estimate
-  const calculateEstimate = useMemo(() => {
-    let total = 0;
-    let itemCount = 0;
+  const selectedProductData = useMemo(() => {
+    if (!selectedProduct || !filteredProducts) return null;
+    return filteredProducts.find((p: any) => p.id.toString() === selectedProduct);
+  }, [selectedProduct, filteredProducts]);
 
-    quoteItems.forEach((item) => {
-      const product = products?.find((p) => p.id === item.productId);
-      if (product) {
-        if (item.manualPriceOverride) {
-          total += item.manualPriceOverride;
-        } else {
-          const { totalPrice } = calculateItemPrice(item, product);
-          total += totalPrice;
-        }
-        itemCount++;
-      }
-    });
+  const productDimensions = useMemo(() => {
+    if (!selectedProductData) return [];
+    // Return standard dimensions for cladding
+    return [`${selectedProductData.widthMm}x${selectedProductData.heightMm}mm`];
+  }, [selectedProductData]);
 
-    return { total, itemCount, isValid: itemCount > 0 };
-  }, [quoteItems, products]);
+  const estimatedCost = useMemo(() => {
+    if (!selectedProductData || wallArea === 0) return 0;
+    const basePrice = parseFloat(priceOverride) || selectedProductData.pricePerUnit;
+    const panelsNeeded = Math.ceil(wallArea / 1); // Simplified calculation
+    return basePrice * panelsNeeded;
+  }, [selectedProductData, wallArea, priceOverride]);
 
-  const handleAddItem = () => {
-    if (!selectedProductTypeId) {
-      toast.error("Please select a product type first");
+  const handleSubmit = async () => {
+    // Validation
+    if (!clientName.trim()) {
+      toast.error("Client name is required");
       return;
     }
-    const newItem: QuoteItem = {
-      id: Math.random().toString(),
-      productTypeId: selectedProductTypeId,
-      productId: 0,
-      quantity: 1,
-    };
-    setQuoteItems([...quoteItems, newItem]);
-  };
-
-  const handleRemoveItem = (id: string) => {
-    setQuoteItems(quoteItems.filter((item) => item.id !== id));
-  };
-
-  const handleUpdateItem = (id: string, updates: Partial<QuoteItem>) => {
-    setQuoteItems(
-      quoteItems.map((item) =>
-        item.id === id ? { ...item, ...updates } : item
-      )
-    );
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!user) {
-      toast.error("You must be logged in to create a quote");
+    if (!clientEmail.trim()) {
+      toast.error("Client email is required");
       return;
     }
-
-    if (!clientName || !clientEmail || !clientPhone) {
-      toast.error("Please fill in all client details");
+    if (!selectedOperator) {
+      toast.error("Please select an operator first");
       return;
     }
-
-    if (!calculateEstimate.isValid) {
-      toast.error("Please add at least one item to the quote");
+    if (!productType) {
+      toast.error("Please select a product type");
+      return;
+    }
+    if (!selectedProduct) {
+      toast.error("Please select a product");
+      return;
+    }
+    if (wallArea === 0) {
+      toast.error("Please enter valid wall dimensions");
       return;
     }
 
     try {
       // Create job
-      const jobResult = await createJobMutation.mutateAsync({
+      const job = await createJobMutation.mutateAsync({
         clientName,
         clientEmail,
         clientPhone,
         clientAddress,
-        notes,
       });
 
-      // Create job items
-      if (jobResult) {
-        for (const item of quoteItems) {
-          const product = products?.find((p) => p.id === item.productId);
-          if (product) {
-            const { quantity, totalPrice } = calculateItemPrice(item, product);
-            await createJobItemMutation.mutateAsync({
-              jobId: jobResult.id,
-              itemType: "cladding",
-              claddingVariantId: item.productId,
-              wallWidthMm: item.wallWidthMm,
-              wallHeightMm: item.wallHeightMm,
-              quantityRequired: quantity,
-              totalPrice,
-              manualPriceOverride: item.manualPriceOverride,
-            });
-          }
-        }
-      }
+      if (!job) throw new Error("Failed to create job");
+
+      // Create job item
+      await createJobItemMutation.mutateAsync({
+        jobId: job.id,
+        itemType: "cladding",
+        claddingVariantId: parseInt(selectedProduct),
+        wallWidthMm: Math.round(parseFloat(wallWidth) * 1000),
+        wallHeightMm: Math.round(parseFloat(wallHeight) * 1000),
+        quantityRequired: parseInt(quantity),
+        totalPrice: Math.round(estimatedCost * 100),
+        manualPriceOverride: priceOverride ? Math.round(parseFloat(priceOverride) * 100) : undefined,
+      });
 
       toast.success("Quote created successfully!");
-      setLocation("/jobs");
+      // Reset form
+      setClientName("");
+      setClientEmail("");
+      setClientPhone("");
+      setClientAddress("");
+      setProductType("");
+      setSelectedProduct("");
+      setWallWidth("");
+      setWallHeight("");
+      setCurrentTab("client");
     } catch (error) {
-      toast.error(`Error creating quote: ${error instanceof Error ? error.message : "Unknown error"}`);
+      toast.error("Failed to create quote. Please try again.");
+      console.error(error);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">Create New Quote</h1>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Client Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Client Details</CardTitle>
-              <CardDescription>Enter client information for the quote</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="clientName">Client Name *</Label>
-                  <Input
-                    id="clientName"
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    required
-                    placeholder="e.g., John Smith"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="clientEmail">Email *</Label>
-                  <Input
-                    id="clientEmail"
-                    type="email"
-                    value={clientEmail}
-                    onChange={(e) => setClientEmail(e.target.value)}
-                    required
-                    placeholder="john@example.com"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="clientPhone">Phone *</Label>
-                  <Input
-                    id="clientPhone"
-                    value={clientPhone}
-                    onChange={(e) => setClientPhone(e.target.value)}
-                    required
-                    placeholder="0412 345 678"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="clientAddress">Address</Label>
-                  <Input
-                    id="clientAddress"
-                    value={clientAddress}
-                    onChange={(e) => setClientAddress(e.target.value)}
-                    placeholder="123 Main St, Sydney NSW"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Any additional notes or special requirements"
-                  rows={3}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Quote Items */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Quote Items</CardTitle>
-                <CardDescription>Add products to the quote</CardDescription>
-              </div>
-              <Button type="button" onClick={handleAddItem} size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Item
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {loadingTypes ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="animate-spin" />
-                  Loading product types...
-                </div>
-              ) : (
-                <div>
-                  <Label htmlFor="productType">Product Type</Label>
-                  <Select
-                    value={selectedProductTypeId?.toString() || ""}
-                    onValueChange={(value) => setSelectedProductTypeId(parseInt(value))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a product type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {productTypes?.map((type) => (
-                        <SelectItem key={type.id} value={type.id.toString()}>
-                          {type.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {quoteItems.length === 0 ? (
-                <div className="flex items-center gap-2 p-4 bg-muted rounded-lg">
-                  <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">No items added yet. Click "Add Item" to get started.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {quoteItems.map((item, index) => {
-                    const product = products?.find((p) => p.id === item.productId);
-                    const { quantity, totalPrice } = product
-                      ? calculateItemPrice(item, product)
-                      : { quantity: 0, totalPrice: 0 };
-
-                    return (
-                      <Card key={item.id} className="bg-muted/50">
-                        <CardContent className="pt-4 space-y-4">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-semibold">Item {index + 1}</h4>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveItem(item.id)}
-                              className="text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <Label htmlFor={`product-${item.id}`}>Product *</Label>
-                              <Select
-                                value={item.productId.toString()}
-                                onValueChange={(value) =>
-                                  handleUpdateItem(item.id, { productId: parseInt(value) })
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a product" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {loadingProducts ? (
-                                    <div className="p-2">Loading...</div>
-                                  ) : (
-                                    products?.map((prod) => (
-                                      <SelectItem key={prod.id} value={prod.id.toString()}>
-                                        {prod.name} - ${(prod.pricePerUnit / 100).toFixed(2)}
-                                      </SelectItem>
-                                    ))
-                                  )}
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            {product?.widthMm && product?.heightMm && (
-                              <>
-                                <div>
-                                  <Label htmlFor={`width-${item.id}`}>Wall Width (mm)</Label>
-                                  <Input
-                                    id={`width-${item.id}`}
-                                    type="number"
-                                    value={item.wallWidthMm || ""}
-                                    onChange={(e) =>
-                                      handleUpdateItem(item.id, { wallWidthMm: parseInt(e.target.value) || 0 })
-                                    }
-                                    placeholder="e.g., 3000"
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor={`height-${item.id}`}>Wall Height (mm)</Label>
-                                  <Input
-                                    id={`height-${item.id}`}
-                                    type="number"
-                                    value={item.wallHeightMm || ""}
-                                    onChange={(e) =>
-                                      handleUpdateItem(item.id, { wallHeightMm: parseInt(e.target.value) || 0 })
-                                    }
-                                    placeholder="e.g., 2400"
-                                  />
-                                </div>
-                              </>
-                            )}
-
-                            <div>
-                              <Label htmlFor={`override-${item.id}`}>Manual Price Override ($)</Label>
-                              <Input
-                                id={`override-${item.id}`}
-                                type="number"
-                                step="0.01"
-                                value={item.manualPriceOverride ? (item.manualPriceOverride / 100).toFixed(2) : ""}
-                                onChange={(e) =>
-                                  handleUpdateItem(item.id, {
-                                    manualPriceOverride: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : undefined,
-                                  })
-                                }
-                                placeholder="Leave empty for auto-calculation"
-                              />
-                            </div>
-                          </div>
-
-                          {product && (
-                            <div className="bg-background p-3 rounded border">
-                              <div className="text-sm space-y-1">
-                                <p>
-                                  <span className="font-semibold">Quantity:</span> {quantity} units
-                                </p>
-                                <p>
-                                  <span className="font-semibold">Price:</span> ${(totalPrice / 100).toFixed(2)}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Estimate Summary */}
-          {calculateEstimate.isValid && (
-            <Card className="bg-primary/5 border-primary/20">
-              <CardHeader>
-                <CardTitle>Estimate Summary</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-semibold">Total Estimate:</span>
-                  <span className="text-2xl font-bold text-primary">
-                    ${(calculateEstimate.total / 100).toFixed(2)}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Submit Button */}
-          <div className="flex gap-4">
-            <Button
-              type="submit"
-              disabled={createJobMutation.isPending || !calculateEstimate.isValid}
-              className="flex-1"
-            >
-              {createJobMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating Quote...
-                </>
-              ) : (
-                "Create Quote"
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setLocation("/")}
-            >
-              Cancel
-            </Button>
+    <div className="fixed inset-0 bg-gray-50 flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-lg font-semibold text-gray-900">Stage 1: Quoting</h1>
+            <p className="text-xs text-gray-500">Create and estimate job quotes</p>
           </div>
-        </form>
+        </div>
+        <div className="text-sm text-gray-600">
+          Operator: <span className="font-medium">{operators?.find((o) => o.id.toString() === selectedOperator)?.name}</span>
+        </div>
+      </div>
+
+      {/* Main Content - Scrollable */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto p-4">
+          <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-6">
+              <TabsTrigger value="client">Client</TabsTrigger>
+              <TabsTrigger value="product">Product</TabsTrigger>
+              <TabsTrigger value="summary">Summary</TabsTrigger>
+            </TabsList>
+
+            {/* Tab 1: Client Details */}
+            <TabsContent value="client" className="space-y-4">
+              <Card className="p-6">
+                <h2 className="text-lg font-semibold mb-4">Client Information</h2>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="clientName">Client Name *</Label>
+                    <Input
+                      id="clientName"
+                      value={clientName}
+                      onChange={(e) => setClientName(e.target.value)}
+                      placeholder="Enter client name"
+                      className="mt-1 h-10 text-base"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="clientEmail">Email *</Label>
+                    <Input
+                      id="clientEmail"
+                      type="email"
+                      value={clientEmail}
+                      onChange={(e) => setClientEmail(e.target.value)}
+                      placeholder="client@example.com"
+                      className="mt-1 h-10 text-base"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="clientPhone">Phone</Label>
+                    <Input
+                      id="clientPhone"
+                      type="tel"
+                      value={clientPhone}
+                      onChange={(e) => setClientPhone(e.target.value)}
+                      placeholder="(555) 123-4567"
+                      className="mt-1 h-10 text-base"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="clientAddress">Address</Label>
+                    <Input
+                      id="clientAddress"
+                      value={clientAddress}
+                      onChange={(e) => setClientAddress(e.target.value)}
+                      placeholder="123 Main St, City, State"
+                      className="mt-1 h-10 text-base"
+                    />
+                  </div>
+                </div>
+              </Card>
+            </TabsContent>
+
+            {/* Tab 2: Product & Dimensions */}
+            <TabsContent value="product" className="space-y-4">
+              <Card className="p-6">
+                <h2 className="text-lg font-semibold mb-4">Wall Dimensions</h2>
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <Label htmlFor="wallWidth">Width (m) *</Label>
+                    <Input
+                      id="wallWidth"
+                      type="number"
+                      value={wallWidth}
+                      onChange={(e) => setWallWidth(e.target.value)}
+                      placeholder="0.00"
+                      className="mt-1 h-10 text-base"
+                      step="0.01"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="wallHeight">Height (m) *</Label>
+                    <Input
+                      id="wallHeight"
+                      type="number"
+                      value={wallHeight}
+                      onChange={(e) => setWallHeight(e.target.value)}
+                      placeholder="0.00"
+                      className="mt-1 h-10 text-base"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+                {wallArea > 0 && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
+                    <p className="text-sm text-blue-900">
+                      <strong>Wall Area:</strong> {wallArea.toFixed(2)} m²
+                    </p>
+                  </div>
+                )}
+              </Card>
+
+              <Card className="p-6">
+                <h2 className="text-lg font-semibold mb-4">Product Selection</h2>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="productType">Product Type *</Label>
+                    <Select value={productType} onValueChange={setProductType}>
+                      <SelectTrigger id="productType" className="h-10 text-base">
+                        <SelectValue placeholder="Select product type..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cladding">Cladding</SelectItem>
+                        <SelectItem value="acoustic_panel">Acoustic Panels</SelectItem>
+                        <SelectItem value="marble_sheet">Marble Sheet</SelectItem>
+                        <SelectItem value="mirror">Mirrors</SelectItem>
+                        <SelectItem value="fireplace">Fireplace</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {productType && (
+                    <div>
+                      <Label htmlFor="product">Product *</Label>
+                      <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                        <SelectTrigger id="product" className="h-10 text-base">
+                          <SelectValue placeholder="Select product..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {filteredProducts && filteredProducts.map((p: any) => (
+                            <SelectItem key={p.id} value={p.id.toString()}>
+                              {p.name} - ${p.pricePerUnit.toFixed(2)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {selectedProductData && productDimensions.length > 0 && (
+                    <div>
+                      <Label htmlFor="dimension">Dimension</Label>
+                      <Select value={selectedDimension} onValueChange={setSelectedDimension} disabled={useCustomDimension}>
+                        <SelectTrigger id="dimension" className="h-10 text-base">
+                          <SelectValue placeholder="Select dimension..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {productDimensions.map((dim: string, idx: number) => (
+                            <SelectItem key={idx} value={dim}>
+                              {dim}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="customDim"
+                      checked={useCustomDimension}
+                      onChange={(e) => setUseCustomDimension(e.target.checked)}
+                      className="w-4 h-4"
+                    />
+                    <Label htmlFor="customDim" className="cursor-pointer">
+                      Use custom dimension
+                    </Label>
+                  </div>
+
+                  {useCustomDimension && (
+                    <div>
+                      <Label htmlFor="customDimension">Custom Dimension</Label>
+                      <Input
+                        id="customDimension"
+                        value={customDimension}
+                        onChange={(e) => setCustomDimension(e.target.value)}
+                        placeholder="e.g., 1200x2400mm"
+                        className="mt-1 h-10 text-base"
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="quantity">Quantity</Label>
+                      <Input
+                        id="quantity"
+                        type="number"
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                        placeholder="1"
+                        className="mt-1 h-10 text-base"
+                        min="1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="priceOverride">Price Override ($)</Label>
+                      <Input
+                        id="priceOverride"
+                        type="number"
+                        value={priceOverride}
+                        onChange={(e) => setPriceOverride(e.target.value)}
+                        placeholder="Leave blank for default"
+                        className="mt-1 h-10 text-base"
+                        step="0.01"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </TabsContent>
+
+            {/* Tab 3: Summary */}
+            <TabsContent value="summary" className="space-y-4">
+              <Card className="p-6">
+                <h2 className="text-lg font-semibold mb-4">Quote Summary</h2>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Client:</span>
+                    <span className="font-medium">{clientName || "—"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Email:</span>
+                    <span className="font-medium">{clientEmail || "—"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Wall Area:</span>
+                    <span className="font-medium">{wallArea.toFixed(2)} m²</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Product:</span>
+                    <span className="font-medium">{selectedProductData?.name || "—"}</span>
+                  </div>
+                  <div className="border-t border-gray-200 pt-3 mt-3 flex justify-between">
+                    <span className="text-gray-900 font-semibold">Estimated Cost:</span>
+                    <span className="text-lg font-bold text-blue-600">${estimatedCost.toFixed(2)}</span>
+                  </div>
+                </div>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
+
+      {/* Footer - Fixed */}
+      <div className="bg-white border-t border-gray-200 px-4 py-3 flex gap-3 flex-shrink-0">
+        <Button
+          variant="outline"
+          onClick={() => navigate("/dashboard")}
+          className="flex-1 h-12 text-base"
+        >
+          Cancel
+        </Button>
+        <Button
+          onClick={handleSubmit}
+          disabled={createJobMutation.isPending}
+          className="flex-1 h-12 text-base"
+        >
+          {createJobMutation.isPending ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Creating...
+            </>
+          ) : (
+            <>
+              <Download className="w-4 h-4 mr-2" />
+              Create Quote
+            </>
+          )}
+        </Button>
       </div>
     </div>
   );

@@ -1,248 +1,43 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLocation } from "wouter";
-import { Loader2, Plus, BarChart3, Settings, LogOut } from "lucide-react";
+import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import { getLoginUrl } from "@/const";
 
 export default function Home() {
-  const { user, loading, logout } = useAuth();
-  const [, setLocation] = useLocation();
+  const { user, loading, isAuthenticated } = useAuth();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      navigate("/dashboard");
+    }
+  }, [isAuthenticated, user, navigate]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="animate-spin w-8 h-8" />
       </div>
     );
   }
 
-  if (!user) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-lg">
-          <CardHeader className="space-y-2 text-center">
-            <h1 className="text-3xl font-bold text-primary">Cladding Quote</h1>
-            <CardDescription>Professional job quoting made simple</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground text-center">
-              Create accurate job quotes in minutes. Track client details, dimensions, and costs all in one place.
-            </p>
-            <Button asChild className="w-full h-12 text-base" size="lg">
-              <a href={getLoginUrl()}>Sign In to Get Started</a>
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
+          <h1 className="text-3xl font-bold text-blue-600 mb-2">Cladding Quote</h1>
+          <p className="text-gray-600 mb-6">Professional job quoting made simple</p>
+          <p className="text-gray-500 text-sm mb-8">
+            Create accurate job quotes in minutes. Track client details, dimensions, and costs all in one place.
+          </p>
+          <a href={getLoginUrl()} className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors">
+            Sign In to Get Started
+          </a>
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-card sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-primary">Cladding Quote</h1>
-            <p className="text-sm text-muted-foreground">Welcome, {user.name}</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => logout()}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Sign Out
-          </Button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Quick Actions Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {/* Create Quote */}
-          <Button 
-            variant="outline" 
-            className="h-auto p-6 flex flex-col items-start gap-3 hover:shadow-lg transition-shadow active:scale-95"
-            onClick={() => setLocation("/quote")}
-          >
-            <div className="flex items-center justify-between w-full">
-              <span className="text-lg font-semibold">Quick Quote</span>
-              <Plus className="h-5 w-5 text-primary" />
-            </div>
-            <p className="text-sm text-muted-foreground text-left">
-              Create a new job quote with client details and dimensions
-            </p>
-          </Button>
-
-          {/* View Jobs */}
-          <Button 
-            variant="outline" 
-            className="h-auto p-6 flex flex-col items-start gap-3 hover:shadow-lg transition-shadow active:scale-95"
-            onClick={() => setLocation("/jobs")}
-          >
-            <div className="flex items-center justify-between w-full">
-              <span className="text-lg font-semibold">Track Jobs</span>
-              <BarChart3 className="h-5 w-5 text-primary" />
-            </div>
-            <p className="text-sm text-muted-foreground text-left">
-              View all quotes, bookings, and job status at a glance
-            </p>
-          </Button>
-
-          {/* Manage Products */}
-          <Button 
-            variant="outline" 
-            className="h-auto p-6 flex flex-col items-start gap-3 hover:shadow-lg transition-shadow active:scale-95"
-            onClick={() => setLocation("/admin/products")}
-          >
-            <div className="flex items-center justify-between w-full">
-              <span className="text-lg font-semibold">Products</span>
-              <Settings className="h-5 w-5 text-primary" />
-            </div>
-            <p className="text-sm text-muted-foreground text-left">
-              Manage cladding variants, pricing, and product options
-            </p>
-          </Button>
-
-          {/* Settings */}
-          <Button 
-            variant="outline" 
-            className="h-auto p-6 flex flex-col items-start gap-3 opacity-50 cursor-not-allowed"
-            disabled
-          >
-            <div className="flex items-center justify-between w-full">
-              <span className="text-lg font-semibold">Settings</span>
-              <Settings className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-sm text-muted-foreground text-left">
-              Upload logo and configure business settings (coming soon)
-            </p>
-          </Button>
-        </div>
-
-        {/* Features Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Key Features</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 h-5 w-5 text-green-600 font-bold">✓</div>
-                <div>
-                  <p className="font-semibold text-sm">Real-time Estimates</p>
-                  <p className="text-sm text-muted-foreground">Instant cost calculations based on dimensions</p>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 h-5 w-5 text-green-600 font-bold">✓</div>
-                <div>
-                  <p className="font-semibold text-sm">Volume Discounts</p>
-                  <p className="text-sm text-muted-foreground">Automatic discount tiers for bulk orders</p>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 h-5 w-5 text-green-600 font-bold">✓</div>
-                <div>
-                  <p className="font-semibold text-sm">PDF Quotes</p>
-                  <p className="text-sm text-muted-foreground">Download professional quotes for clients</p>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 h-5 w-5 text-green-600 font-bold">✓</div>
-                <div>
-                  <p className="font-semibold text-sm">Job Tracking</p>
-                  <p className="text-sm text-muted-foreground">Monitor status from quoted to completed</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Product Catalog</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between items-center p-2 bg-muted rounded">
-                <span className="text-sm font-medium">Cladding</span>
-                <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded">2 variants</span>
-              </div>
-              <div className="flex justify-between items-center p-2 bg-muted rounded">
-                <span className="text-sm font-medium">Acoustic Panels</span>
-                <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded">7 colors</span>
-              </div>
-              <div className="flex justify-between items-center p-2 bg-muted rounded">
-                <span className="text-sm font-medium">UV Panel (Marble)</span>
-                <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded">1 variant</span>
-              </div>
-              <div className="flex justify-between items-center p-2 bg-muted rounded">
-                <span className="text-sm font-medium">Mirrors</span>
-                <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded">4 designs</span>
-              </div>
-              <div className="flex justify-between items-center p-2 bg-muted rounded">
-                <span className="text-sm font-medium">Fireplace</span>
-                <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded">3 sizes</span>
-              </div>
-              <Button variant="outline" className="w-full mt-4" onClick={() => setLocation("/admin/products")}>
-                Manage Products
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Quick Start Guide */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Getting Started</CardTitle>
-            <CardDescription>Follow these steps to create your first quote</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex gap-4">
-                <div className="flex-shrink-0 h-8 w-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm">
-                  1
-                </div>
-                <div>
-                  <p className="font-semibold">Click "Quick Quote"</p>
-                  <p className="text-sm text-muted-foreground">Start creating a new job quote</p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="flex-shrink-0 h-8 w-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm">
-                  2
-                </div>
-                <div>
-                  <p className="font-semibold">Enter Client Details</p>
-                  <p className="text-sm text-muted-foreground">Name, email, phone, and address</p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="flex-shrink-0 h-8 w-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm">
-                  3
-                </div>
-                <div>
-                  <p className="font-semibold">Select Products & Dimensions</p>
-                  <p className="text-sm text-muted-foreground">Choose products and enter wall/cabinet dimensions</p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="flex-shrink-0 h-8 w-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm">
-                  4
-                </div>
-                <div>
-                  <p className="font-semibold">Review & Download</p>
-                  <p className="text-sm text-muted-foreground">Check the estimate and download PDF to send to client</p>
-                </div>
-              </div>
-            </div>
-            <Button className="w-full mt-6" onClick={() => setLocation("/quote")}>
-              Create Your First Quote
-            </Button>
-          </CardContent>
-        </Card>
-      </main>
-    </div>
-  );
+  return null;
 }
