@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useLocation } from "wouter";
 import { Loader2, ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ interface LineItem {
   quantityRequired: number;
   unitPrice: number;
   totalPrice: number;
+  ledStripQuantity?: number;
 }
 
 export default function Stage1QuotingWorkspace() {
@@ -41,6 +43,8 @@ export default function Stage1QuotingWorkspace() {
   const [tempProductId, setTempProductId] = useState("");
   const [tempWallWidth, setTempWallWidth] = useState("");
   const [tempWallHeight, setTempWallHeight] = useState("");
+  const [tempLedStrips, setTempLedStrips] = useState(false);
+  const [tempLedStripQuantity, setTempLedStripQuantity] = useState("");
 
   // Queries
   const { data: productTypes } = trpc.products.listTypes.useQuery();
@@ -54,6 +58,16 @@ export default function Stage1QuotingWorkspace() {
 
   const selectedOperator = localStorage.getItem("selectedOperator");
 
+  // Determine if product requires wall dimensions
+  const requiresWallDimensions = (productTypeSlug: string) => {
+    return ["cladding", "acoustic_panels", "marble_sheet"].includes(productTypeSlug);
+  };
+
+  // Determine if product can have LED strips
+  const canHaveLedStrips = (productTypeSlug: string) => {
+    return ["cladding", "acoustic_panels"].includes(productTypeSlug);
+  };
+
   // Get product details
   const getProductDetails = useCallback((productId: string) => {
     if (!productsByType) return null;
@@ -61,9 +75,18 @@ export default function Stage1QuotingWorkspace() {
     return product || null;
   }, [productsByType]);
 
+  // Get product type slug
+  const getProductTypeSlug = useCallback(() => {
+    if (!tempProductTypeId || !productTypes) return "";
+    const type = productTypes.find((t: any) => t.id === tempProductTypeId);
+    return type?.slug || "";
+  }, [tempProductTypeId, productTypes]);
+
   // Calculate quantity based on dimensions
   const calculateQuantity = useCallback((wallWidthMm: number, wallHeightMm: number, product: any) => {
-    if (!product) return 0;
+    if (!product) return 1;
+    
+    if (wallWidthMm === 0 || wallHeightMm === 0) return 1; // For products without wall dimensions
     
     const wallArea = (wallWidthMm / 1000) * (wallHeightMm / 1000); // Convert to m²
     
@@ -83,12 +106,29 @@ export default function Stage1QuotingWorkspace() {
     const id = parseInt(typeId);
     setTempProductTypeId(id);
     setTempProductId("");
+    setTempWallWidth("");
+    setTempWallHeight("");
+    setTempLedStrips(false);
+    setTempLedStripQuantity("");
   }, []);
 
   // Add line item
   const handleAddLineItem = useCallback(() => {
-    if (!tempProductTypeId || !tempProductId || !tempWallWidth || !tempWallHeight) {
-      toast.error("Please fill in all product details");
+    const productTypeSlug = getProductTypeSlug();
+    
+    // Validate required fields
+    if (!tempProductTypeId || !tempProductId) {
+      toast.error("Please select a product");
+      return;
+    }
+
+    if (requiresWallDimensions(productTypeSlug) && (!tempWallWidth || !tempWallHeight)) {
+      toast.error("Please enter wall dimensions");
+      return;
+    }
+
+    if (tempLedStrips && !tempLedStripQuantity) {
+      toast.error("Please enter LED strip quantity");
       return;
     }
 
@@ -98,16 +138,14 @@ export default function Stage1QuotingWorkspace() {
       return;
     }
 
-    const productType = productTypes?.find((t: any) => t.id === tempProductTypeId)?.slug || "product";
-
-    const wallWidthMm = Math.round(parseFloat(tempWallWidth) * 1000);
-    const wallHeightMm = Math.round(parseFloat(tempWallHeight) * 1000);
+    const wallWidthMm = requiresWallDimensions(productTypeSlug) ? Math.round(parseFloat(tempWallWidth) * 1000) : 0;
+    const wallHeightMm = requiresWallDimensions(productTypeSlug) ? Math.round(parseFloat(tempWallHeight) * 1000) : 0;
     const quantity = calculateQuantity(wallWidthMm, wallHeightMm, product);
     const totalPrice = quantity * product.pricePerUnit;
 
     const newItem: LineItem = {
       id: Math.random().toString(36),
-      productType,
+      productType: productTypeSlug,
       productId: tempProductId,
       productName: product.name,
       productDimensionMm: `${product.widthMm || 0}x${product.heightMm || 0}`,
@@ -116,6 +154,7 @@ export default function Stage1QuotingWorkspace() {
       quantityRequired: quantity,
       unitPrice: product.pricePerUnit,
       totalPrice,
+      ledStripQuantity: tempLedStrips ? parseInt(tempLedStripQuantity) : undefined,
     };
 
     setLineItems([...lineItems, newItem]);
@@ -123,8 +162,10 @@ export default function Stage1QuotingWorkspace() {
     setTempProductId("");
     setTempWallWidth("");
     setTempWallHeight("");
+    setTempLedStrips(false);
+    setTempLedStripQuantity("");
     toast.success(`Added ${quantity} units of ${product.name}`);
-  }, [tempProductTypeId, tempProductId, tempWallWidth, tempWallHeight, getProductDetails, calculateQuantity, productTypes]);
+  }, [tempProductTypeId, tempProductId, tempWallWidth, tempWallHeight, tempLedStrips, tempLedStripQuantity, getProductDetails, calculateQuantity, getProductTypeSlug]);
 
   // Remove line item
   const handleRemoveLineItem = useCallback((id: string) => {
@@ -169,14 +210,14 @@ export default function Stage1QuotingWorkspace() {
 
         await createJobItemMutation.mutateAsync({
           jobId: job.id,
-          itemType: "cabinet", // Use cabinet type for all products temporarily
+          itemType: "cabinet", // Use cabinet type for all products
           claddingVariantId: undefined,
-          wallWidthMm: item.wallWidthMm,
-          wallHeightMm: item.wallHeightMm,
+          wallWidthMm: item.wallWidthMm || 0,
+          wallHeightMm: item.wallHeightMm || 0,
           quantityRequired: item.quantityRequired,
           unitPrice: item.unitPrice,
           totalPrice: item.totalPrice,
-        })
+        });
       }
 
       toast.success("Quote created successfully!");
@@ -186,6 +227,10 @@ export default function Stage1QuotingWorkspace() {
       console.error(error);
     }
   };
+
+  const productTypeSlug = getProductTypeSlug();
+  const showWallDimensions = requiresWallDimensions(productTypeSlug);
+  const showLedStrips = canHaveLedStrips(productTypeSlug);
 
   return (
     <div className="fixed inset-0 bg-gray-50 flex flex-col overflow-hidden">
@@ -199,16 +244,16 @@ export default function Stage1QuotingWorkspace() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-lg font-semibold text-gray-900">Stage 1: Quoting</h1>
+            <h1 className="text-lg font-bold">Stage 1: Quoting</h1>
             <p className="text-xs text-gray-500">Operator: {selectedOperator || "Not selected"}</p>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto p-4 space-y-6">
-          <Tabs value={currentTab} onValueChange={setCurrentTab}>
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="max-w-2xl mx-auto space-y-4">
+          <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="client">Client</TabsTrigger>
               <TabsTrigger value="products">Products</TabsTrigger>
@@ -218,7 +263,7 @@ export default function Stage1QuotingWorkspace() {
             {/* Client Tab */}
             <TabsContent value="client" className="space-y-4">
               <Card className="p-6">
-                <h2 className="text-lg font-semibold mb-4">Client Information</h2>
+                <h2 className="text-lg font-semibold mb-4">Client Details</h2>
                 <div className="space-y-4">
                   <div>
                     <Label htmlFor="clientName" className="text-sm font-medium">Client Name *</Label>
@@ -226,10 +271,9 @@ export default function Stage1QuotingWorkspace() {
                       id="clientName"
                       value={clientName}
                       onChange={(e) => setClientName(e.target.value)}
-                      placeholder="Enter client name"
+                      placeholder="John Smith"
                       className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                     />
-                    {clientName && <p className="text-xs text-green-600 mt-1">✓ Entered</p>}
                   </div>
                   <div>
                     <Label htmlFor="clientEmail" className="text-sm font-medium">Email *</Label>
@@ -238,10 +282,9 @@ export default function Stage1QuotingWorkspace() {
                       type="email"
                       value={clientEmail}
                       onChange={(e) => setClientEmail(e.target.value)}
-                      placeholder="client@example.com"
+                      placeholder="john@example.com"
                       className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                     />
-                    {clientEmail && <p className="text-xs text-green-600 mt-1">✓ Entered</p>}
                   </div>
                   <div>
                     <Label htmlFor="clientPhone" className="text-sm font-medium">Phone *</Label>
@@ -249,10 +292,9 @@ export default function Stage1QuotingWorkspace() {
                       id="clientPhone"
                       value={clientPhone}
                       onChange={(e) => setClientPhone(e.target.value)}
-                      placeholder="0412 345 678"
+                      placeholder="0412345678"
                       className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                     />
-                    {clientPhone && <p className="text-xs text-green-600 mt-1">✓ Entered</p>}
                   </div>
                   <div>
                     <Label htmlFor="clientAddress" className="text-sm font-medium">Address *</Label>
@@ -260,10 +302,9 @@ export default function Stage1QuotingWorkspace() {
                       id="clientAddress"
                       value={clientAddress}
                       onChange={(e) => setClientAddress(e.target.value)}
-                      placeholder="123 Main St, City, State 1234"
+                      placeholder="123 Main St, City"
                       className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                     />
-                    {clientAddress && <p className="text-xs text-green-600 mt-1">✓ Entered</p>}
                   </div>
                 </div>
               </Card>
@@ -273,11 +314,12 @@ export default function Stage1QuotingWorkspace() {
             <TabsContent value="products" className="space-y-4">
               <Card className="p-6">
                 <h2 className="text-lg font-semibold mb-4">Add Products</h2>
-                <div className="space-y-4 mb-6">
+                <div className="space-y-4">
+                  {/* Product Type Selection */}
                   <div>
                     <Label htmlFor="productType" className="text-sm font-medium">Product Type *</Label>
                     <Select value={tempProductTypeId?.toString() || ""} onValueChange={handleProductTypeChange}>
-                      <SelectTrigger className="mt-1 h-12 text-base">
+                      <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500">
                         <SelectValue placeholder="Select product type" />
                       </SelectTrigger>
                       <SelectContent>
@@ -290,15 +332,16 @@ export default function Stage1QuotingWorkspace() {
                     </Select>
                   </div>
 
-                  {tempProductTypeId && productsByType && (
+                  {/* Product Selection */}
+                  {tempProductTypeId && (
                     <div>
                       <Label htmlFor="product" className="text-sm font-medium">Product *</Label>
                       <Select value={tempProductId} onValueChange={setTempProductId}>
-                        <SelectTrigger className="mt-1 h-12 text-base">
+                        <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500">
                           <SelectValue placeholder="Select product" />
                         </SelectTrigger>
                         <SelectContent>
-                          {productsByType.map((product: any) => (
+                          {productsByType?.map((product: any) => (
                             <SelectItem key={product.id} value={product.id.toString()}>
                               {product.name} - ${(product.pricePerUnit / 100).toFixed(2)}
                             </SelectItem>
@@ -308,32 +351,68 @@ export default function Stage1QuotingWorkspace() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="wallWidth" className="text-sm font-medium">Wall Width (m) *</Label>
-                      <Input
-                        id="wallWidth"
-                        type="number"
-                        value={tempWallWidth}
-                        onChange={(e) => setTempWallWidth(e.target.value)}
-                        placeholder="0.00"
-                        className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                        step="0.01"
-                      />
+                  {/* Wall Dimensions (conditional) */}
+                  {showWallDimensions && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="wallWidth" className="text-sm font-medium">Wall Width (m) *</Label>
+                        <Input
+                          id="wallWidth"
+                          type="number"
+                          value={tempWallWidth}
+                          onChange={(e) => setTempWallWidth(e.target.value)}
+                          placeholder="0.00"
+                          className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                          step="0.01"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="wallHeight" className="text-sm font-medium">Wall Height (m) *</Label>
+                        <Input
+                          id="wallHeight"
+                          type="number"
+                          value={tempWallHeight}
+                          onChange={(e) => setTempWallHeight(e.target.value)}
+                          placeholder="0.00"
+                          className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                          step="0.01"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <Label htmlFor="wallHeight" className="text-sm font-medium">Wall Height (m) *</Label>
-                      <Input
-                        id="wallHeight"
-                        type="number"
-                        value={tempWallHeight}
-                        onChange={(e) => setTempWallHeight(e.target.value)}
-                        placeholder="0.00"
-                        className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                        step="0.01"
-                      />
+                  )}
+
+                  {/* LED Strips (conditional) */}
+                  {showLedStrips && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          id="ledStrips"
+                          checked={tempLedStrips}
+                          onCheckedChange={(checked) => {
+                            setTempLedStrips(checked as boolean);
+                            if (!checked) setTempLedStripQuantity("");
+                          }}
+                        />
+                        <Label htmlFor="ledStrips" className="text-sm font-medium cursor-pointer">
+                          Add LED Strip Lights
+                        </Label>
+                      </div>
+                      {tempLedStrips && (
+                        <div>
+                          <Label htmlFor="ledStripQuantity" className="text-sm font-medium">Number of LED Strips *</Label>
+                          <Input
+                            id="ledStripQuantity"
+                            type="number"
+                            value={tempLedStripQuantity}
+                            onChange={(e) => setTempLedStripQuantity(e.target.value)}
+                            placeholder="0"
+                            className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                            min="1"
+                          />
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  )}
 
                   <Button
                     onClick={handleAddLineItem}
@@ -346,14 +425,16 @@ export default function Stage1QuotingWorkspace() {
 
                 {/* Line Items */}
                 {lineItems.length > 0 && (
-                  <div className="space-y-3">
+                  <div className="space-y-3 mt-6">
                     <h3 className="font-semibold text-sm">Added Products ({lineItems.length})</h3>
                     {lineItems.map((item) => (
                       <div key={item.id} className="bg-gray-50 p-4 rounded-lg flex justify-between items-start">
                         <div className="flex-1">
                           <p className="font-medium text-sm">{item.productName}</p>
                           <p className="text-xs text-gray-600">
-                            {item.wallWidthMm / 1000}m × {item.wallHeightMm / 1000}m | {item.quantityRequired} units @ ${(item.unitPrice / 100).toFixed(2)}
+                            {item.wallWidthMm > 0 ? `${item.wallWidthMm / 1000}m × ${item.wallHeightMm / 1000}m | ` : ""}
+                            {item.quantityRequired} units @ ${(item.unitPrice / 100).toFixed(2)}
+                            {item.ledStripQuantity ? ` + ${item.ledStripQuantity} LED strips` : ""}
                           </p>
                           <p className="text-sm font-semibold text-blue-600 mt-1">
                             ${(item.totalPrice / 100).toFixed(2)}
@@ -395,7 +476,7 @@ export default function Stage1QuotingWorkspace() {
                     <p className="text-sm text-gray-600 mb-2">Products ({lineItems.length})</p>
                     {lineItems.map((item) => (
                       <div key={item.id} className="flex justify-between text-sm mb-2">
-                        <span>{item.productName} ({item.quantityRequired} units)</span>
+                        <span>{item.productName} ({item.quantityRequired} units){item.ledStripQuantity ? ` + ${item.ledStripQuantity} LED` : ""}</span>
                         <span className="font-semibold">${(item.totalPrice / 100).toFixed(2)}</span>
                       </div>
                     ))}
