@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocation } from "wouter";
-import { Loader2, ArrowLeft, Download } from "lucide-react";
+import { Loader2, ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+
+interface LineItem {
+  id: string;
+  productType: string;
+  productId: string;
+  productName: string;
+  productDimensionMm: string;
+  wallWidthMm: number;
+  wallHeightMm: number;
+  quantityRequired: number;
+  unitPrice: number;
+  totalPrice: number;
+}
 
 export default function Stage1QuotingWorkspace() {
   const { user } = useAuth();
@@ -22,82 +35,119 @@ export default function Stage1QuotingWorkspace() {
   const [clientPhone, setClientPhone] = useState("");
   const [clientAddress, setClientAddress] = useState("");
 
-  // Product Selection
-  const [productType, setProductType] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState("");
-  const [selectedDimension, setSelectedDimension] = useState("");
-  const [customDimension, setCustomDimension] = useState("");
-  const [useCustomDimension, setUseCustomDimension] = useState(false);
-  const [quantity, setQuantity] = useState("1");
-  const [priceOverride, setPriceOverride] = useState("");
-
-  // Wall Dimensions
-  const [wallWidth, setWallWidth] = useState("");
-  const [wallHeight, setWallHeight] = useState("");
+  // Line Items
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [tempProductTypeId, setTempProductTypeId] = useState<number | null>(null);
+  const [tempProductId, setTempProductId] = useState("");
+  const [tempWallWidth, setTempWallWidth] = useState("");
+  const [tempWallHeight, setTempWallHeight] = useState("");
 
   // Queries
-  const { data: products } = trpc.cladding.list.useQuery();
+  const { data: productTypes } = trpc.products.listTypes.useQuery();
+  const { data: productsByType } = trpc.products.listByType.useQuery(
+    { productTypeId: tempProductTypeId || 0 },
+    { enabled: !!tempProductTypeId }
+  );
   const { data: operators } = trpc.operators.list.useQuery();
   const createJobMutation = trpc.jobs.create.useMutation();
   const createJobItemMutation = trpc.jobItems.create.useMutation();
 
   const selectedOperator = localStorage.getItem("selectedOperator");
 
-  // Calculate area and estimate
-  const wallArea = useMemo(() => {
-    const w = parseFloat(wallWidth) || 0;
-    const h = parseFloat(wallHeight) || 0;
-    return w * h;
-  }, [wallWidth, wallHeight]);
+  // Get product details
+  const getProductDetails = useCallback((productId: string) => {
+    if (!productsByType) return null;
+    const product = productsByType.find((p: any) => p.id === parseInt(productId));
+    return product || null;
+  }, [productsByType]);
 
-  const filteredProducts = useMemo(() => {
-    if (!productType || !products) return [];
-    // For now, return all products since we're using cladding
-    return products;
-  }, [productType, products]);
+  // Calculate quantity based on dimensions
+  const calculateQuantity = useCallback((wallWidthMm: number, wallHeightMm: number, product: any) => {
+    if (!product) return 0;
+    
+    const wallArea = (wallWidthMm / 1000) * (wallHeightMm / 1000); // Convert to m²
+    
+    // Get product dimensions (in mm)
+    const productWidth = (product.widthMm || 600) / 1000; // Convert to m, default 600mm
+    const productHeight = (product.heightMm || 2900) / 1000; // Convert to m, default 2900mm
+    const productArea = productWidth * productHeight;
+    
+    if (productArea === 0) return 1;
+    
+    // Calculate required quantity with 10% waste factor
+    return Math.ceil((wallArea / productArea) * 1.1);
+  }, []);
 
-  const selectedProductData = useMemo(() => {
-    if (!selectedProduct || !filteredProducts) return null;
-    return filteredProducts.find((p: any) => p.id.toString() === selectedProduct);
-  }, [selectedProduct, filteredProducts]);
+  // Handle product type change
+  const handleProductTypeChange = useCallback((typeId: string) => {
+    const id = parseInt(typeId);
+    setTempProductTypeId(id);
+    setTempProductId("");
+  }, []);
 
-  const productDimensions = useMemo(() => {
-    if (!selectedProductData) return [];
-    // Return standard dimensions for cladding
-    return [`${selectedProductData.widthMm}x${selectedProductData.heightMm}mm`];
-  }, [selectedProductData]);
+  // Add line item
+  const handleAddLineItem = useCallback(() => {
+    if (!tempProductTypeId || !tempProductId || !tempWallWidth || !tempWallHeight) {
+      toast.error("Please fill in all product details");
+      return;
+    }
 
-  const estimatedCost = useMemo(() => {
-    if (!selectedProductData || wallArea === 0) return 0;
-    const basePrice = parseFloat(priceOverride) || selectedProductData.pricePerUnit;
-    const panelsNeeded = Math.ceil(wallArea / 1); // Simplified calculation
-    return basePrice * panelsNeeded;
-  }, [selectedProductData, wallArea, priceOverride]);
+    const product = getProductDetails(tempProductId);
+    if (!product) {
+      toast.error("Product not found");
+      return;
+    }
 
+    const productType = productTypes?.find((t: any) => t.id === tempProductTypeId)?.slug || "product";
+
+    const wallWidthMm = Math.round(parseFloat(tempWallWidth) * 1000);
+    const wallHeightMm = Math.round(parseFloat(tempWallHeight) * 1000);
+    const quantity = calculateQuantity(wallWidthMm, wallHeightMm, product);
+    const totalPrice = quantity * product.pricePerUnit;
+
+    const newItem: LineItem = {
+      id: Math.random().toString(36),
+      productType,
+      productId: tempProductId,
+      productName: product.name,
+      productDimensionMm: `${product.widthMm || 0}x${product.heightMm || 0}`,
+      wallWidthMm,
+      wallHeightMm,
+      quantityRequired: quantity,
+      unitPrice: product.pricePerUnit,
+      totalPrice,
+    };
+
+    setLineItems([...lineItems, newItem]);
+    setTempProductTypeId(null);
+    setTempProductId("");
+    setTempWallWidth("");
+    setTempWallHeight("");
+    toast.success(`Added ${quantity} units of ${product.name}`);
+  }, [tempProductTypeId, tempProductId, tempWallWidth, tempWallHeight, getProductDetails, calculateQuantity, productTypes]);
+
+  // Remove line item
+  const handleRemoveLineItem = useCallback((id: string) => {
+    setLineItems(lineItems.filter(item => item.id !== id));
+  }, [lineItems]);
+
+  // Calculate total
+  const totalCost = useMemo(() => {
+    return lineItems.reduce((sum, item) => sum + item.totalPrice, 0);
+  }, [lineItems]);
+
+  // Validate form
+  const isFormValid = clientName && clientEmail && clientPhone && clientAddress && lineItems.length > 0;
+
+  // Handle submit
   const handleSubmit = async () => {
-    // Validation
-    if (!clientName.trim()) {
-      toast.error("Client name is required");
+    if (!isFormValid) {
+      toast.error("Please complete all required fields and add at least one product");
       return;
     }
-    if (!clientEmail.trim()) {
-      toast.error("Client email is required");
-      return;
-    }
+
     if (!selectedOperator) {
-      toast.error("Please select an operator first");
-      return;
-    }
-    if (!productType) {
-      toast.error("Please select a product type");
-      return;
-    }
-    if (!selectedProduct) {
-      toast.error("Please select a product");
-      return;
-    }
-    if (wallArea === 0) {
-      toast.error("Please enter valid wall dimensions");
+      toast.error("Please select an operator");
       return;
     }
 
@@ -112,20 +162,24 @@ export default function Stage1QuotingWorkspace() {
 
       if (!job) throw new Error("Failed to create job");
 
-      // Create job item
-      await createJobItemMutation.mutateAsync({
-        jobId: job.id,
-        itemType: "cladding",
-        claddingVariantId: parseInt(selectedProduct),
-        wallWidthMm: Math.round(parseFloat(wallWidth) * 1000),
-        wallHeightMm: Math.round(parseFloat(wallHeight) * 1000),
-        quantityRequired: parseInt(quantity),
-        totalPrice: Math.round(estimatedCost * 100),
-        manualPriceOverride: priceOverride ? Math.round(parseFloat(priceOverride) * 100) : undefined,
-      });
+      // Create job items
+      for (const item of lineItems) {
+        const product = getProductDetails(item.productId);
+        if (!product) continue;
+
+        await createJobItemMutation.mutateAsync({
+          jobId: job.id,
+          itemType: (item.productType === "cladding" ? "cladding" : "cabinet") as "cladding" | "cabinet",
+          claddingVariantId: item.productType === "cladding" ? parseInt(item.productId) : undefined,
+          wallWidthMm: item.wallWidthMm,
+          wallHeightMm: item.wallHeightMm,
+          quantityRequired: item.quantityRequired,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+        });
+      }
 
       toast.success("Quote created successfully!");
-      // Navigate to jobs page to download PDF
       navigate("/jobs");
     } catch (error) {
       toast.error("Failed to create quote. Please try again.");
@@ -146,25 +200,22 @@ export default function Stage1QuotingWorkspace() {
           </button>
           <div>
             <h1 className="text-lg font-semibold text-gray-900">Stage 1: Quoting</h1>
-            <p className="text-xs text-gray-500">Create and estimate job quotes</p>
+            <p className="text-xs text-gray-500">Operator: {selectedOperator || "Not selected"}</p>
           </div>
-        </div>
-        <div className="text-sm text-gray-600">
-          Operator: <span className="font-medium">{operators?.find((o) => o.id.toString() === selectedOperator)?.name}</span>
         </div>
       </div>
 
-      {/* Main Content - Scrollable */}
+      {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto p-4">
-          <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-6">
+        <div className="max-w-4xl mx-auto p-4 space-y-6">
+          <Tabs value={currentTab} onValueChange={setCurrentTab}>
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="client">Client</TabsTrigger>
-              <TabsTrigger value="product">Product</TabsTrigger>
+              <TabsTrigger value="products">Products</TabsTrigger>
               <TabsTrigger value="summary">Summary</TabsTrigger>
             </TabsList>
 
-            {/* Tab 1: Client Details */}
+            {/* Client Tab */}
             <TabsContent value="client" className="space-y-4">
               <Card className="p-6">
                 <h2 className="text-lg font-semibold mb-4">Client Information</h2>
@@ -193,204 +244,166 @@ export default function Stage1QuotingWorkspace() {
                     {clientEmail && <p className="text-xs text-green-600 mt-1">✓ Entered</p>}
                   </div>
                   <div>
-                    <Label htmlFor="clientPhone">Phone</Label>
+                    <Label htmlFor="clientPhone" className="text-sm font-medium">Phone *</Label>
                     <Input
                       id="clientPhone"
-                      type="tel"
                       value={clientPhone}
                       onChange={(e) => setClientPhone(e.target.value)}
-                      placeholder="(555) 123-4567"
-                      className="mt-1 h-10 text-base"
+                      placeholder="0412 345 678"
+                      className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                     />
+                    {clientPhone && <p className="text-xs text-green-600 mt-1">✓ Entered</p>}
                   </div>
                   <div>
-                    <Label htmlFor="clientAddress">Address</Label>
+                    <Label htmlFor="clientAddress" className="text-sm font-medium">Address *</Label>
                     <Input
                       id="clientAddress"
                       value={clientAddress}
                       onChange={(e) => setClientAddress(e.target.value)}
-                      placeholder="123 Main St, City, State"
-                      className="mt-1 h-10 text-base"
+                      placeholder="123 Main St, City, State 1234"
+                      className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                     />
+                    {clientAddress && <p className="text-xs text-green-600 mt-1">✓ Entered</p>}
                   </div>
                 </div>
               </Card>
             </TabsContent>
 
-            {/* Tab 2: Product & Dimensions */}
-            <TabsContent value="product" className="space-y-4">
+            {/* Products Tab */}
+            <TabsContent value="products" className="space-y-4">
               <Card className="p-6">
-                <h2 className="text-lg font-semibold mb-4">Wall Dimensions</h2>
-                <div className="grid grid-cols-2 gap-4 mb-6">
+                <h2 className="text-lg font-semibold mb-4">Add Products</h2>
+                <div className="space-y-4 mb-6">
                   <div>
-                    <Label htmlFor="wallWidth" className="text-sm font-medium">Width (m) *</Label>
-                    <Input
-                      id="wallWidth"
-                      type="number"
-                      value={wallWidth}
-                      onChange={(e) => setWallWidth(e.target.value)}
-                      placeholder="0.00"
-                      className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                      step="0.01"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="wallHeight" className="text-sm font-medium">Height (m) *</Label>
-                    <Input
-                      id="wallHeight"
-                      type="number"
-                      value={wallHeight}
-                      onChange={(e) => setWallHeight(e.target.value)}
-                      placeholder="0.00"
-                      className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                      step="0.01"
-                    />
-                  </div>
-                </div>
-                {wallArea > 0 && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
-                    <p className="text-sm text-blue-900">
-                      <strong>Wall Area:</strong> {wallArea.toFixed(2)} m²
-                    </p>
-                  </div>
-                )}
-              </Card>
-
-              <Card className="p-6">
-                <h2 className="text-lg font-semibold mb-4">Product Selection</h2>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="productType">Product Type *</Label>
-                    <Select value={productType} onValueChange={setProductType}>
-                      <SelectTrigger id="productType" className="h-10 text-base">
-                        <SelectValue placeholder="Select product type..." />
+                    <Label htmlFor="productType" className="text-sm font-medium">Product Type *</Label>
+                    <Select value={tempProductTypeId?.toString() || ""} onValueChange={handleProductTypeChange}>
+                      <SelectTrigger className="mt-1 h-12 text-base">
+                        <SelectValue placeholder="Select product type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="cladding">Cladding</SelectItem>
-                        <SelectItem value="acoustic_panel">Acoustic Panels</SelectItem>
-                        <SelectItem value="marble_sheet">Marble Sheet</SelectItem>
-                        <SelectItem value="mirror">Mirrors</SelectItem>
-                        <SelectItem value="fireplace">Fireplace</SelectItem>
+                        {productTypes?.map((type: any) => (
+                          <SelectItem key={type.id} value={type.id.toString()}>
+                            {type.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {productType && (
+                  {tempProductTypeId && productsByType && (
                     <div>
-                      <Label htmlFor="product">Product *</Label>
-                      <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-                        <SelectTrigger id="product" className="h-10 text-base">
-                          <SelectValue placeholder="Select product..." />
+                      <Label htmlFor="product" className="text-sm font-medium">Product *</Label>
+                      <Select value={tempProductId} onValueChange={setTempProductId}>
+                        <SelectTrigger className="mt-1 h-12 text-base">
+                          <SelectValue placeholder="Select product" />
                         </SelectTrigger>
                         <SelectContent>
-                          {filteredProducts && filteredProducts.map((p: any) => (
-                            <SelectItem key={p.id} value={p.id.toString()}>
-                              {p.name} - ${p.pricePerUnit.toFixed(2)}
+                          {productsByType.map((product: any) => (
+                            <SelectItem key={product.id} value={product.id.toString()}>
+                              {product.name} - ${(product.pricePerUnit / 100).toFixed(2)}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
-                  )}
-
-                  {selectedProductData && productDimensions.length > 0 && (
-                    <div>
-                      <Label htmlFor="dimension">Dimension</Label>
-                      <Select value={selectedDimension} onValueChange={setSelectedDimension} disabled={useCustomDimension}>
-                        <SelectTrigger id="dimension" className="h-10 text-base">
-                          <SelectValue placeholder="Select dimension..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {productDimensions.map((dim: string, idx: number) => (
-                            <SelectItem key={idx} value={dim}>
-                              {dim}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="customDim"
-                      checked={useCustomDimension}
-                      onChange={(e) => setUseCustomDimension(e.target.checked)}
-                      className="w-4 h-4"
-                    />
-                    <Label htmlFor="customDim" className="cursor-pointer">
-                      Use custom dimension
-                    </Label>
-                  </div>
-
-                  {useCustomDimension && (
-                    <div>
-                      <Label htmlFor="customDimension">Custom Dimension</Label>
-                      <Input
-                        id="customDimension"
-                        value={customDimension}
-                        onChange={(e) => setCustomDimension(e.target.value)}
-                        placeholder="e.g., 1200x2400mm"
-                        className="mt-1 h-10 text-base"
-                      />
                     </div>
                   )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="quantity">Quantity</Label>
+                      <Label htmlFor="wallWidth" className="text-sm font-medium">Wall Width (m) *</Label>
                       <Input
-                        id="quantity"
+                        id="wallWidth"
                         type="number"
-                        value={quantity}
-                        onChange={(e) => setQuantity(e.target.value)}
-                        placeholder="1"
-                        className="mt-1 h-10 text-base"
-                        min="1"
+                        value={tempWallWidth}
+                        onChange={(e) => setTempWallWidth(e.target.value)}
+                        placeholder="0.00"
+                        className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                        step="0.01"
                       />
                     </div>
                     <div>
-                      <Label htmlFor="priceOverride">Price Override ($)</Label>
+                      <Label htmlFor="wallHeight" className="text-sm font-medium">Wall Height (m) *</Label>
                       <Input
-                        id="priceOverride"
+                        id="wallHeight"
                         type="number"
-                        value={priceOverride}
-                        onChange={(e) => setPriceOverride(e.target.value)}
-                        placeholder="Leave blank for default"
-                        className="mt-1 h-10 text-base"
+                        value={tempWallHeight}
+                        onChange={(e) => setTempWallHeight(e.target.value)}
+                        placeholder="0.00"
+                        className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                         step="0.01"
                       />
                     </div>
                   </div>
+
+                  <Button
+                    onClick={handleAddLineItem}
+                    className="w-full h-12 text-base bg-green-600 hover:bg-green-700"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Product
+                  </Button>
                 </div>
+
+                {/* Line Items */}
+                {lineItems.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-sm">Added Products ({lineItems.length})</h3>
+                    {lineItems.map((item) => (
+                      <div key={item.id} className="bg-gray-50 p-4 rounded-lg flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{item.productName}</p>
+                          <p className="text-xs text-gray-600">
+                            {item.wallWidthMm / 1000}m × {item.wallHeightMm / 1000}m | {item.quantityRequired} units @ ${(item.unitPrice / 100).toFixed(2)}
+                          </p>
+                          <p className="text-sm font-semibold text-blue-600 mt-1">
+                            ${(item.totalPrice / 100).toFixed(2)}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveLineItem(item.id)}
+                          className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-600" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Card>
             </TabsContent>
 
-            {/* Tab 3: Summary */}
+            {/* Summary Tab */}
             <TabsContent value="summary" className="space-y-4">
               <Card className="p-6">
                 <h2 className="text-lg font-semibold mb-4">Quote Summary</h2>
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Client:</span>
-                    <span className="font-medium">{clientName || "—"}</span>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Client</p>
+                    <p className="font-semibold">{clientName || "Not entered"}</p>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Email:</span>
-                    <span className="font-medium">{clientEmail || "—"}</span>
+                  <div>
+                    <p className="text-sm text-gray-600">Contact</p>
+                    <p className="text-sm">{clientEmail}</p>
+                    <p className="text-sm">{clientPhone}</p>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Wall Area:</span>
-                    <span className="font-medium">{wallArea.toFixed(2)} m²</span>
+                  <div>
+                    <p className="text-sm text-gray-600">Address</p>
+                    <p className="text-sm">{clientAddress}</p>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Product:</span>
-                    <span className="font-medium">{selectedProductData?.name || "—"}</span>
+                  <hr className="my-4" />
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Products ({lineItems.length})</p>
+                    {lineItems.map((item) => (
+                      <div key={item.id} className="flex justify-between text-sm mb-2">
+                        <span>{item.productName} ({item.quantityRequired} units)</span>
+                        <span className="font-semibold">${(item.totalPrice / 100).toFixed(2)}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="border-t border-gray-200 pt-3 mt-3 flex justify-between">
-                    <span className="text-gray-900 font-semibold">Estimated Cost:</span>
-                    <span className="text-lg font-bold text-blue-600">${estimatedCost.toFixed(2)}</span>
+                  <hr className="my-4" />
+                  <div className="flex justify-between text-lg font-bold">
+                    <span>Total Quote</span>
+                    <span className="text-blue-600">${(totalCost / 100).toFixed(2)}</span>
                   </div>
                 </div>
               </Card>
@@ -399,19 +412,19 @@ export default function Stage1QuotingWorkspace() {
         </div>
       </div>
 
-      {/* Footer - Fixed */}
+      {/* Footer */}
       <div className="bg-white border-t border-gray-200 px-4 py-3 flex gap-3 flex-shrink-0">
         <Button
-          variant="outline"
           onClick={() => navigate("/dashboard")}
+          variant="outline"
           className="flex-1 h-12 text-base"
         >
           Cancel
         </Button>
         <Button
           onClick={handleSubmit}
-          disabled={createJobMutation.isPending}
-          className="flex-1 h-12 text-base"
+          disabled={createJobMutation.isPending || !isFormValid}
+          className="flex-1 h-12 text-base bg-blue-600 hover:bg-blue-700"
         >
           {createJobMutation.isPending ? (
             <>
@@ -419,10 +432,7 @@ export default function Stage1QuotingWorkspace() {
               Creating...
             </>
           ) : (
-            <>
-              <Download className="w-4 h-4 mr-2" />
-              Create Quote
-            </>
+            "Create Quote"
           )}
         </Button>
       </div>

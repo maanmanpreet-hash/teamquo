@@ -37,7 +37,7 @@
 - [x] Add success/error toast notifications
 - [ ] Test on actual Android tablet
 - [ ] Optimize for landscape/portrait modes
-- [x] Add visual feedback for form interactions
+- [x] Add visual feedback for form interactions (blue focus states, green checkmarks, larger touch targets)
 - [ ] Write comprehensive Stage 1 workflow tests
 
 ## Planned: Phase 5 - Stage 2: Procurement & Materials
@@ -85,3 +85,11 @@
 - [ ] Create user documentation
 - [ ] Prepare for deployment
 - [ ] Final checkpoint and delivery
+
+## CRITICAL BUGS TO FIX (User Feedback)
+- [ ] Fix quote generation failure - debug job creation process
+- [ ] Implement automatic quantity calculation based on wall dimensions and product dimensions
+- [ ] Add support for multiple products per quote (allow adding cladding + mirrors, etc.)
+- [ ] Verify and update supplier pricing from excelhome.com.au
+- [ ] Test quote generation end-to-end with multiple product types
+
