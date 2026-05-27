@@ -82,6 +82,9 @@ export const appRouter = router({
         clientEmail: z.string().email().optional(),
         clientPhone: z.string().optional(),
         clientAddress: z.string().optional(),
+        suburb: z.string().optional(),
+        appointmentDate: z.string().optional(), // YYYY-MM-DD format
+        appointmentTime: z.string().optional(), // HH:MM format
         notes: z.string().optional(),
       }))
       .mutation(({ input, ctx }) =>
@@ -91,6 +94,9 @@ export const appRouter = router({
           clientEmail: input.clientEmail,
           clientPhone: input.clientPhone,
           clientAddress: input.clientAddress,
+          suburb: input.suburb,
+          appointmentDate: input.appointmentDate ? new Date(input.appointmentDate) : null,
+          appointmentTime: input.appointmentTime,
           notes: input.notes,
           status: "quoted",
         })
@@ -114,6 +120,9 @@ export const appRouter = router({
         clientEmail: z.string().email().optional(),
         clientPhone: z.string().optional(),
         clientAddress: z.string().optional(),
+        suburb: z.string().optional(),
+        appointmentDate: z.string().optional(),
+        appointmentTime: z.string().optional(),
         notes: z.string().optional(),
         totalEstimate: z.number().int().nonnegative().optional(),
       }))
@@ -122,8 +131,12 @@ export const appRouter = router({
         if (job && job.userId !== ctx.user.id) {
           throw new Error("Unauthorized");
         }
-        const { id, ...updates } = input;
-        return db.updateJob(id, updates);
+        const { id, appointmentDate, ...updates } = input;
+        const updateData = {
+          ...updates,
+          appointmentDate: appointmentDate ? new Date(appointmentDate) : undefined,
+        };
+        return db.updateJob(id, updateData);
       }),
   }),
 

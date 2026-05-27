@@ -38,6 +38,9 @@ export default function Stage1QuotingWorkspace() {
   const [clientEmail, setClientEmail] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [clientAddress, setClientAddress] = useState("");
+  const [suburb, setSuburb] = useState("");
+  const [appointmentDate, setAppointmentDate] = useState("");
+  const [appointmentTime, setAppointmentTime] = useState("");
 
   // Line Items
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
@@ -84,6 +87,12 @@ export default function Stage1QuotingWorkspace() {
       setClientEmail(draftJob.clientEmail || "");
       setClientPhone(draftJob.clientPhone || "");
       setClientAddress(draftJob.clientAddress || "");
+      setSuburb(draftJob.suburb || "");
+      if (draftJob.appointmentDate) {
+        const date = new Date(draftJob.appointmentDate);
+        setAppointmentDate(date.toISOString().split('T')[0]);
+      }
+      setAppointmentTime(draftJob.appointmentTime || "");
       setIsLoadingDraft(false);
     }
   }, [draftJob, isLoadingDraft]);
@@ -253,6 +262,9 @@ export default function Stage1QuotingWorkspace() {
         clientEmail: clientEmail || undefined,
         clientPhone: clientPhone || undefined,
         clientAddress: clientAddress || undefined,
+        suburb: suburb || undefined,
+        appointmentDate: appointmentDate || undefined,
+        appointmentTime: appointmentTime || undefined,
       });
       toast.success("Draft saved! You can continue later.");
       // Reset form
@@ -260,6 +272,9 @@ export default function Stage1QuotingWorkspace() {
       setClientEmail("");
       setClientPhone("");
       setClientAddress("");
+      setSuburb("");
+      setAppointmentDate("");
+      setAppointmentTime("");
       setLineItems([]);
     } catch (error) {
       toast.error("Failed to save draft");
@@ -393,6 +408,56 @@ export default function Stage1QuotingWorkspace() {
                       placeholder="123 Main St, City"
                       className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                     />
+                  </div>
+                  <div>
+                    <Label htmlFor="suburb" className="text-sm font-medium">Suburb</Label>
+                    <Select value={suburb} onValueChange={setSuburb}>
+                      <SelectTrigger id="suburb" className="h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all">
+                        <SelectValue placeholder="Select suburb..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Kalkallo">Kalkallo</SelectItem>
+                        <SelectItem value="Donnybrook">Donnybrook</SelectItem>
+                        <SelectItem value="Mickleham">Mickleham</SelectItem>
+                        <SelectItem value="Craigieburn">Craigieburn</SelectItem>
+                        <SelectItem value="Beveridge">Beveridge</SelectItem>
+                        <SelectItem value="other">Other (enter manually)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {suburb === "other" && (
+                    <div>
+                      <Label htmlFor="customSuburb" className="text-sm font-medium">Enter Suburb</Label>
+                      <Input
+                        id="customSuburb"
+                        value={suburb === "other" ? "" : suburb}
+                        onChange={(e) => setSuburb(e.target.value)}
+                        placeholder="Enter suburb name"
+                        className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                      />
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="appointmentDate" className="text-sm font-medium">Quote Date</Label>
+                      <Input
+                        id="appointmentDate"
+                        type="date"
+                        value={appointmentDate}
+                        onChange={(e) => setAppointmentDate(e.target.value)}
+                        className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="appointmentTime" className="text-sm font-medium">Quote Time</Label>
+                      <Input
+                        id="appointmentTime"
+                        type="time"
+                        value={appointmentTime}
+                        onChange={(e) => setAppointmentTime(e.target.value)}
+                        className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                      />
+                    </div>
                   </div>
                 </div>
               </Card>

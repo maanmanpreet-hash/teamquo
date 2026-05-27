@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { date, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -107,6 +107,9 @@ export const jobs = mysqlTable("jobs", {
   clientEmail: varchar("client_email", { length: 320 }),
   clientPhone: varchar("client_phone", { length: 20 }),
   clientAddress: text("client_address"),
+  suburb: varchar("suburb", { length: 100 }), // Suburb for location-based queue sorting
+  appointmentDate: date("appointment_date"), // Date agreed to provide quote
+  appointmentTime: varchar("appointment_time", { length: 5 }), // Time in HH:MM format
   status: mysqlEnum("status", ["quoted", "booked", "commenced", "completed", "cancelled"]).default("quoted").notNull(),
   stage: mysqlEnum("stage", ["quoting", "procurement", "installation", "invoicing"]).default("quoting").notNull(),
   stageStatus: varchar("stage_status", { length: 100 }).default("in_progress"),

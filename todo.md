@@ -7,6 +7,10 @@
 - [x] Add ability to view and resume incomplete quotes
 - [x] Display quote status (draft, in-progress, completed)
 - [x] Show which operator created each draft
+- [x] Add appointment date/time to take call workflow
+- [x] Add suburb field with dropdown (Kalkallo, Donnybrook, Mickleham, Craigieburn, Beveridge)
+- [x] Sort queue by appointment date/time
+- [x] Filter queue by suburb for field operators
 - [ ] Add edit functionality for draft quotes
 - [ ] Seed operators table: Manpreet, Ginni, Roopjit, Simar
 - [ ] Allow custom operator name entry

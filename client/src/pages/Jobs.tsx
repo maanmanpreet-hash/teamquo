@@ -24,7 +24,10 @@ export default function Jobs() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [selectedStatus, setSelectedStatus] = useState<JobStatus | "all">("all");
+  const [selectedSuburb, setSelectedSuburb] = useState<string | "all">("all");
   const [downloadingJobId, setDownloadingJobId] = useState<number | null>(null);
+
+  const SUBURBS = ["Kalkallo", "Donnybrook", "Mickleham", "Craigieburn", "Beveridge"];
 
   // Fetch jobs
   const { data: jobs, isLoading, refetch } = trpc.jobs.list.useQuery();
@@ -81,10 +84,18 @@ export default function Jobs() {
     );
   }
 
-  const filteredJobs =
-    selectedStatus === "all"
-      ? jobs
-      : jobs?.filter((job) => job.status === selectedStatus);
+  const filteredJobs = jobs
+    ?.filter((job) => selectedStatus === "all" || job.status === selectedStatus)
+    ?.filter((job) => selectedSuburb === "all" || job.suburb === selectedSuburb)
+    ?.sort((a, b) => {
+      // Sort by appointment date/time if available, then by creation date
+      if (a.appointmentDate && b.appointmentDate) {
+        const aTime = new Date(`${a.appointmentDate}T${a.appointmentTime || "00:00"}`);
+        const bTime = new Date(`${b.appointmentDate}T${b.appointmentTime || "00:00"}`);
+        return aTime.getTime() - bTime.getTime();
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
 
   const statusCounts = {
     quoted: jobs?.filter((j) => j.status === "quoted").length || 0,
@@ -155,19 +166,32 @@ export default function Jobs() {
           </Card>
         </div>
 
-        {/* Filter */}
-        <div className="mb-6">
+        {/* Filters */}
+        <div className="mb-6 flex gap-4 flex-wrap">
           <Select value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as JobStatus | "all")}>
             <SelectTrigger className="w-48">
-              <SelectValue />
+              <SelectValue placeholder="Filter by status..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Jobs</SelectItem>
+              <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="quoted">Quoted</SelectItem>
               <SelectItem value="booked">Booked</SelectItem>
               <SelectItem value="commenced">Commenced</SelectItem>
               <SelectItem value="completed">Completed</SelectItem>
               <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={selectedSuburb} onValueChange={(value) => setSelectedSuburb(value as string)}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Filter by suburb..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Suburbs</SelectItem>
+              {SUBURBS.map((suburb) => (
+                <SelectItem key={suburb} value={suburb}>
+                  {suburb}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -195,7 +219,7 @@ export default function Jobs() {
                           </Badge>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-muted-foreground">
+                      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-sm text-muted-foreground">
                         {job.clientEmail && (
                           <div>
                             <span className="font-medium">Email:</span> {job.clientEmail || "—"}
@@ -206,15 +230,21 @@ export default function Jobs() {
                             <span className="font-medium">Phone:</span> {job.clientPhone || "—"}
                           </div>
                         )}
+                        {job.suburb && (
+                          <div>
+                            <span className="font-medium">📍 Suburb:</span> {job.suburb}
+                          </div>
+                        )}
+                        {job.appointmentDate && (
+                          <div>
+                            <span className="font-medium">📅 Quote:</span> {new Date(job.appointmentDate).toLocaleDateString()} {job.appointmentTime && `@ ${job.appointmentTime}`}
+                          </div>
+                        )}
                         {job.operatorName && (
                           <div>
                             <span className="font-medium">Operator:</span> {job.operatorName}
                           </div>
                         )}
-                        <div>
-                          <span className="font-medium">Created:</span>{" "}
-                          {new Date(job.createdAt).toLocaleDateString()}
-                        </div>
                       </div>
                       {job.clientAddress && (
                         <div className="text-sm text-muted-foreground mt-2">
