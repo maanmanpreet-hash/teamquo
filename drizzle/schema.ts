@@ -25,4 +25,65 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+/**
+ * Cladding variants table: stores available cladding options with dimensions and pricing
+ */
+export const claddingVariants = mysqlTable("cladding_variants", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(), // e.g., "Timber Look 300x600"
+  design: varchar("design", { length: 255 }).notNull(), // e.g., "Timber", "Stone", "Modern"
+  widthMm: int("width_mm").notNull(), // Panel width in millimeters
+  heightMm: int("height_mm").notNull(), // Panel height in millimeters
+  pricePerUnit: int("price_per_unit").notNull(), // Price in cents (e.g., 5000 = $50.00)
+  description: text("description"), // Optional description
+  isActive: int("is_active").default(1).notNull(), // 1 = active, 0 = inactive
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CladdingVariant = typeof claddingVariants.$inferSelect;
+export type InsertCladdingVariant = typeof claddingVariants.$inferInsert;
+
+/**
+ * Jobs table: stores job/quote records with client information and status
+ */
+export const jobs = mysqlTable("jobs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull(), // Reference to the user who created the quote
+  clientName: varchar("client_name", { length: 255 }).notNull(),
+  clientEmail: varchar("client_email", { length: 320 }),
+  clientPhone: varchar("client_phone", { length: 20 }),
+  clientAddress: text("client_address"),
+  status: mysqlEnum("status", ["quoted", "booked", "commenced", "completed", "cancelled"]).default("quoted").notNull(),
+  totalEstimate: int("total_estimate"), // Total quote price in cents
+  notes: text("notes"), // Additional notes about the job
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Job = typeof jobs.$inferSelect;
+export type InsertJob = typeof jobs.$inferInsert;
+
+/**
+ * Job items table: stores individual items (cladding, cabinets) for each job
+ */
+export const jobItems = mysqlTable("job_items", {
+  id: int("id").autoincrement().primaryKey(),
+  jobId: int("job_id").notNull(), // Reference to the job
+  itemType: mysqlEnum("item_type", ["cladding", "cabinet"]).notNull(),
+  claddingVariantId: int("cladding_variant_id"), // Reference to cladding variant (if itemType = 'cladding')
+  wallWidthMm: int("wall_width_mm"), // Wall width in millimeters
+  wallHeightMm: int("wall_height_mm"), // Wall height in millimeters
+  cabinetWidthMm: int("cabinet_width_mm"), // Cabinet width (if itemType = 'cabinet')
+  cabinetHeightMm: int("cabinet_height_mm"), // Cabinet height (if itemType = 'cabinet')
+  cabinetDepthMm: int("cabinet_depth_mm"), // Cabinet depth (if itemType = 'cabinet')
+  quantityRequired: int("quantity_required"), // Number of panels/units required
+  unitPrice: int("unit_price"), // Price per unit in cents
+  totalPrice: int("total_price"), // Total price for this item in cents
+  manualPriceOverride: int("manual_price_override"), // Manual override price in cents (if user entered custom price)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type JobItem = typeof jobItems.$inferSelect;
+export type InsertJobItem = typeof jobItems.$inferInsert;
