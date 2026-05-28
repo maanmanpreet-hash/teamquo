@@ -1,5 +1,11 @@
 # TeamQuo - Collaborative Quote Management Platform
 
+## 🚨 URGENT BUGS - FIX NOW
+- [x] Restore fireplace and mirror products to dropdown (currently missing)
+- [x] Fix acoustic panels - auto-calculate quantity from wall dimensions ONLY
+- [x] Remove manual acoustic panel dimension entry fields
+- [x] Revert unnecessary scope changes from wall-product refactor
+
 ## 🚨 CRITICAL ISSUES - FIX IMMEDIATELY
 - [x] Refactor workflow: walls first, THEN products per wall (not separate tabs)
 - [x] Auto-calculate cladding panel quantity based on wall dimensions

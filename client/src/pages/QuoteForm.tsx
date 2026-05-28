@@ -69,7 +69,7 @@ export default function Stage1QuotingWorkspace() {
   const [tempWallHeight, setTempWallHeight] = useState("");
 
   // Product selection for current wall
-  const [tempProductType, setTempProductType] = useState<"cladding" | "acoustic_panel" | "floating_cabinet" | null>(null);
+  const [tempProductType, setTempProductType] = useState<"cladding" | "acoustic_panel" | "floating_cabinet" | "fireplace" | "mirror" | null>(null);
   const [tempProductId, setTempProductId] = useState("");
   const [tempQuantity, setTempQuantity] = useState("");
   
@@ -86,7 +86,7 @@ export default function Stage1QuotingWorkspace() {
   // Queries
   const { data: productTypes } = trpc.products.listTypes.useQuery();
   const { data: productsByType } = trpc.products.listByType.useQuery(
-    { productTypeId: tempProductType === "cladding" ? 1 : tempProductType === "acoustic_panel" ? 2 : tempProductType === "floating_cabinet" ? 3 : 0 },
+    { productTypeId: tempProductType === "cladding" ? 1 : tempProductType === "acoustic_panel" ? 2 : tempProductType === "floating_cabinet" ? 3 : tempProductType === "fireplace" ? 4 : tempProductType === "mirror" ? 5 : 0 },
     { enabled: !!tempProductType }
   );
   const { data: operators } = trpc.operators.list.useQuery();
@@ -221,24 +221,31 @@ export default function Stage1QuotingWorkspace() {
         unitPrice: foundProduct.pricePerUnit,
       };
     } else if (tempProductType === "acoustic_panel") {
-      if (!tempAcousticLength || !tempAcousticWidth) {
-        toast.error("Please enter acoustic panel dimensions");
-        return;
-      }
       const foundProduct = productsByType?.find(p => p.id.toString() === tempProductId);
       if (!foundProduct) {
         toast.error("Product not found");
         return;
       }
-      const lengthMm = Math.round(parseFloat(tempAcousticLength) * 1000);
-      const widthMm = Math.round(parseFloat(tempAcousticWidth) * 1000);
-      quantity = calculatePanelQuantity(wall.wallWidthMm, wall.wallHeightMm, lengthMm, widthMm);
+      // Auto-calculate quantity based on wall dimensions and panel size
+      quantity = calculatePanelQuantity(wall.wallWidthMm, wall.wallHeightMm, foundProduct.widthMm || 1000, foundProduct.heightMm || 1000);
       newProduct = {
         ...newProduct,
         productName: foundProduct.name,
-        acousticLengthM: parseFloat(tempAcousticLength),
-        acousticWidthM: parseFloat(tempAcousticWidth),
+        panelWidthMm: foundProduct.widthMm || 1000,
+        panelHeightMm: foundProduct.heightMm || 1000,
         quantity,
+        unitPrice: foundProduct.pricePerUnit,
+      };
+    } else if (tempProductType === "fireplace" || tempProductType === "mirror") {
+      const foundProduct = productsByType?.find(p => p.id.toString() === tempProductId);
+      if (!foundProduct) {
+        toast.error("Product not found");
+        return;
+      }
+      newProduct = {
+        ...newProduct,
+        productName: foundProduct.name,
+        quantity: 1,
         unitPrice: foundProduct.pricePerUnit,
       };
     } else if (tempProductType === "floating_cabinet") {
@@ -272,8 +279,7 @@ export default function Stage1QuotingWorkspace() {
     setTempProductType(null);
     setTempProductId("");
     setTempQuantity("");
-    setTempAcousticLength("");
-    setTempAcousticWidth("");
+
     setTempCabinetWidth("");
     setTempCabinetHeight("");
     setTempCabinetDepth("");
@@ -685,6 +691,8 @@ export default function Stage1QuotingWorkspace() {
                             <SelectItem value="cladding">Cladding</SelectItem>
                             <SelectItem value="acoustic_panel">Acoustic Panel</SelectItem>
                             <SelectItem value="floating_cabinet">Floating Cabinet</SelectItem>
+                            <SelectItem value="fireplace">Fireplace</SelectItem>
+                            <SelectItem value="mirror">Mirror</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -708,32 +716,7 @@ export default function Stage1QuotingWorkspace() {
                     </div>
 
                     {/* Acoustic Panel Dimensions */}
-                    {tempProductType === "acoustic_panel" && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <Label className="text-sm font-medium">Length (m) *</Label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            value={tempAcousticLength}
-                            onChange={(e) => setTempAcousticLength(e.target.value)}
-                            placeholder="e.g., 1.2"
-                            className="mt-1 h-12 text-base border-2 border-gray-200"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-sm font-medium">Width (m) *</Label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            value={tempAcousticWidth}
-                            onChange={(e) => setTempAcousticWidth(e.target.value)}
-                            placeholder="e.g., 0.6"
-                            className="mt-1 h-12 text-base border-2 border-gray-200"
-                          />
-                        </div>
-                      </div>
-                    )}
+                    {/* Acoustic panels auto-calculate - no manual entry needed */}
 
                     {/* Floating Cabinet Dimensions */}
                     {tempProductType === "floating_cabinet" && (
