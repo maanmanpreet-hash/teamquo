@@ -69,7 +69,7 @@ export default function Stage1QuotingWorkspace() {
   const [tempWallHeight, setTempWallHeight] = useState("");
 
   // Product selection for current wall
-  const [tempProductType, setTempProductType] = useState<"cladding" | "acoustic_panel" | "floating_cabinet" | "fireplace" | "mirror" | null>(null);
+  const [tempProductType, setTempProductType] = useState<"cladding" | "acoustic_panel" | "floating_cabinet" | "fireplace" | "mirror" | "marble_sheet" | null>(null);
   const [tempProductId, setTempProductId] = useState("");
   const [tempQuantity, setTempQuantity] = useState("");
   
@@ -86,7 +86,7 @@ export default function Stage1QuotingWorkspace() {
   // Queries
   const { data: productTypes } = trpc.products.listTypes.useQuery();
   const { data: productsByType } = trpc.products.listByType.useQuery(
-    { productTypeId: tempProductType === "cladding" ? 1 : tempProductType === "acoustic_panel" ? 2 : tempProductType === "floating_cabinet" ? 3 : tempProductType === "fireplace" ? 4 : tempProductType === "mirror" ? 5 : 0 },
+    { productTypeId: tempProductType === "cladding" ? 1 : tempProductType === "acoustic_panel" ? 2 : tempProductType === "floating_cabinet" ? 3 : tempProductType === "fireplace" ? 4 : tempProductType === "mirror" ? 5 : tempProductType === "marble_sheet" ? 6 : 0 },
     { enabled: !!tempProductType }
   );
   const { data: operators } = trpc.operators.list.useQuery();
@@ -236,7 +236,7 @@ export default function Stage1QuotingWorkspace() {
         quantity,
         unitPrice: foundProduct.pricePerUnit,
       };
-    } else if (tempProductType === "fireplace" || tempProductType === "mirror") {
+    } else if (tempProductType === "fireplace" || tempProductType === "mirror" || tempProductType === "marble_sheet") {
       const foundProduct = productsByType?.find(p => p.id.toString() === tempProductId);
       if (!foundProduct) {
         toast.error("Product not found");
@@ -693,6 +693,7 @@ export default function Stage1QuotingWorkspace() {
                             <SelectItem value="floating_cabinet">Floating Cabinet</SelectItem>
                             <SelectItem value="fireplace">Fireplace</SelectItem>
                             <SelectItem value="mirror">Mirror</SelectItem>
+                            <SelectItem value="marble_sheet">Marble Sheet</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
