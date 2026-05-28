@@ -86,8 +86,8 @@ export default function Stage1QuotingWorkspace() {
   // Queries
   const { data: productTypes } = trpc.products.listTypes.useQuery();
   const { data: productsByType } = trpc.products.listByType.useQuery(
-    { productTypeId: tempProductId ? parseInt(tempProductId) : 0 },
-    { enabled: !!tempProductId }
+    { productTypeId: tempProductType === "cladding" ? 1 : tempProductType === "acoustic_panel" ? 2 : tempProductType === "floating_cabinet" ? 3 : 0 },
+    { enabled: !!tempProductType }
   );
   const { data: operators } = trpc.operators.list.useQuery();
   const { data: draftJob } = trpc.jobs.getById.useQuery(
@@ -138,6 +138,21 @@ export default function Stage1QuotingWorkspace() {
       setIsLoadingDraft(false);
     }
   }, [draftJob, isLoadingDraft]);
+
+  // Load walls and their products
+  useEffect(() => {
+    if (savedWalls && savedWalls.length > 0) {
+      const wallsData = savedWalls.map((wall: any) => ({
+        id: wall.id.toString(),
+        wallType: wall.wallType,
+        wallName: wall.wallName,
+        wallWidthMm: wall.wallWidthMm,
+        wallHeightMm: wall.wallHeightMm,
+        products: wall.products || [],
+      }));
+      setWallsWithProducts(wallsData);
+    }
+  }, [savedWalls]);
 
   // Calculate panel quantity for cladding/acoustic
   const calculatePanelQuantity = (wallWidthMm: number, wallHeightMm: number, panelWidthMm: number, panelHeightMm: number) => {
