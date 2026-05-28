@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+"use client";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -7,23 +8,37 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useLocation } from "wouter";
-import { Loader2, ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { Loader2, ArrowLeft, Plus, Trash2, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 
-interface LineItem {
+interface WallWithProducts {
   id: string;
-  productType: string;
-  productId: string;
-  productName: string;
-  productDimensionMm: string;
+  wallType: string;
+  wallName: string;
   wallWidthMm: number;
   wallHeightMm: number;
-  quantityRequired: number;
+  products: WallProduct[];
+}
+
+interface WallProduct {
+  id: string;
+  productType: string; // "cladding" | "acoustic_panel" | "floating_cabinet"
+  productId: string;
+  productName: string;
+  quantity: number;
   unitPrice: number;
-  totalPrice: number;
-  ledStripQuantity?: number;
+  // For cladding/acoustic panels
+  panelWidthMm?: number;
+  panelHeightMm?: number;
+  // For acoustic panels
+  acousticLengthM?: number;
+  acousticWidthM?: number;
+  // For floating cabinet
+  cabinetWidthMm?: number;
+  cabinetHeightMm?: number;
+  cabinetDepthMm?: number;
+  cabinetHeightFromFloorMm?: number;
 }
 
 export default function Stage1QuotingWorkspace() {
@@ -45,57 +60,55 @@ export default function Stage1QuotingWorkspace() {
   const [referenceImagePreview, setReferenceImagePreview] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
-  // Walls
-  interface WallItem {
-    id: string;
-    wallType: string;
-    wallName: string;
-    wallWidthMm: number;
-    wallHeightMm: number;
-  }
-  const [walls, setWalls] = useState<WallItem[]>([]);
+  // Walls with integrated products
+  const [wallsWithProducts, setWallsWithProducts] = useState<WallWithProducts[]>([]);
+  const [editingWallId, setEditingWallId] = useState<string | null>(null);
   const [tempWallType, setTempWallType] = useState("regular");
   const [tempWallName, setTempWallName] = useState("");
-  const [tempWallDimWidth, setTempWallDimWidth] = useState("");
-  const [tempWallDimHeight, setTempWallDimHeight] = useState("");
-  const [showWallDimensionForm, setShowWallDimensionForm] = useState(false);
-
-  // Line Items
-  const [lineItems, setLineItems] = useState<LineItem[]>([]);
-  const [tempProductTypeId, setTempProductTypeId] = useState<number | null>(null);
-  const [tempProductId, setTempProductId] = useState("");
   const [tempWallWidth, setTempWallWidth] = useState("");
   const [tempWallHeight, setTempWallHeight] = useState("");
-  const [tempLedStrips, setTempLedStrips] = useState(false);
-  const [tempLedStripQuantity, setTempLedStripQuantity] = useState("");
-  const [tempLength, setTempLength] = useState("");
-  const [tempWidth, setTempWidth] = useState("");
+
+  // Product selection for current wall
+  const [tempProductType, setTempProductType] = useState<"cladding" | "acoustic_panel" | "floating_cabinet" | null>(null);
+  const [tempProductId, setTempProductId] = useState("");
+  const [tempQuantity, setTempQuantity] = useState("");
+  
+  // Acoustic panel specific
+  const [tempAcousticLength, setTempAcousticLength] = useState("");
+  const [tempAcousticWidth, setTempAcousticWidth] = useState("");
+  
+  // Floating cabinet specific
+  const [tempCabinetWidth, setTempCabinetWidth] = useState("");
+  const [tempCabinetHeight, setTempCabinetHeight] = useState("");
+  const [tempCabinetDepth, setTempCabinetDepth] = useState("");
+  const [tempCabinetHeightFromFloor, setTempCabinetHeightFromFloor] = useState("");
 
   // Queries
   const { data: productTypes } = trpc.products.listTypes.useQuery();
   const { data: productsByType } = trpc.products.listByType.useQuery(
-    { productTypeId: tempProductTypeId || 0 },
-    { enabled: !!tempProductTypeId }
+    { productTypeId: tempProductId ? parseInt(tempProductId) : 0 },
+    { enabled: !!tempProductId }
   );
   const { data: operators } = trpc.operators.list.useQuery();
   const { data: draftJob } = trpc.jobs.getById.useQuery(
     { id: resumeJobId || 0 },
     { enabled: resumeJobId !== null }
   );
-  const createJobMutation = trpc.jobs.create.useMutation();
-  const createJobItemMutation = trpc.jobItems.create.useMutation();
-  const updateJobMutation = trpc.jobs.update.useMutation();
-  const uploadImageMutation = trpc.storage.uploadImage.useMutation();
   const { data: savedWalls } = trpc.walls.getByJobId.useQuery(
     { jobId: resumeJobId || 0 },
     { enabled: resumeJobId !== null }
   );
+
+  const createJobMutation = trpc.jobs.create.useMutation();
+  const updateJobMutation = trpc.jobs.update.useMutation();
+  const createJobItemMutation = trpc.jobItems.create.useMutation();
+  const uploadImageMutation = trpc.storage.uploadImage.useMutation();
   const createWallMutation = trpc.walls.create.useMutation();
   const deleteWallMutation = trpc.walls.delete.useMutation();
 
   const selectedOperator = localStorage.getItem("selectedOperator");
 
-  // Load draft on mount if resumeJobId is in URL
+  // Load draft on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const jobId = params.get("resumeJobId");
@@ -105,7 +118,7 @@ export default function Stage1QuotingWorkspace() {
     }
   }, []);
 
-  // Populate form when draft is loaded
+  // Load draft data
   useEffect(() => {
     if (draftJob && isLoadingDraft) {
       setClientName(draftJob.clientName === "[Draft]" ? "" : draftJob.clientName);
@@ -122,656 +135,663 @@ export default function Stage1QuotingWorkspace() {
         setReferenceImageUrl(draftJob.referenceImageUrl);
         setReferenceImagePreview(draftJob.referenceImageUrl);
       }
-      if (savedWalls && savedWalls.length > 0) {
-        const loadedWalls: WallItem[] = savedWalls.map(w => ({
-          id: w.id.toString(),
-          wallType: w.wallType,
-          wallName: w.wallName || w.wallType,
-          wallWidthMm: w.wallWidthMm || 0,
-          wallHeightMm: w.wallHeightMm || 0,
-        }));
-        setWalls(loadedWalls);
-      }
       setIsLoadingDraft(false);
     }
-  }, [draftJob, isLoadingDraft, savedWalls]);
+  }, [draftJob, isLoadingDraft]);
 
-  // Determine if product requires wall dimensions
-  const requiresWallDimensions = (productTypeSlug: string) => {
-    return ["cladding", "acoustic_panels", "marble_sheet"].includes(productTypeSlug);
+  // Calculate panel quantity for cladding/acoustic
+  const calculatePanelQuantity = (wallWidthMm: number, wallHeightMm: number, panelWidthMm: number, panelHeightMm: number) => {
+    const panelsHorizontal = Math.ceil(wallWidthMm / panelWidthMm);
+    const panelsVertical = Math.ceil(wallHeightMm / panelHeightMm);
+    return panelsHorizontal * panelsVertical;
   };
 
-  // Determine if product requires length/width (acoustic panels)
-  const requiresLengthWidth = (productTypeSlug: string) => {
-    return ["acoustic_panels"].includes(productTypeSlug);
-  };
+  // Add new wall
+  const handleAddWall = () => {
+    if (!tempWallType || !tempWallName || !tempWallWidth || !tempWallHeight) {
+      toast.error("Please fill all wall details");
+      return;
+    }
 
-  // Determine if product can have LED strips
-  const canHaveLedStrips = (productTypeSlug: string) => {
-    return ["cladding", "acoustic_panels"].includes(productTypeSlug);
-  };
+    const newWall: WallWithProducts = {
+      id: Date.now().toString(),
+      wallType: tempWallType,
+      wallName: tempWallName,
+      wallWidthMm: Math.round(parseFloat(tempWallWidth) * 1000),
+      wallHeightMm: Math.round(parseFloat(tempWallHeight) * 1000),
+      products: [],
+    };
 
-  // Get product details
-  const getProductDetails = useCallback((productId: string) => {
-    if (!productsByType) return null;
-    const product = productsByType.find((p: any) => p.id === parseInt(productId));
-    return product || null;
-  }, [productsByType]);
-
-  // Get product type slug
-  const getProductTypeSlug = useCallback(() => {
-    if (!tempProductTypeId || !productTypes) return "";
-    const type = productTypes.find((t: any) => t.id === tempProductTypeId);
-    return type?.slug || "";
-  }, [tempProductTypeId, productTypes]);
-
-  // Calculate quantity based on dimensions
-  const calculateQuantity = useCallback((wallWidthMm: number, wallHeightMm: number, product: any) => {
-    if (!product) return 1;
-    
-    if (wallWidthMm === 0 || wallHeightMm === 0) return 1; // For products without wall dimensions
-    
-    const wallArea = (wallWidthMm / 1000) * (wallHeightMm / 1000); // Convert to m²
-    
-    // Get product dimensions (in mm)
-    const productWidth = (product.widthMm || 600) / 1000; // Convert to m, default 600mm
-    const productHeight = (product.heightMm || 2900) / 1000; // Convert to m, default 2900mm
-    const productArea = productWidth * productHeight;
-    
-    if (productArea === 0) return 1;
-    
-    // Calculate required quantity with 10% waste factor
-    return Math.ceil((wallArea / productArea) * 1.1);
-  }, []);
-
-  // Handle product type change
-  const handleProductTypeChange = useCallback((typeId: string) => {
-    const id = parseInt(typeId);
-    setTempProductTypeId(id);
-    setTempProductId("");
+    setWallsWithProducts([...wallsWithProducts, newWall]);
+    setTempWallType("regular");
+    setTempWallName("");
     setTempWallWidth("");
     setTempWallHeight("");
-    setTempLength("");
-    setTempWidth("");
-    setTempLedStrips(false);
-    setTempLedStripQuantity("");
-  }, []);
+    toast.success("Wall added");
+  };
 
-  // Add line item
-  const handleAddLineItem = useCallback(() => {
-    const productTypeSlug = getProductTypeSlug();
-    
-    // Validate required fields
-    if (!tempProductTypeId || !tempProductId) {
+  // Add product to wall
+  const handleAddProductToWall = (wallId: string) => {
+    if (!tempProductType || !tempProductId) {
       toast.error("Please select a product");
       return;
     }
 
-    if (requiresLengthWidth(productTypeSlug) && (!tempLength || !tempWidth)) {
-      toast.error("Please enter length and width for acoustic panels");
-      return;
-    }
+    const wall = wallsWithProducts.find(w => w.id === wallId);
+    if (!wall) return;
 
-    if (requiresWallDimensions(productTypeSlug) && !requiresLengthWidth(productTypeSlug) && (!tempWallWidth || !tempWallHeight)) {
-      toast.error("Please enter wall dimensions");
-      return;
-    }
-
-    if (tempLedStrips && !tempLedStripQuantity) {
-      toast.error("Please enter LED strip quantity");
-      return;
-    }
-
-    const product = getProductDetails(tempProductId);
-    if (!product) {
-      toast.error("Product not found");
-      return;
-    }
-
-    // For acoustic panels, use length/width; otherwise use wall dimensions
-    let wallWidthMm = 0;
-    let wallHeightMm = 0;
-    
-    if (requiresLengthWidth(productTypeSlug)) {
-      wallWidthMm = Math.round(parseFloat(tempLength) * 1000);
-      wallHeightMm = Math.round(parseFloat(tempWidth) * 1000);
-    } else if (requiresWallDimensions(productTypeSlug)) {
-      wallWidthMm = Math.round(parseFloat(tempWallWidth) * 1000);
-      wallHeightMm = Math.round(parseFloat(tempWallHeight) * 1000);
-    }
-
-    const quantity = calculateQuantity(wallWidthMm, wallHeightMm, product);
-    const totalPrice = quantity * product.pricePerUnit;
-
-    const newItem: LineItem = {
-      id: Math.random().toString(36),
-      productType: productTypeSlug,
+    let quantity = 1;
+    let newProduct: WallProduct = {
+      id: Date.now().toString(),
+      productType: tempProductType,
       productId: tempProductId,
-      productName: product.name,
-      productDimensionMm: `${product.widthMm || 0}x${product.heightMm || 0}`,
-      wallWidthMm,
-      wallHeightMm,
-      quantityRequired: quantity,
-      unitPrice: product.pricePerUnit,
-      totalPrice,
-      ledStripQuantity: tempLedStrips ? parseInt(tempLedStripQuantity) : undefined,
+      productName: "Product",
+      quantity: 1,
+      unitPrice: 0,
     };
 
-    setLineItems([...lineItems, newItem]);
-    setTempProductTypeId(null);
+    if (tempProductType === "cladding") {
+      const foundProduct = productsByType?.find(p => p.id.toString() === tempProductId);
+      if (!foundProduct) {
+        toast.error("Product not found");
+        return;
+      }
+      quantity = calculatePanelQuantity(wall.wallWidthMm, wall.wallHeightMm, foundProduct.widthMm || 0, foundProduct.heightMm || 0);
+      newProduct = {
+        ...newProduct,
+        productName: foundProduct.name,
+        panelWidthMm: foundProduct.widthMm || 0,
+        panelHeightMm: foundProduct.heightMm || 0,
+        quantity,
+        unitPrice: foundProduct.pricePerUnit,
+      };
+    } else if (tempProductType === "acoustic_panel") {
+      if (!tempAcousticLength || !tempAcousticWidth) {
+        toast.error("Please enter acoustic panel dimensions");
+        return;
+      }
+      const foundProduct = productsByType?.find(p => p.id.toString() === tempProductId);
+      if (!foundProduct) {
+        toast.error("Product not found");
+        return;
+      }
+      const lengthMm = Math.round(parseFloat(tempAcousticLength) * 1000);
+      const widthMm = Math.round(parseFloat(tempAcousticWidth) * 1000);
+      quantity = calculatePanelQuantity(wall.wallWidthMm, wall.wallHeightMm, lengthMm, widthMm);
+      newProduct = {
+        ...newProduct,
+        productName: foundProduct.name,
+        acousticLengthM: parseFloat(tempAcousticLength),
+        acousticWidthM: parseFloat(tempAcousticWidth),
+        quantity,
+        unitPrice: foundProduct.pricePerUnit,
+      };
+    } else if (tempProductType === "floating_cabinet") {
+      if (!tempCabinetWidth || !tempCabinetHeight || !tempCabinetDepth || !tempCabinetHeightFromFloor) {
+        toast.error("Please enter all cabinet dimensions");
+        return;
+      }
+      const foundProduct = productsByType?.find(p => p.id.toString() === tempProductId);
+      if (!foundProduct) {
+        toast.error("Product not found");
+        return;
+      }
+      newProduct = {
+        ...newProduct,
+        productName: foundProduct.name,
+        cabinetWidthMm: Math.round(parseFloat(tempCabinetWidth)),
+        cabinetHeightMm: Math.round(parseFloat(tempCabinetHeight)),
+        cabinetDepthMm: Math.round(parseFloat(tempCabinetDepth)),
+        cabinetHeightFromFloorMm: Math.round(parseFloat(tempCabinetHeightFromFloor)),
+        quantity: 1,
+        unitPrice: foundProduct.pricePerUnit,
+      };
+    }
+
+    const updatedWalls = wallsWithProducts.map(w => 
+      w.id === wallId ? { ...w, products: [...w.products, newProduct] } : w
+    );
+    setWallsWithProducts(updatedWalls);
+    
+    // Reset product form
+    setTempProductType(null);
     setTempProductId("");
-    setTempWallWidth("");
-    setTempWallHeight("");
-    setTempLength("");
-    setTempWidth("");
-    setTempLedStrips(false);
-    setTempLedStripQuantity("");
-    toast.success(`Added ${quantity} units of ${product.name}`);
-  }, [tempProductTypeId, tempProductId, tempWallWidth, tempWallHeight, tempLength, tempWidth, tempLedStrips, tempLedStripQuantity, getProductDetails, calculateQuantity, getProductTypeSlug, requiresLengthWidth, requiresWallDimensions]);
-
-  // Remove line item
-  const handleRemoveLineItem = useCallback((id: string) => {
-    setLineItems(lineItems.filter(item => item.id !== id));
-  }, [lineItems]);
-
-  // Calculate total cost by wall
-  const costByWall = useMemo(() => {
-    const costs: Record<string, number> = {};
-    lineItems.forEach((item) => {
-      const wallKey = item.wallWidthMm && item.wallHeightMm ? `${item.wallWidthMm}x${item.wallHeightMm}` : "default";
-      costs[wallKey] = (costs[wallKey] || 0) + item.totalPrice;
-    });
-    return costs;
-  }, [lineItems]);
-
-  // Calculate total
-  const totalCost = useMemo(() => {
-    return lineItems.reduce((sum, item) => sum + item.totalPrice, 0);
-  }, [lineItems]);
-
-  // Get wall info for display
-  const getWallInfo = (wallWidthMm: number, wallHeightMm: number) => {
-    const wall = walls.find(w => w.wallWidthMm === wallWidthMm && w.wallHeightMm === wallHeightMm);
-    return wall ? wall.wallName : `${(wallWidthMm / 1000).toFixed(1)}m × ${(wallHeightMm / 1000).toFixed(1)}m`;
+    setTempQuantity("");
+    setTempAcousticLength("");
+    setTempAcousticWidth("");
+    setTempCabinetWidth("");
+    setTempCabinetHeight("");
+    setTempCabinetDepth("");
+    setTempCabinetHeightFromFloor("");
+    
+    toast.success("Product added to wall");
   };
 
-  // Validate form
-  const isFormValid = clientName && clientEmail && clientPhone && clientAddress && lineItems.length > 0;
-  const canSaveDraft = clientName || clientEmail || clientPhone || clientAddress;
+  // Remove product from wall
+  const handleRemoveProduct = (wallId: string, productId: string) => {
+    const updatedWalls = wallsWithProducts.map(w =>
+      w.id === wallId ? { ...w, products: w.products.filter(p => p.id !== productId) } : w
+    );
+    setWallsWithProducts(updatedWalls);
+    toast.success("Product removed");
+  };
 
-  // Handle save draft
-  const handleSaveDraft = async () => {
-    if (!canSaveDraft) {
-      toast.error("Please enter at least some client details");
+  // Delete wall
+  const handleDeleteWall = (wallId: string) => {
+    setWallsWithProducts(wallsWithProducts.filter(w => w.id !== wallId));
+    // Delete from backend if it has a numeric ID
+    if (!isNaN(parseInt(wallId))) {
+      deleteWallMutation.mutate({ id: parseInt(wallId) });
+    }
+    toast.success("Wall deleted");
+  };
+
+  // Handle image upload
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be less than 5MB");
       return;
     }
 
-    if (!selectedOperator) {
-      toast.error("Please select an operator");
+    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
+      toast.error("Only JPEG, PNG, WebP, and GIF are supported");
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const base64 = Buffer.from(arrayBuffer).toString('base64');
+      const result = await uploadImageMutation.mutateAsync({
+        base64Data: base64,
+        fileName: file.name,
+        mimeType: file.type as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
+      });
+      setReferenceImageUrl(result.url);
+      setReferenceImagePreview(result.url);
+      toast.success("Image uploaded");
+    } catch (error) {
+      toast.error("Failed to upload image");
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // Save draft
+  const handleSaveDraft = async () => {
+    if (!clientName) {
+      toast.error("Please enter client name");
       return;
     }
 
     try {
-      await createJobMutation.mutateAsync({
-        clientName: clientName || undefined,
-        clientEmail: clientEmail || undefined,
-        clientPhone: clientPhone || undefined,
-        clientAddress: clientAddress || undefined,
-        suburb: suburb || undefined,
-        appointmentDate: appointmentDate || undefined,
-        appointmentTime: appointmentTime || undefined,
-        referenceImageUrl: referenceImageUrl || undefined,
-      });
-      toast.success("Draft saved! You can continue later.");
-      // Reset form
-      setClientName("");
-      setClientEmail("");
-      setClientPhone("");
-      setClientAddress("");
-      setSuburb("");
-      setAppointmentDate("");
-      setAppointmentTime("");
-      setReferenceImageUrl("");
-      setReferenceImagePreview(null);
-      setLineItems([]);
+      let jobId = resumeJobId;
+
+      if (!jobId) {
+        const job = await createJobMutation.mutateAsync({
+          clientName,
+          clientEmail,
+          clientPhone,
+          clientAddress,
+          suburb,
+          appointmentDate: appointmentDate || undefined,
+          appointmentTime,
+          referenceImageUrl,
+        });
+        if (job && 'id' in job) {
+          jobId = (job as any).id;
+          setResumeJobId((job as any).id);
+        }
+      } else {
+        await updateJobMutation.mutateAsync({
+          id: jobId,
+          clientName,
+          clientEmail,
+          clientPhone,
+          clientAddress,
+          suburb,
+          appointmentDate: appointmentDate || undefined,
+          appointmentTime,
+          referenceImageUrl,
+        });
+      }
+
+      // Save walls
+      if (!jobId) return;
+      for (const wall of wallsWithProducts) {
+        if (isNaN(parseInt(wall.id))) {
+          const createdWall = await createWallMutation.mutateAsync({
+            jobId: jobId,
+            wallType: wall.wallType as "regular" | "garage" | "custom",
+            wallName: wall.wallName,
+            wallWidthMm: wall.wallWidthMm,
+            wallHeightMm: wall.wallHeightMm,
+          });
+
+          // Save products for this wall
+          const wallId = (createdWall as any)?.id || parseInt(wall.id);
+          for (const product of wall.products) {
+            await createJobItemMutation.mutateAsync({
+              jobId: jobId,
+              wallId,
+              itemType: product.productType as "cladding" | "acoustic_panel" | "floating_cabinet",
+              claddingVariantId: product.productType === "cladding" ? parseInt(product.productId) : undefined,
+              wallWidthMm: wall.wallWidthMm,
+              wallHeightMm: wall.wallHeightMm,
+              cabinetWidthMm: product.cabinetWidthMm,
+              cabinetHeightMm: product.cabinetHeightMm,
+              cabinetDepthMm: product.cabinetDepthMm,
+              cabinetHeightFromFloorMm: product.cabinetHeightFromFloorMm,
+              quantityRequired: product.quantity,
+              unitPrice: product.unitPrice,
+              totalPrice: product.quantity * product.unitPrice,
+            });
+          }
+        }
+      }
+
+      toast.success("Quote saved as draft");
     } catch (error) {
       toast.error("Failed to save draft");
       console.error(error);
     }
   };
 
-  // Handle submit
-  const handleSubmit = async () => {
-    if (!isFormValid) {
-      toast.error("Please complete all required fields and add at least one product");
-      return;
-    }
-
-    if (!selectedOperator) {
-      toast.error("Please select an operator");
-      return;
-    }
-
-    try {
-      // Create job
-      const job = await createJobMutation.mutateAsync({
-        clientName,
-        clientEmail,
-        clientPhone,
-        clientAddress,
-      });
-
-      if (!job) throw new Error("Failed to create job");
-
-      // Create job items
-      for (const item of lineItems) {
-        const product = getProductDetails(item.productId);
-        if (!product) continue;
-
-        await createJobItemMutation.mutateAsync({
-          jobId: job.id,
-          itemType: "cabinet", // Use cabinet type for all products
-          claddingVariantId: undefined,
-          wallWidthMm: item.wallWidthMm || 0,
-          wallHeightMm: item.wallHeightMm || 0,
-          quantityRequired: item.quantityRequired,
-          unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice,
-        });
-      }
-
-      toast.success("Quote created successfully!");
-      navigate("/jobs");
-    } catch (error) {
-      toast.error("Failed to create quote. Please try again.");
-      console.error(error);
-    }
+  // Calculate total cost
+  const calculateTotal = () => {
+    return wallsWithProducts.reduce((total, wall) => {
+      return total + wall.products.reduce((wallTotal, product) => {
+        return wallTotal + (product.quantity * product.unitPrice);
+      }, 0);
+    }, 0);
   };
 
-  const productTypeSlug = getProductTypeSlug();
-  const showWallDimensions = requiresWallDimensions(productTypeSlug);
-  const showLedStrips = canHaveLedStrips(productTypeSlug);
-  const showLengthWidth = requiresLengthWidth(productTypeSlug);
+  const canSaveDraft = clientName.trim().length > 0;
 
   return (
-    <div className="fixed inset-0 bg-gray-50 flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-lg font-bold">Stage 1: Quoting</h1>
-            <p className="text-xs text-gray-500">Operator: {selectedOperator || "Not selected"}</p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <Button
+              onClick={() => navigate("/jobs")}
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <h1 className="text-3xl font-bold text-gray-900">Create Quote</h1>
           </div>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="max-w-2xl mx-auto space-y-4">
-          <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="client">Client</TabsTrigger>
-              <TabsTrigger value="walls">Walls</TabsTrigger>
-              <TabsTrigger value="products">Products</TabsTrigger>
-              <TabsTrigger value="summary">Summary</TabsTrigger>
-            </TabsList>
+        <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="client">Client Details</TabsTrigger>
+            <TabsTrigger value="walls">Walls & Products</TabsTrigger>
+            <TabsTrigger value="summary">Summary</TabsTrigger>
+          </TabsList>
 
-            {/* Client Tab */}
-            <TabsContent value="client" className="space-y-4">
-              <Card className="p-6">
-                <h2 className="text-lg font-semibold mb-4">Client Details</h2>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="clientName" className="text-sm font-medium">Client Name *</Label>
-                    <Input
-                      id="clientName"
-                      value={clientName}
-                      onChange={(e) => setClientName(e.target.value)}
-                      placeholder="John Smith"
-                      className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="clientEmail" className="text-sm font-medium">Email *</Label>
-                    <Input
-                      id="clientEmail"
-                      type="email"
-                      value={clientEmail}
-                      onChange={(e) => setClientEmail(e.target.value)}
-                      placeholder="john@example.com"
-                      className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="clientPhone" className="text-sm font-medium">Phone *</Label>
-                    <Input
-                      id="clientPhone"
-                      value={clientPhone}
-                      onChange={(e) => setClientPhone(e.target.value)}
-                      placeholder="0412345678"
-                      className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="clientAddress" className="text-sm font-medium">Address *</Label>
-                    <Input
-                      id="clientAddress"
-                      value={clientAddress}
-                      onChange={(e) => {
-                        const addr = e.target.value;
-                        setClientAddress(addr);
-                        const suburbs = ["Kalkallo", "Donnybrook", "Mickleham", "Craigieburn", "Beveridge"];
-                        const detectedSuburb = suburbs.find(s => addr.toLowerCase().includes(s.toLowerCase()));
-                        if (detectedSuburb) setSuburb(detectedSuburb);
-                      }}
-                      placeholder="e.g., 123 Main St, Kalkallo"
-                      className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                      list="address-suggestions"
-                    />
-                    <datalist id="address-suggestions">
-                      <option value="123 Main Street, Kalkallo" />
-                      <option value="456 Park Avenue, Donnybrook" />
-                      <option value="789 Oak Road, Mickleham" />
-                      <option value="321 Elm Street, Craigieburn" />
-                      <option value="654 Maple Drive, Beveridge" />
-                    </datalist>
-                  </div>
-                  <div>
-                    <Label htmlFor="suburb" className="text-sm font-medium">Suburb</Label>
-                    <Select value={suburb} onValueChange={setSuburb}>
-                      <SelectTrigger id="suburb" className="h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all">
-                        <SelectValue placeholder="Select suburb..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Kalkallo">Kalkallo</SelectItem>
-                        <SelectItem value="Donnybrook">Donnybrook</SelectItem>
-                        <SelectItem value="Mickleham">Mickleham</SelectItem>
-                        <SelectItem value="Craigieburn">Craigieburn</SelectItem>
-                        <SelectItem value="Beveridge">Beveridge</SelectItem>
-                        <SelectItem value="other">Other (enter manually)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {suburb === "other" && (
-                    <div>
-                      <Label htmlFor="customSuburb" className="text-sm font-medium">Enter Suburb</Label>
-                      <Input
-                        id="customSuburb"
-                        value={suburb === "other" ? "" : suburb}
-                        onChange={(e) => setSuburb(e.target.value)}
-                        placeholder="Enter suburb name"
-                        className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                      />
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="appointmentDate" className="text-sm font-medium">Appointment Date</Label>
-                      <Input
-                        id="appointmentDate"
-                        type="date"
-                        value={appointmentDate}
-                        onChange={(e) => setAppointmentDate(e.target.value)}
-                        className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="appointmentTime" className="text-sm font-medium">Appointment Time</Label>
-                      <Select value={appointmentTime} onValueChange={setAppointmentTime}>
-                        <SelectTrigger id="appointmentTime" className="h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all">
-                          <SelectValue placeholder="Select time..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="08:00">8:00 AM</SelectItem>
-                          <SelectItem value="08:30">8:30 AM</SelectItem>
-                          <SelectItem value="09:00">9:00 AM</SelectItem>
-                          <SelectItem value="09:30">9:30 AM</SelectItem>
-                          <SelectItem value="10:00">10:00 AM</SelectItem>
-                          <SelectItem value="10:30">10:30 AM</SelectItem>
-                          <SelectItem value="11:00">11:00 AM</SelectItem>
-                          <SelectItem value="11:30">11:30 AM</SelectItem>
-                          <SelectItem value="12:00">12:00 PM</SelectItem>
-                          <SelectItem value="12:30">12:30 PM</SelectItem>
-                          <SelectItem value="13:00">1:00 PM</SelectItem>
-                          <SelectItem value="13:30">1:30 PM</SelectItem>
-                          <SelectItem value="14:00">2:00 PM</SelectItem>
-                          <SelectItem value="14:30">2:30 PM</SelectItem>
-                          <SelectItem value="15:00">3:00 PM</SelectItem>
-                          <SelectItem value="15:30">3:30 PM</SelectItem>
-                          <SelectItem value="16:00">4:00 PM</SelectItem>
-                          <SelectItem value="16:30">4:30 PM</SelectItem>
-                          <SelectItem value="17:00">5:00 PM</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="referenceImage" className="text-sm font-medium">📸 Reference Image</Label>
-                    <Input
-                      id="referenceImage"
-                      type="file"
-                      accept="image/*"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        
-                        if (file.size > 5 * 1024 * 1024) {
-                          toast.error("Image must be less than 5MB");
-                          return;
-                        }
-
-                        const validMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-                        if (!validMimes.includes(file.type)) {
-                          toast.error("Only JPEG, PNG, WebP, and GIF images are supported");
-                          return;
-                        }
-
-                        setIsUploadingImage(true);
-                        try {
-                          const reader = new FileReader();
-                          reader.onload = async () => {
-                            try {
-                              const base64 = (reader.result as string).split(",")[1];
-                              const result = await uploadImageMutation.mutateAsync({
-                                fileName: file.name,
-                                base64Data: base64,
-                                mimeType: file.type as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
-                              });
-                              setReferenceImageUrl(result.url);
-                              setReferenceImagePreview(result.url);
-                              toast.success("Image uploaded successfully");
-                            } catch (error) {
-                              toast.error("Failed to upload image");
-                              console.error(error);
-                            } finally {
-                              setIsUploadingImage(false);
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        } catch (error) {
-                          toast.error("Failed to read image file");
-                          console.error(error);
-                          setIsUploadingImage(false);
-                        }
-                      }}
-                      disabled={isUploadingImage}
-                      className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                    />
-                  </div>
-                  {referenceImagePreview && (
-                    <div>
-                      <Label className="text-sm font-medium">Preview</Label>
-                      <div className="mt-2 relative">
-                        <img 
-                          src={referenceImagePreview} 
-                          alt="Reference" 
-                          className="max-h-48 rounded border-2 border-gray-200"
-                        />
-                        <button
-                          onClick={() => {
-                            setReferenceImageUrl("");
-                            setReferenceImagePreview(null);
-                          }}
-                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  )}
+          {/* Client Details Tab */}
+          <TabsContent value="client" className="space-y-4">
+            <Card className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="clientName" className="text-sm font-medium">Client Name *</Label>
+                  <Input
+                    id="clientName"
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    placeholder="John Smith"
+                    className="mt-1 h-12 text-base border-2 border-gray-200"
+                  />
                 </div>
-              </Card>
+                <div>
+                  <Label htmlFor="clientEmail" className="text-sm font-medium">Email</Label>
+                  <Input
+                    id="clientEmail"
+                    type="email"
+                    value={clientEmail}
+                    onChange={(e) => setClientEmail(e.target.value)}
+                    placeholder="john@example.com"
+                    className="mt-1 h-12 text-base border-2 border-gray-200"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="clientPhone" className="text-sm font-medium">Phone</Label>
+                  <Input
+                    id="clientPhone"
+                    value={clientPhone}
+                    onChange={(e) => setClientPhone(e.target.value)}
+                    placeholder="0412 345 678"
+                    className="mt-1 h-12 text-base border-2 border-gray-200"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="clientAddress" className="text-sm font-medium">Address</Label>
+                  <Input
+                    id="clientAddress"
+                    value={clientAddress}
+                    onChange={(e) => setClientAddress(e.target.value)}
+                    placeholder="123 Main St"
+                    className="mt-1 h-12 text-base border-2 border-gray-200"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="suburb" className="text-sm font-medium">Suburb</Label>
+                  <Select value={suburb} onValueChange={setSuburb}>
+                    <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
+                      <SelectValue placeholder="Select suburb" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Kalkallo">Kalkallo</SelectItem>
+                      <SelectItem value="Donnybrook">Donnybrook</SelectItem>
+                      <SelectItem value="Mickleham">Mickleham</SelectItem>
+                      <SelectItem value="Craigieburn">Craigieburn</SelectItem>
+                      <SelectItem value="Beveridge">Beveridge</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="appointmentDate" className="text-sm font-medium">Appointment Date</Label>
+                  <Input
+                    id="appointmentDate"
+                    type="date"
+                    value={appointmentDate}
+                    onChange={(e) => setAppointmentDate(e.target.value)}
+                    className="mt-1 h-12 text-base border-2 border-gray-200"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="appointmentTime" className="text-sm font-medium">Appointment Time</Label>
+                  <Select value={appointmentTime} onValueChange={setAppointmentTime}>
+                    <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
+                      <SelectValue placeholder="Select time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 48 }).map((_, i) => {
+                        const hour = Math.floor(i / 2);
+                        const minute = (i % 2) * 30;
+                        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                        return <SelectItem key={time} value={time}>{time}</SelectItem>;
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Reference Image Upload */}
+              <div className="border-t pt-4">
+                <Label className="text-sm font-medium">Reference Image</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  disabled={isUploadingImage}
+                  className="mt-1 h-12 text-base border-2 border-gray-200"
+                />
+                {referenceImagePreview && (
+                  <div className="mt-2 relative">
+                    <img 
+                      src={referenceImagePreview} 
+                      alt="Reference" 
+                      className="max-h-48 rounded border-2 border-gray-200"
+                    />
+                    <button
+                      onClick={() => {
+                        setReferenceImageUrl("");
+                        setReferenceImagePreview(null);
+                      }}
+                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {/* Save Draft Button */}
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleSaveDraft}
-                  variant="outline"
-                  className="flex-1 h-12 text-base"
-                  disabled={createJobMutation.isPending || !canSaveDraft}
-                >
-                  {createJobMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  Save Draft
-                </Button>
-              </div>
-            </TabsContent>
+              <Button
+                onClick={handleSaveDraft}
+                variant="outline"
+                className="w-full h-12 text-base"
+                disabled={createJobMutation.isPending || !canSaveDraft}
+              >
+                {createJobMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Save Draft
+              </Button>
+            </Card>
+          </TabsContent>
 
-            {/* Walls Tab */}
-            <TabsContent value="walls" className="space-y-4">
-              <Card className="p-6">
-                <h2 className="text-lg font-semibold mb-4">Manage Walls</h2>
-                <div className="space-y-4">
-                  {/* Add Wall Form */}
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 space-y-4">
-                    <h3 className="font-medium">Add New Wall</h3>
+          {/* Walls & Products Tab */}
+          <TabsContent value="walls" className="space-y-4">
+            {/* Add Wall Form */}
+            <Card className="p-6 space-y-4 border-2 border-dashed">
+              <h2 className="text-lg font-semibold">Add New Wall</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="wallType" className="text-sm font-medium">Wall Type *</Label>
+                  <Select value={tempWallType} onValueChange={setTempWallType}>
+                    <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="regular">Hallway Wall</SelectItem>
+                      <SelectItem value="garage">Garage Wall</SelectItem>
+                      <SelectItem value="custom">TV Wall</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="wallName" className="text-sm font-medium">Wall Name *</Label>
+                  <Input
+                    id="wallName"
+                    value={tempWallName}
+                    onChange={(e) => setTempWallName(e.target.value)}
+                    placeholder="e.g., Living Room"
+                    className="mt-1 h-12 text-base border-2 border-gray-200"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="wallWidth" className="text-sm font-medium flex items-center gap-2">
+                    <span>Width (m) *</span>
+                    <span className="text-lg">↔️</span>
+                  </Label>
+                  <Input
+                    id="wallWidth"
+                    type="number"
+                    step="0.1"
+                    value={tempWallWidth}
+                    onChange={(e) => setTempWallWidth(e.target.value)}
+                    placeholder="e.g., 3.5"
+                    className="mt-1 h-12 text-base border-2 border-gray-200"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="wallHeight" className="text-sm font-medium flex items-center gap-2">
+                    <span>Height (m) *</span>
+                    <span className="text-lg">📏</span>
+                  </Label>
+                  <Input
+                    id="wallHeight"
+                    type="number"
+                    step="0.1"
+                    value={tempWallHeight}
+                    onChange={(e) => setTempWallHeight(e.target.value)}
+                    placeholder="e.g., 2.4"
+                    className="mt-1 h-12 text-base border-2 border-gray-200"
+                  />
+                </div>
+              </div>
+              <Button onClick={handleAddWall} className="w-full h-12 text-base">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Wall
+              </Button>
+            </Card>
+
+            {/* Walls List with Products */}
+            <div className="space-y-4">
+              {wallsWithProducts.map((wall) => (
+                <Card key={wall.id} className="p-6 space-y-4">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="wallType" className="text-sm font-medium">Wall Type *</Label>
-                      <Select value={tempWallType} onValueChange={(val) => {
-                        setTempWallType(val);
-                        setShowWallDimensionForm(true);
-                      }}>
-                        <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
-                          <SelectValue placeholder="Select wall type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="regular">Hallway Wall</SelectItem>
-                          <SelectItem value="garage">Garage Wall</SelectItem>
-                          <SelectItem value="custom">TV Wall</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <h3 className="text-lg font-semibold">{wall.wallName}</h3>
+                      <p className="text-sm text-gray-600">
+                        {wall.wallType} • {(wall.wallWidthMm / 1000).toFixed(1)}m × {(wall.wallHeightMm / 1000).toFixed(1)}m
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => handleDeleteWall(wall.id)}
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  {/* Add Product to Wall */}
+                  <div className="border-t pt-4 space-y-4">
+                    <h4 className="font-medium">Add Product to this Wall</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium">Product Type *</Label>
+                        <Select value={tempProductType || ""} onValueChange={(val) => {
+                          setTempProductType(val as any);
+                          setTempProductId("");
+                        }}>
+                          <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="cladding">Cladding</SelectItem>
+                            <SelectItem value="acoustic_panel">Acoustic Panel</SelectItem>
+                            <SelectItem value="floating_cabinet">Floating Cabinet</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {tempProductType && (
+                        <div>
+                          <Label className="text-sm font-medium">Product *</Label>
+                          <Select value={tempProductId} onValueChange={setTempProductId}>
+                            <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
+                              <SelectValue placeholder="Select product" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {productsByType?.map((product: any) => (
+                                <SelectItem key={product.id} value={product.id.toString()}>
+                                  {product.name} - ${(product.pricePerUnit / 100).toFixed(2)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
 
-                    {showWallDimensionForm && (
-                      <>
+                    {/* Acoustic Panel Dimensions */}
+                    {tempProductType === "acoustic_panel" && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="wallName" className="text-sm font-medium">Wall Name (e.g., Living Room)</Label>
+                          <Label className="text-sm font-medium">Length (m) *</Label>
                           <Input
-                            id="wallName"
-                            value={tempWallName}
-                            onChange={(e) => setTempWallName(e.target.value)}
-                            placeholder="e.g., Living Room, Master Bedroom"
+                            type="number"
+                            step="0.1"
+                            value={tempAcousticLength}
+                            onChange={(e) => setTempAcousticLength(e.target.value)}
+                            placeholder="e.g., 1.2"
                             className="mt-1 h-12 text-base border-2 border-gray-200"
                           />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <Label htmlFor="wallDimWidth" className="text-sm font-medium flex items-center gap-2">
-                              <span>Width (m) *</span>
-                              <span className="text-lg">↔️</span>
-                            </Label>
-                            <Input
-                              id="wallDimWidth"
-                              type="number"
-                              step="0.1"
-                              value={tempWallDimWidth}
-                              onChange={(e) => setTempWallDimWidth(e.target.value)}
-                              placeholder="e.g., 3.5"
-                              className="mt-1 h-12 text-base border-2 border-gray-200"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="wallDimHeight" className="text-sm font-medium flex items-center gap-2">
-                              <span>Height (m) *</span>
-                              <span className="text-lg">↕️</span>
-                            </Label>
-                            <Input
-                              id="wallDimHeight"
-                              type="number"
-                              step="0.1"
-                              value={tempWallDimHeight}
-                              onChange={(e) => setTempWallDimHeight(e.target.value)}
-                              placeholder="e.g., 2.4"
-                              className="mt-1 h-12 text-base border-2 border-gray-200"
-                            />
-                          </div>
+                        <div>
+                          <Label className="text-sm font-medium">Width (m) *</Label>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            value={tempAcousticWidth}
+                            onChange={(e) => setTempAcousticWidth(e.target.value)}
+                            placeholder="e.g., 0.6"
+                            className="mt-1 h-12 text-base border-2 border-gray-200"
+                          />
                         </div>
-                        <Button
-                          onClick={() => {
-                            if (!tempWallDimWidth || !tempWallDimHeight) {
-                              toast.error("Please enter wall dimensions");
-                              return;
-                            }
-                            const newWall: WallItem = {
-                              id: Math.random().toString(),
-                              wallType: tempWallType,
-                              wallName: tempWallName || tempWallType,
-                              wallWidthMm: Math.round(parseFloat(tempWallDimWidth) * 1000),
-                              wallHeightMm: Math.round(parseFloat(tempWallDimHeight) * 1000),
-                            };
-                            setWalls([...walls, newWall]);
-                            // If job exists, persist wall to backend
-                            if (resumeJobId) {
-                              createWallMutation.mutate({
-                                jobId: resumeJobId,
-                                wallType: tempWallType as "regular" | "garage" | "custom",
-                                wallName: tempWallName || tempWallType,
-                                wallWidthMm: newWall.wallWidthMm,
-                                wallHeightMm: newWall.wallHeightMm,
-                              });
-                            }
-                            setTempWallType("regular");
-                            setTempWallName("");
-                            setTempWallDimWidth("");
-                            setTempWallDimHeight("");
-                            setShowWallDimensionForm(false);
-                            toast.success("Wall added!");
-                          }}
-                          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Add Wall
-                        </Button>
-                      </>
+                      </div>
                     )}
+
+                    {/* Floating Cabinet Dimensions */}
+                    {tempProductType === "floating_cabinet" && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-sm font-medium">Width (mm) *</Label>
+                          <Input
+                            type="number"
+                            value={tempCabinetWidth}
+                            onChange={(e) => setTempCabinetWidth(e.target.value)}
+                            placeholder="e.g., 600"
+                            className="mt-1 h-12 text-base border-2 border-gray-200"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Height (mm) *</Label>
+                          <Input
+                            type="number"
+                            value={tempCabinetHeight}
+                            onChange={(e) => setTempCabinetHeight(e.target.value)}
+                            placeholder="e.g., 400"
+                            className="mt-1 h-12 text-base border-2 border-gray-200"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Depth (mm) *</Label>
+                          <Input
+                            type="number"
+                            value={tempCabinetDepth}
+                            onChange={(e) => setTempCabinetDepth(e.target.value)}
+                            placeholder="e.g., 300"
+                            className="mt-1 h-12 text-base border-2 border-gray-200"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Height from Floor (mm) *</Label>
+                          <Input
+                            type="number"
+                            value={tempCabinetHeightFromFloor}
+                            onChange={(e) => setTempCabinetHeightFromFloor(e.target.value)}
+                            placeholder="e.g., 800"
+                            className="mt-1 h-12 text-base border-2 border-gray-200"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <Button 
+                      onClick={() => handleAddProductToWall(wall.id)}
+                      className="w-full h-12 text-base"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Product
+                    </Button>
                   </div>
 
-                  {/* Walls List */}
-                  {walls.length > 0 && (
-                    <div className="space-y-2">
-                      <h3 className="font-medium">Added Walls ({walls.length})</h3>
-                      {walls.map((wall) => (
-                        <div key={wall.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  {/* Products List */}
+                  {wall.products.length > 0 && (
+                    <div className="border-t pt-4 space-y-2">
+                      <h4 className="font-medium">Products ({wall.products.length})</h4>
+                      {wall.products.map((product) => (
+                        <div key={product.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                           <div>
-                            <p className="font-medium">{wall.wallName}</p>
-                            <p className="text-sm text-gray-600">{wall.wallType} • {(wall.wallWidthMm / 1000).toFixed(1)}m × {(wall.wallHeightMm / 1000).toFixed(1)}m</p>
+                            <p className="font-medium">{product.productName}</p>
+                            <p className="text-sm text-gray-600">
+                              Qty: {product.quantity} × ${(product.unitPrice / 100).toFixed(2)} = ${(product.quantity * product.unitPrice / 100).toFixed(2)}
+                            </p>
                           </div>
                           <Button
-                            onClick={() => {
-                              setWalls(walls.filter(w => w.id !== wall.id));
-                              // Delete from backend if it has a numeric ID
-                              if (!isNaN(parseInt(wall.id))) {
-                                deleteWallMutation.mutate({ id: parseInt(wall.id) });
-                              }
-                            }}
+                            onClick={() => handleRemoveProduct(wall.id, product.id)}
                             variant="ghost"
                             size="sm"
-                            className="text-red-600 hover:text-red-700"
+                            className="text-red-600"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -779,338 +799,51 @@ export default function Stage1QuotingWorkspace() {
                       ))}
                     </div>
                   )}
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          {/* Summary Tab */}
+          <TabsContent value="summary" className="space-y-4">
+            <Card className="p-6 space-y-4">
+              <h2 className="text-lg font-semibold">Quote Summary</h2>
+              
+              {/* Client Info */}
+              <div className="border-b pb-4">
+                <h3 className="font-medium mb-2">Client Details</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>Name: <span className="font-medium">{clientName}</span></div>
+                  <div>Phone: <span className="font-medium">{clientPhone}</span></div>
+                  <div>Email: <span className="font-medium">{clientEmail}</span></div>
+                  <div>Address: <span className="font-medium">{clientAddress}</span></div>
+                  <div>Suburb: <span className="font-medium">{suburb}</span></div>
+                  <div>Appointment: <span className="font-medium">{appointmentDate} {appointmentTime}</span></div>
                 </div>
-              </Card>
-            </TabsContent>
+              </div>
 
-            {/* Products Tab */}
-            <TabsContent value="products" className="space-y-4">
-              <Card className="p-6">
-                <h2 className="text-lg font-semibold mb-4">Add Products</h2>
-                <div className="space-y-4">
-                  {/* Product Type Selection */}
-                  <div>
-                    <Label htmlFor="productType" className="text-sm font-medium">Product Type *</Label>
-                    <Select value={tempProductTypeId?.toString() || ""} onValueChange={handleProductTypeChange}>
-                      <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500">
-                        <SelectValue placeholder="Select product type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {productTypes?.map((type: any) => (
-                          <SelectItem key={type.id} value={type.id.toString()}>
-                            {type.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Product Selection */}
-                  {tempProductTypeId && (
-                    <div>
-                      <Label htmlFor="product" className="text-sm font-medium">Product *</Label>
-                      <Select value={tempProductId} onValueChange={setTempProductId}>
-                        <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500">
-                          <SelectValue placeholder="Select product" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {productsByType?.map((product: any) => (
-                            <SelectItem key={product.id} value={product.id.toString()}>
-                              {product.name} - ${(product.pricePerUnit / 100).toFixed(2)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+              {/* Walls Summary */}
+              {wallsWithProducts.map((wall) => (
+                <div key={wall.id} className="border-b pb-4">
+                  <h3 className="font-medium mb-2">{wall.wallName} ({(wall.wallWidthMm / 1000).toFixed(1)}m × {(wall.wallHeightMm / 1000).toFixed(1)}m)</h3>
+                  {wall.products.map((product) => (
+                    <div key={product.id} className="text-sm ml-4 mb-2">
+                      <p>{product.productName}</p>
+                      <p className="text-gray-600">Qty: {product.quantity} × ${(product.unitPrice / 100).toFixed(2)} = <span className="font-medium">${(product.quantity * product.unitPrice / 100).toFixed(2)}</span></p>
                     </div>
-                  )}
-
-                  {/* Acoustic Panel Length/Width (conditional) */}
-                  {showLengthWidth && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="length" className="text-sm font-medium flex items-center gap-2">
-                          <span>Length (m) *</span>
-                          <span title="Horizontal measurement" className="text-lg">📏</span>
-                        </Label>
-                        <Input
-                          id="length"
-                          type="number"
-                          step="0.1"
-                          value={tempLength}
-                          onChange={(e) => setTempLength(e.target.value)}
-                          placeholder="e.g., 2.4"
-                          className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="width" className="text-sm font-medium flex items-center gap-2">
-                          <span>Width (m) *</span>
-                          <span title="Vertical measurement" className="text-lg">📐</span>
-                        </Label>
-                        <Input
-                          id="width"
-                          type="number"
-                          step="0.1"
-                          value={tempWidth}
-                          onChange={(e) => setTempWidth(e.target.value)}
-                          placeholder="e.g., 1.2"
-                          className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Wall Dimensions (conditional) */}
-                  {showWallDimensions && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="wallWidth" className="text-sm font-medium flex items-center gap-2">
-                          <span>Width (m) *</span>
-                          <span title="Horizontal measurement" className="text-lg">↔️</span>
-                        </Label>
-                        <Input
-                          id="wallWidth"
-                          type="number"
-                          value={tempWallWidth}
-                          onChange={(e) => setTempWallWidth(e.target.value)}
-                          placeholder="0.00"
-                          className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                          step="0.01"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="wallHeight" className="text-sm font-medium flex items-center gap-2">
-                          <span>Height (m) *</span>
-                          <span title="Vertical measurement" className="text-lg">↕️</span>
-                        </Label>
-                        <Input
-                          id="wallHeight"
-                          type="number"
-                          value={tempWallHeight}
-                          onChange={(e) => setTempWallHeight(e.target.value)}
-                          placeholder="0.00"
-                          className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                          step="0.01"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* LED Strips (conditional) */}
-                  {showLedStrips && (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <Checkbox
-                          id="ledStrips"
-                          checked={tempLedStrips}
-                          onCheckedChange={(checked) => {
-                            setTempLedStrips(checked as boolean);
-                            if (!checked) setTempLedStripQuantity("");
-                          }}
-                        />
-                        <Label htmlFor="ledStrips" className="text-sm font-medium cursor-pointer">
-                          Add LED Strip Lights
-                        </Label>
-                      </div>
-                      {tempLedStrips && (
-                        <div>
-                          <Label htmlFor="ledStripQuantity" className="text-sm font-medium">Number of LED Strips *</Label>
-                          <Input
-                            id="ledStripQuantity"
-                            type="number"
-                            value={tempLedStripQuantity}
-                            onChange={(e) => setTempLedStripQuantity(e.target.value)}
-                            placeholder="0"
-                            className="mt-1 h-12 text-base border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                            min="1"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <Button
-                    onClick={handleAddLineItem}
-                    className="w-full h-12 text-base bg-green-600 hover:bg-green-700"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Product
-                  </Button>
+                  ))}
                 </div>
+              ))}
 
-                {/* Line Items */}
-                {lineItems.length > 0 && (
-                  <div className="space-y-3 mt-6">
-                    <h3 className="font-semibold text-sm">Added Products ({lineItems.length})</h3>
-                    {lineItems.map((item) => (
-                      <div key={item.id} className="bg-gray-50 p-4 rounded-lg flex justify-between items-start">
-                        <div className="flex-1">
-                          <p className="font-medium text-sm">{item.productName}</p>
-                          <p className="text-xs text-gray-600">
-                            {item.wallWidthMm > 0 ? `${item.wallWidthMm / 1000}m × ${item.wallHeightMm / 1000}m | ` : ""}
-                            {item.quantityRequired} units @ ${(item.unitPrice / 100).toFixed(2)}
-                            {item.ledStripQuantity ? ` + ${item.ledStripQuantity} LED strips` : ""}
-                          </p>
-                          <p className="text-sm font-semibold text-blue-600 mt-1">
-                            ${(item.totalPrice / 100).toFixed(2)}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => handleRemoveLineItem(item.id)}
-                          className="p-2 hover:bg-red-100 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4 text-red-600" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-            </TabsContent>
-
-            {/* Summary Tab */}
-            <TabsContent value="summary" className="space-y-4">
-              <Card className="p-6">
-                <h2 className="text-lg font-semibold mb-4">Quote Summary</h2>
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm text-gray-600">Client</p>
-                    <p className="font-semibold">{clientName || "Not entered"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Contact</p>
-                    <p className="text-sm">{clientEmail}</p>
-                    <p className="text-sm">{clientPhone}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Address</p>
-                    <p className="text-sm">{clientAddress}</p>
-                  </div>
-                  {referenceImagePreview && (
-                    <div>
-                      <p className="text-sm text-gray-600 mb-2">Reference Image</p>
-                      <img 
-                        src={referenceImagePreview} 
-                        alt="Reference" 
-                        className="max-h-48 rounded border-2 border-gray-200"
-                      />
-                    </div>
-                  )}
-                  <hr className="my-4" />
-                  <div>
-                    <p className="text-sm text-gray-600 mb-3 font-semibold">Cost Breakdown by Wall</p>
-                    {walls.length > 0 ? (
-                      <div className="space-y-3">
-                        {walls.map((wall) => {
-                          const wallKey = `${wall.wallWidthMm}x${wall.wallHeightMm}`;
-                          const wallCost = costByWall[wallKey] || 0;
-                          const wallItems = lineItems.filter(item => item.wallWidthMm === wall.wallWidthMm && item.wallHeightMm === wall.wallHeightMm);
-                          return (
-                            <div key={wall.id} className="bg-gray-50 p-3 rounded-lg">
-                              <p className="font-medium text-gray-900">{wall.wallName}</p>
-                              <p className="text-xs text-gray-600 mb-2">{(wall.wallWidthMm / 1000).toFixed(1)}m × {(wall.wallHeightMm / 1000).toFixed(1)}m</p>
-                              <div className="space-y-1 mb-2">
-                                {wallItems.map((item) => (
-                                  <div key={item.id} className="flex justify-between text-xs text-gray-700">
-                                    <span>{item.productName} ({item.quantityRequired})</span>
-                                    <span>${(item.totalPrice / 100).toFixed(2)}</span>
-                                  </div>
-                                ))}
-                              </div>
-                              <div className="flex justify-between text-sm font-semibold border-t pt-1">
-                                <span>Wall Total</span>
-                                <span className="text-blue-600">${(wallCost / 100).toFixed(2)}</span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {lineItems.map((item) => (
-                          <div key={item.id} className="flex justify-between text-sm">
-                            <span>{item.productName} ({item.quantityRequired} units){item.ledStripQuantity ? ` + ${item.ledStripQuantity} LED` : ""}</span>
-                            <span className="font-semibold">${(item.totalPrice / 100).toFixed(2)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <hr className="my-4" />
-                  <div className="flex justify-between text-lg font-bold">
-                    <span>Total Quote</span>
-                    <span className="text-blue-600">${(totalCost / 100).toFixed(2)}</span>
-                  </div>
-                </div>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="bg-white border-t border-gray-200 px-4 py-3 flex gap-3 flex-shrink-0">
-        <Button
-          onClick={() => navigate("/dashboard")}
-          variant="outline"
-          className="flex-1 h-12 text-base"
-        >
-          Cancel
-        </Button>
-        
-        {currentTab === "client" && (
-          <Button
-            onClick={() => setCurrentTab("products")}
-            className="flex-1 h-12 text-base bg-blue-600 hover:bg-blue-700"
-          >
-            Next
-          </Button>
-        )}
-        
-        {currentTab === "products" && (
-          <>
-            <Button
-              onClick={() => setCurrentTab("client")}
-              variant="outline"
-              className="flex-1 h-12 text-base"
-            >
-              Back
-            </Button>
-            <Button
-              onClick={() => setCurrentTab("summary")}
-              disabled={lineItems.length === 0}
-              className="flex-1 h-12 text-base bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-            >
-              Next
-            </Button>
-          </>
-        )}
-        
-        {currentTab === "summary" && (
-          <>
-            <Button
-              onClick={() => setCurrentTab("products")}
-              variant="outline"
-              className="flex-1 h-12 text-base"
-            >
-              Back
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={createJobMutation.isPending || !isFormValid}
-              className="flex-1 h-12 text-base bg-green-600 hover:bg-green-700"
-            >
-              {createJobMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                "Create Quote"
-              )}
-            </Button>
-          </>
-        )}
+              {/* Total */}
+              <div className="text-right">
+                <p className="text-2xl font-bold">
+                  Total: ${(calculateTotal() / 100).toFixed(2)}
+                </p>
+              </div>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

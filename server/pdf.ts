@@ -39,7 +39,7 @@ export function generateQuoteHTML(
             </td>
           </tr>
         `;
-      } else if (item.itemType === "cabinet") {
+      } else if (item.itemType === "floating_cabinet") {
         return `
           <tr>
             <td style="padding: 10px; border-bottom: 1px solid #e0e0e0;">

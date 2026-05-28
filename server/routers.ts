@@ -169,13 +169,15 @@ export const appRouter = router({
     create: protectedProcedure
       .input(z.object({
         jobId: z.number(),
-        itemType: z.enum(["cladding", "cabinet"]),
+        itemType: z.enum(["cladding", "acoustic_panel", "floating_cabinet"]),
         claddingVariantId: z.number().optional(),
         wallWidthMm: z.number().int().positive().optional(),
         wallHeightMm: z.number().int().positive().optional(),
         cabinetWidthMm: z.number().int().positive().optional(),
         cabinetHeightMm: z.number().int().positive().optional(),
         cabinetDepthMm: z.number().int().positive().optional(),
+        cabinetHeightFromFloorMm: z.number().int().nonnegative().optional(),
+        wallId: z.number().optional(),
         quantityRequired: z.number().int().positive().optional(),
         unitPrice: z.number().int().nonnegative().optional(),
         totalPrice: z.number().int().nonnegative().optional(),

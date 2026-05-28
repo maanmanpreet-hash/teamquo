@@ -1,5 +1,14 @@
 # TeamQuo - Collaborative Quote Management Platform
 
+## 🚨 CRITICAL ISSUES - FIX IMMEDIATELY
+- [ ] Refactor workflow: walls first, THEN products per wall (not separate tabs)
+- [ ] Auto-calculate cladding panel quantity based on wall dimensions
+- [ ] Auto-calculate acoustic panel quantity based on wall dimensions
+- [ ] Add floating cabinet product to product list
+- [ ] Floating cabinet: add width, height, depth, height-from-floor fields
+- [ ] Products should be added to specific walls, not globally
+- [ ] Integrate wall dimensions with product quantity calculations
+
 ## 🚨 CRITICAL BUGS - FIX IMMEDIATELY
 - [x] Acoustic panel: Add wall dimensions fields when selected
 - [x] Appointment: Change to date picker + time dropdown (rename to "Appointment")

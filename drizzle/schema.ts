@@ -129,13 +129,15 @@ export type InsertJob = typeof jobs.$inferInsert;
 export const jobItems = mysqlTable("job_items", {
   id: int("id").autoincrement().primaryKey(),
   jobId: int("job_id").notNull(), // Reference to the job
-  itemType: mysqlEnum("item_type", ["cladding", "cabinet"]).notNull(),
+  wallId: int("wall_id"), // Reference to the wall (if applicable)
+  itemType: mysqlEnum("item_type", ["cladding", "acoustic_panel", "floating_cabinet"]).notNull(),
   claddingVariantId: int("cladding_variant_id"), // Reference to cladding variant (if itemType = 'cladding')
   wallWidthMm: int("wall_width_mm"), // Wall width in millimeters
   wallHeightMm: int("wall_height_mm"), // Wall height in millimeters
-  cabinetWidthMm: int("cabinet_width_mm"), // Cabinet width (if itemType = 'cabinet')
-  cabinetHeightMm: int("cabinet_height_mm"), // Cabinet height (if itemType = 'cabinet')
-  cabinetDepthMm: int("cabinet_depth_mm"), // Cabinet depth (if itemType = 'cabinet')
+  cabinetWidthMm: int("cabinet_width_mm"), // Cabinet width (if itemType = 'floating_cabinet')
+  cabinetHeightMm: int("cabinet_height_mm"), // Cabinet height (if itemType = 'floating_cabinet')
+  cabinetDepthMm: int("cabinet_depth_mm"), // Cabinet depth (if itemType = 'floating_cabinet')
+  cabinetHeightFromFloorMm: int("cabinet_height_from_floor_mm"), // Distance from floor to bottom of cabinet
   quantityRequired: int("quantity_required"), // Number of panels/units required
   unitPrice: int("unit_price"), // Price per unit in cents
   totalPrice: int("total_price"), // Total price for this item in cents
