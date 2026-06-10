@@ -12,6 +12,13 @@ export async function downloadPDF(html: string, filename: string) {
       try {
         const element = document.createElement('div');
         element.innerHTML = html;
+
+        element.querySelectorAll('img').forEach((img) => {
+          const src = img.getAttribute('src');
+          if (src && src.startsWith('/')) {
+            img.setAttribute('src', `${window.location.origin}${src}`);
+          }
+        });
         
         // Ensure filename has .pdf extension
         const pdfFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
