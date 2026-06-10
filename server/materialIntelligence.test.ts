@@ -180,6 +180,18 @@ describe("material intelligence", () => {
     expect(estimate.notes.join(" ")).toContain("custom joinery");
   });
 
+  it("records a review note when TV Backdrop is selected without TV size", () => {
+    const estimate = estimateWallMaterials({
+      wallName: "TV Wall",
+      wallWidthMm: 3800,
+      wallHeightMm: 2600,
+      products: [{ productType: "tv_backdrop", productName: "TV Backdrop", quantity: 1 }],
+    });
+
+    expect(estimate.lines).toHaveLength(0);
+    expect(estimate.notes.join(" ")).toContain("TV size is missing");
+  });
+
   it("consolidates material lines across multiple walls", () => {
     const wallEstimates = [
       estimateWallMaterials({
