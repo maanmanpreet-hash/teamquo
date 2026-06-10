@@ -16,7 +16,7 @@ export function generateQuoteHTML(
   claddingVariants: Map<number, CladdingVariant>,
   products: Map<number, Product> = new Map(),
   companyName: string = CUSTOMER_FACING_COMPANY_NAME,
-  logoUrl?: string
+  logoUrl: string = "/skywall-logo.svg"
 ): string {
   const quoteNumber = formatQuoteNumber(job);
 
@@ -98,6 +98,8 @@ export function generateQuoteHTML(
     ? `<section class="notes"><h2>Notes</h2><p>${escapeHtml(job.notes).replace(/\n/g, "<br />")}</p></section>`
     : "";
 
+  const safeLogoUrl = escapeHtml(logoUrl || "/skywall-logo.svg");
+
   return `<!doctype html>
 <html>
 <head>
@@ -107,7 +109,9 @@ export function generateQuoteHTML(
     body { font-family: Arial, sans-serif; margin: 0; padding: 28px; color: #172033; background: #fff; }
     .page { max-width: 900px; margin: 0 auto; }
     .header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 3px solid #14213d; padding-bottom: 18px; margin-bottom: 24px; }
-    .brand-mark { font-size: 30px; font-weight: 800; letter-spacing: 1px; color: #14213d; }
+    .brand-block { display: flex; gap: 14px; align-items: flex-start; }
+    .brand-logo { width: 190px; max-height: 66px; object-fit: contain; object-position: left top; }
+    .brand-fallback { font-size: 30px; font-weight: 800; letter-spacing: 1px; color: #14213d; }
     .brand-name { margin-top: 4px; font-size: 15px; color: #334155; }
     .company-details { margin-top: 10px; font-size: 12px; line-height: 1.5; color: #475569; }
     .quote-box { text-align: right; font-size: 13px; line-height: 1.6; color: #334155; }
@@ -136,7 +140,9 @@ export function generateQuoteHTML(
   <div class="page">
     <header class="header">
       <div>
-        <div class="brand-mark">SKYWALL</div>
+        <div class="brand-block">
+          <img src="${safeLogoUrl}" alt="SKYWALL" class="brand-logo" />
+        </div>
         <div class="brand-name">${escapeHtml(companyName)}</div>
         <div class="company-details">
           ABN: ${escapeHtml(SKYWALL_CONTACT_DETAILS.abn)}<br />
