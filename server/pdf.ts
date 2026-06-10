@@ -16,7 +16,7 @@ export function generateQuoteHTML(
   claddingVariants: Map<number, CladdingVariant>,
   products: Map<number, Product> = new Map(),
   companyName: string = CUSTOMER_FACING_COMPANY_NAME,
-  logoUrl: string = "/skywall-logo.svg"
+  logoUrl: string = "/skywall-logo.png"
 ): string {
   const quoteNumber = formatQuoteNumber(job);
 
@@ -98,7 +98,7 @@ export function generateQuoteHTML(
     ? `<section class="notes"><h2>Notes</h2><p>${escapeHtml(job.notes).replace(/\n/g, "<br />")}</p></section>`
     : "";
 
-  const safeLogoUrl = escapeHtml(logoUrl || "/skywall-logo.svg");
+  const safeLogoUrl = escapeHtml(logoUrl || "/skywall-logo.png");
 
   return `<!doctype html>
 <html>
