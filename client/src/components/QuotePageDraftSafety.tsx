@@ -2,6 +2,7 @@ import { useEffect } from "react";
 
 const QUOTE_DIRTY_KEY = "teamquo.quote.unsavedChanges";
 const QUOTE_RECOVERY_KEY = "teamquo.quote.recoverySnapshot";
+const SAVE_SUCCESS_MESSAGES = ["Draft saved", "Quote saved"];
 const LEAVE_WARNING =
   "You have unsaved quote changes. Save Draft before leaving, otherwise information entered on this page may be lost.";
 
@@ -12,6 +13,11 @@ function isQuotePath() {
 function markQuoteDirty() {
   if (!isQuotePath()) return;
   sessionStorage.setItem(QUOTE_DIRTY_KEY, "1");
+}
+
+function clearRecoveredQuoteState() {
+  sessionStorage.removeItem(QUOTE_DIRTY_KEY);
+  localStorage.removeItem(QUOTE_RECOVERY_KEY);
 }
 
 function hasUnsavedQuoteChanges() {
@@ -107,6 +113,11 @@ function restoreSimpleFields() {
   }
 }
 
+function bodyShowsSaveSuccess() {
+  const text = document.body?.innerText || "";
+  return SAVE_SUCCESS_MESSAGES.some(message => text.includes(message));
+}
+
 export function QuotePageDraftSafety() {
   useEffect(() => {
     const onInput = (event: Event) => {
@@ -149,11 +160,15 @@ export function QuotePageDraftSafety() {
     };
 
     const restoreTimer = window.setTimeout(restoreSimpleFields, 500);
+    const observer = new MutationObserver(() => {
+      if (bodyShowsSaveSuccess()) clearRecoveredQuoteState();
+    });
 
     window.addEventListener("beforeunload", onBeforeUnload);
     document.addEventListener("input", onInput, true);
     document.addEventListener("change", onInput, true);
     document.addEventListener("click", onClickCapture, true);
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
     return () => {
       window.clearTimeout(restoreTimer);
@@ -161,6 +176,7 @@ export function QuotePageDraftSafety() {
       document.removeEventListener("input", onInput, true);
       document.removeEventListener("change", onInput, true);
       document.removeEventListener("click", onClickCapture, true);
+      observer.disconnect();
     };
   }, []);
 
