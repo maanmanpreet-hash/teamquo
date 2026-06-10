@@ -12,8 +12,20 @@ export function formatQuoteNumber(
   return `Q-${year}-${paddedId}`;
 }
 
+export function formatMoneyFromCents(cents: number | null | undefined): string {
+  return `$${((cents || 0) / 100).toFixed(2)}`;
+}
+
 export const CUSTOMER_FACING_COMPANY_NAME =
   "SKYWALL Cabinets & Interior Cladding";
+
+export const SKYWALL_CONTACT_DETAILS = {
+  abn: "52 935 732 589",
+  address: "38 Tuxworth Drive, Kalkallo 3064 VIC",
+  phone: "0431 889 004",
+  email: "info@skywallcabinets.com.au",
+  website: "www.skywallcabinets.com.au",
+};
 
 export const QUOTE_TERMS = [
   "Prices include GST unless stated otherwise.",
