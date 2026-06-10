@@ -172,6 +172,7 @@ export default function QuoteForm() {
   const [tempWallWidth, setTempWallWidth] = useState("");
   const [tempWallHeight, setTempWallHeight] = useState("");
 
+  const [activeProductWallId, setActiveProductWallId] = useState<string | null>(null);
   const [tempProductType, setTempProductType] = useState<ProductTypeSlug | null>(null);
   const [tempProductId, setTempProductId] = useState("");
   const [tempCabinetWidth, setTempCabinetWidth] = useState("");
@@ -313,6 +314,25 @@ export default function QuoteForm() {
   const wallsWithoutProducts = wallsWithProducts.filter(wall => wall.products.length === 0);
   const workflowReady = hasClientDetails && hasWalls && hasProducts && wallsWithoutProducts.length === 0;
   const saveInProgress = createJobMutation.isPending || updateJobMutation.isPending;
+
+  const resetProductDraft = () => {
+    setTempProductType(null);
+    setTempProductId("");
+    setTempCabinetWidth("");
+    setTempCabinetHeight("");
+    setTempCabinetDepth("");
+    setTempCabinetHeightFromFloor("");
+  };
+
+  const openProductPicker = (wallId: string) => {
+    resetProductDraft();
+    setActiveProductWallId(wallId);
+  };
+
+  const closeProductPicker = () => {
+    resetProductDraft();
+    setActiveProductWallId(null);
+  };
 
   const goToStep = (step: WorkflowStep) => {
     if (step === "walls" && !hasClientDetails) {
@@ -464,16 +484,12 @@ export default function QuoteForm() {
         currentWall.id === wallId ? { ...currentWall, products: [...currentWall.products, newProduct] } : currentWall
       )
     );
-    setTempProductType(null);
-    setTempProductId("");
-    setTempCabinetWidth("");
-    setTempCabinetHeight("");
-    setTempCabinetDepth("");
-    setTempCabinetHeightFromFloor("");
+    closeProductPicker();
     toast.success("Product added");
   };
 
   const handleDeleteWall = (wallId: string) => {
+    if (activeProductWallId === wallId) closeProductPicker();
     setWallsWithProducts(wallsWithProducts.filter(wall => wall.id !== wallId));
   };
 
@@ -725,76 +741,98 @@ export default function QuoteForm() {
               <Button onClick={handleAddWall} className="h-10 w-full md:w-auto"><Plus className="mr-2 h-4 w-4" />Add Wall</Button>
             </Card>
 
-            {wallsWithProducts.map(wall => (
-              <Card key={wall.id} className="space-y-3 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h3 className="font-semibold">{wall.wallName}</h3>
-                    <p className="text-sm text-gray-600">{formatMetres(wall.wallWidthMm)} x {formatMetres(wall.wallHeightMm)}</p>
-                  </div>
-                  <Button onClick={() => handleDeleteWall(wall.id)} variant="ghost" size="sm" className="text-red-600 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
-                </div>
+            {wallsWithProducts.map(wall => {
+              const isProductPickerOpen = activeProductWallId === wall.id;
 
-                <div className="grid grid-cols-1 gap-3 border-t pt-3 md:grid-cols-3">
-                  <div>
-                    <Label>Product Type *</Label>
-                    <Select value={tempProductType || ""} onValueChange={value => { setTempProductType(value as ProductTypeSlug); setTempProductId(""); }}>
-                      <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Select type" /></SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(productTypeLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {tempProductType && (
+              return (
+                <Card key={wall.id} className="space-y-3 p-4">
+                  <div className="flex items-center justify-between gap-4">
                     <div>
-                      <Label>Product *</Label>
-                      <Select value={tempProductId} onValueChange={setTempProductId}>
-                        <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Select product" /></SelectTrigger>
-                        <SelectContent>
-                          {productsByType?.map((product: any) => {
-                            const metadata = parseMaterialMetadata(product.description);
-                            return (
-                              <SelectItem key={product.id} value={product.id.toString()}>
-                                {product.name} - {formatMoney(product.pricePerUnit)}{metadata.wastagePercent !== undefined ? ` - ${metadata.wastagePercent}% wastage` : ""}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
+                      <h3 className="font-semibold">{wall.wallName}</h3>
+                      <p className="text-sm text-gray-600">{formatMetres(wall.wallWidthMm)} x {formatMetres(wall.wallHeightMm)}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {!isProductPickerOpen && (
+                        <Button onClick={() => openProductPicker(wall.id)} variant="outline" size="sm" className="h-8">
+                          <Plus className="mr-1 h-3 w-3" />Product
+                        </Button>
+                      )}
+                      <Button onClick={() => handleDeleteWall(wall.id)} variant="ghost" size="sm" className="text-red-600 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  </div>
+
+                  {wall.products.length > 0 && (
+                    <div className="space-y-2 border-t pt-3">
+                      {wall.products.map(product => (
+                        <div key={product.id} className="rounded-lg bg-gray-50 p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-medium">{product.productName}</p>
+                              <p className="text-sm text-gray-600">Qty {product.quantity} x {formatMoney(product.unitPrice)} = {formatMoney(product.quantity * product.unitPrice)}</p>
+                              {product.manualReviewRequired && <p className="text-xs font-semibold text-amber-700">Manual review required</p>}
+                            </div>
+                            <Button onClick={() => handleRemoveProduct(wall.id, product.id)} variant="ghost" size="sm" className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
-                  <div className="flex items-end">
-                    <Button onClick={() => handleAddProductToWall(wall.id)} className="h-10 w-full"><Plus className="mr-2 h-4 w-4" />Add Product</Button>
-                  </div>
-                </div>
 
-                {tempProductType === "floating_cabinet" && (
-                  <div className="grid grid-cols-2 gap-2 rounded-lg border bg-gray-50 p-3 md:grid-cols-4">
-                    <Input type="number" value={tempCabinetWidth} onChange={e => setTempCabinetWidth(e.target.value)} placeholder="Width mm" className="h-10" />
-                    <Input type="number" value={tempCabinetHeight} onChange={e => setTempCabinetHeight(e.target.value)} placeholder="Height mm" className="h-10" />
-                    <Input type="number" value={tempCabinetDepth} onChange={e => setTempCabinetDepth(e.target.value)} placeholder="Depth mm" className="h-10" />
-                    <Input type="number" value={tempCabinetHeightFromFloor} onChange={e => setTempCabinetHeightFromFloor(e.target.value)} placeholder="From floor mm" className="h-10" />
-                  </div>
-                )}
+                  {wall.products.length === 0 && !isProductPickerOpen && (
+                    <div className="rounded-lg border border-dashed p-3 text-sm text-gray-500">
+                      No products added yet. Use Product to add one to this wall.
+                    </div>
+                  )}
 
-                {wall.products.length > 0 && (
-                  <div className="space-y-2 border-t pt-3">
-                    {wall.products.map(product => (
-                      <div key={product.id} className="rounded-lg bg-gray-50 p-3">
-                        <div className="flex items-start justify-between gap-3">
+                  {isProductPickerOpen && (
+                    <div className="space-y-3 rounded-lg border bg-blue-50/40 p-3">
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <div>
+                          <Label>Product Type *</Label>
+                          <Select value={tempProductType || ""} onValueChange={value => { setTempProductType(value as ProductTypeSlug); setTempProductId(""); }}>
+                            <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Select type" /></SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(productTypeLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {tempProductType && (
                           <div>
-                            <p className="font-medium">{product.productName}</p>
-                            <p className="text-sm text-gray-600">Qty {product.quantity} x {formatMoney(product.unitPrice)} = {formatMoney(product.quantity * product.unitPrice)}</p>
-                            {product.manualReviewRequired && <p className="text-xs font-semibold text-amber-700">Manual review required</p>}
+                            <Label>Product *</Label>
+                            <Select value={tempProductId} onValueChange={setTempProductId}>
+                              <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Select product" /></SelectTrigger>
+                              <SelectContent>
+                                {productsByType?.map((product: any) => {
+                                  const metadata = parseMaterialMetadata(product.description);
+                                  return (
+                                    <SelectItem key={product.id} value={product.id.toString()}>
+                                      {product.name} - {formatMoney(product.pricePerUnit)}{metadata.wastagePercent !== undefined ? ` - ${metadata.wastagePercent}% wastage` : ""}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
                           </div>
-                          <Button onClick={() => handleRemoveProduct(wall.id, product.id)} variant="ghost" size="sm" className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
+                        )}
+                        <div className="flex items-end gap-2">
+                          <Button onClick={() => handleAddProductToWall(wall.id)} className="h-10 flex-1"><Plus className="mr-2 h-4 w-4" />Add</Button>
+                          <Button onClick={closeProductPicker} type="button" variant="outline" className="h-10">Cancel</Button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-            ))}
+
+                      {tempProductType === "floating_cabinet" && (
+                        <div className="grid grid-cols-2 gap-2 rounded-lg border bg-white p-3 md:grid-cols-4">
+                          <Input type="number" value={tempCabinetWidth} onChange={e => setTempCabinetWidth(e.target.value)} placeholder="Width mm" className="h-10" />
+                          <Input type="number" value={tempCabinetHeight} onChange={e => setTempCabinetHeight(e.target.value)} placeholder="Height mm" className="h-10" />
+                          <Input type="number" value={tempCabinetDepth} onChange={e => setTempCabinetDepth(e.target.value)} placeholder="Depth mm" className="h-10" />
+                          <Input type="number" value={tempCabinetHeightFromFloor} onChange={e => setTempCabinetHeightFromFloor(e.target.value)} placeholder="From floor mm" className="h-10" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
 
             <Button onClick={() => goToStep("review")} disabled={!workflowReady} className="h-10 w-full">Review Quote</Button>
           </div>
