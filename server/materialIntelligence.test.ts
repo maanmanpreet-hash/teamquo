@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildInternalMaterialListText,
   buildQuoteMaterialSummary,
   calculateTvBackdropDimensions,
   calculateTvDimensions,
@@ -245,5 +246,40 @@ describe("material intelligence", () => {
     );
     expect(summary.referenceCostCents).toBe(25074);
     expect(summary.notes.join(" ")).toContain("custom joinery");
+  });
+
+  it("exports an internal material list text with and without reference costs", () => {
+    const summary = buildQuoteMaterialSummary([
+      {
+        wallName: "TV Wall",
+        wallWidthMm: 3800,
+        wallHeightMm: 2600,
+        products: [
+          { productType: "tv_backdrop", productName: "TV Backdrop", quantity: 1, tvSizeInches: 75 },
+          { productType: "marble_sheet", productName: "PVC Marble Sheet", quantity: 1 },
+          { productType: "tv_backdrop", productName: "Supply & Install TV Bracket", quantity: 1 },
+        ],
+      },
+    ]);
+
+    const withCosts = buildInternalMaterialListText(summary, {
+      quoteNumber: "Q-2026-0001",
+      clientName: "Test Client",
+      clientAddress: "1 Test Street",
+    });
+
+    expect(withCosts).toContain("INTERNAL MATERIAL LIST");
+    expect(withCosts).toContain("Quote: Q-2026-0001");
+    expect(withCosts).toContain("Customer: Test Client");
+    expect(withCosts).toContain("Address: 1 Test Street");
+    expect(withCosts).toContain("PVC Marble Sheet 1220x3x2900mm x 2 | $118.18");
+    expect(withCosts).toContain("6mm MDF Sheet 1220x2440mm x 2 | $68.00");
+    expect(withCosts).toContain("TV Bracket x 1 | $50.00");
+    expect(withCosts).toContain("Reference Material Cost: $250.74");
+
+    const withoutCosts = buildInternalMaterialListText(summary, { includeReferenceCosts: false });
+    expect(withoutCosts).toContain("TV Bracket x 1");
+    expect(withoutCosts).not.toContain("Reference Material Cost");
+    expect(withoutCosts).not.toContain("$50.00");
   });
 });
