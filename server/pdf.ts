@@ -1,4 +1,4 @@
-import { Job, JobItem, CladdingVariant, Product } from "../drizzle/schema";
+import { Job, JobItem, CladdingVariant, Product, Wall } from "../drizzle/schema";
 import {
   CUSTOMER_FACING_COMPANY_NAME,
   QUOTE_TERMS,
@@ -6,6 +6,30 @@ import {
   formatMoneyFromCents,
   formatQuoteNumber,
 } from "../shared/quote";
+import { parseMaterialMetadata } from "../shared/quoteCalculations";
+
+type WallSummary = Pick<Wall, "id" | "wallName" | "wallType" | "wallWidthMm" | "wallHeightMm" | "notes">;
+
+function decodeWallNotes(notes: string | null | undefined) {
+  if (!notes) return { obstructionStatus: "unknown", obstructionNotes: "" };
+
+  try {
+    const parsed = JSON.parse(notes);
+    if (
+      parsed &&
+      ["unknown", "none", "present"].includes(parsed.obstructionStatus)
+    ) {
+      return {
+        obstructionStatus: parsed.obstructionStatus as "unknown" | "none" | "present",
+        obstructionNotes: String(parsed.obstructionNotes || ""),
+      };
+    }
+  } catch {
+    return { obstructionStatus: "unknown", obstructionNotes: notes };
+  }
+
+  return { obstructionStatus: "unknown", obstructionNotes: notes };
+}
 
 /**
  * Generate customer-facing quote HTML for PDF export.
@@ -16,7 +40,8 @@ export function generateQuoteHTML(
   claddingVariants: Map<number, CladdingVariant>,
   products: Map<number, Product> = new Map(),
   companyName: string = CUSTOMER_FACING_COMPANY_NAME,
-  logoUrl: string = "/skywall-logo.png"
+  logoUrl: string = "/skywall-logo.png",
+  walls: Map<number, WallSummary> = new Map()
 ): string {
   const quoteNumber = formatQuoteNumber(job);
 
@@ -37,7 +62,7 @@ export function generateQuoteHTML(
     marble_sheet: "Marble Sheet",
   };
 
-  const formatDimensions = (item: JobItem, product?: Product) => {
+  const formatDimensions = (item: JobItem, product?: Product, wall?: WallSummary) => {
     if (item.itemType === "floating_cabinet") {
       const dims = [
         item.cabinetWidthMm,
@@ -47,8 +72,14 @@ export function generateQuoteHTML(
       return dims.length ? `${dims.join("mm x ")}mm` : "Custom size";
     }
 
+    if (wall?.wallWidthMm && wall?.wallHeightMm) {
+      return `${(wall.wallWidthMm / 1000).toFixed(2)}m W x ${(
+        wall.wallHeightMm / 1000
+      ).toFixed(2)}m H`;
+    }
+
     if (item.wallWidthMm && item.wallHeightMm) {
-      return `${(item.wallWidthMm / 1000).toFixed(2)}m L x ${(
+      return `${(item.wallWidthMm / 1000).toFixed(2)}m W x ${(
         item.wallHeightMm / 1000
       ).toFixed(2)}m H`;
     }
@@ -60,16 +91,46 @@ export function generateQuoteHTML(
     return "As measured on site";
   };
 
+  const itemCustomerNotes = (item: JobItem, product?: Product, wall?: WallSummary) => {
+    const notes: string[] = [];
+    const metadata = parseMaterialMetadata(product?.description);
+    const decodedWallNotes = decodeWallNotes(wall?.notes);
+
+    if (["cladding", "acoustic_panel", "marble_sheet"].includes(item.itemType)) {
+      notes.push("Material quantity is based on selected product size and supplied wall dimensions.");
+      notes.push("Final join layout and cut positions are subject to site measurement confirmation.");
+    }
+
+    if (metadata.orientationRule) {
+      notes.push(`Install orientation: ${metadata.orientationRule}.`);
+    }
+
+    if (decodedWallNotes.obstructionStatus === "present") {
+      notes.push(
+        decodedWallNotes.obstructionNotes
+          ? `Noted wall features: ${decodedWallNotes.obstructionNotes}. Final cut layout to be confirmed on site.`
+          : "Wall features/openings are present. Final cut layout to be confirmed on site."
+      );
+    } else if (decodedWallNotes.obstructionStatus === "unknown") {
+      notes.push("Openings, power points, recesses, and other wall features to be confirmed before commencement.");
+    }
+
+    return Array.from(new Set(notes));
+  };
+
   const rows = jobItems
     .map((item, index) => {
       const product = item.productId ? products.get(item.productId) : undefined;
       const variant = item.claddingVariantId
         ? claddingVariants.get(item.claddingVariantId)
         : undefined;
+      const wall = item.wallId ? walls.get(item.wallId) : undefined;
       const productName =
         product?.name || variant?.name || itemTypeLabels[item.itemType];
       const productDesign = product?.design || variant?.design;
       const quantity = item.quantityRequired || 1;
+      const unitPrice = item.unitPrice || 0;
+      const lineTotal = item.totalPrice ?? quantity * unitPrice;
       const description = [
         itemTypeLabels[item.itemType],
         productName,
@@ -77,6 +138,7 @@ export function generateQuoteHTML(
       ]
         .filter(Boolean)
         .join(" - ");
+      const notes = itemCustomerNotes(item, product, wall);
 
       return `
         <tr>
@@ -84,9 +146,13 @@ export function generateQuoteHTML(
           <td>
             <strong>Supply and install</strong><br />
             ${escapeHtml(description)}
+            ${wall?.wallName ? `<div class="line-note"><strong>Location:</strong> ${escapeHtml(wall.wallName)}</div>` : ""}
+            ${notes.length ? `<ul class="line-notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join("")}</ul>` : ""}
           </td>
-          <td>${escapeHtml(formatDimensions(item, product))}</td>
+          <td>${escapeHtml(formatDimensions(item, product, wall))}</td>
           <td>${quantity}x</td>
+          <td>${formatMoneyFromCents(unitPrice)}</td>
+          <td>${formatMoneyFromCents(lineTotal)}</td>
         </tr>
       `;
     })
@@ -95,10 +161,14 @@ export function generateQuoteHTML(
   const terms = QUOTE_TERMS.map(term => `<li>${escapeHtml(term)}</li>`).join("");
 
   const safeNotes = job.notes
-    ? `<section class="notes"><h2>Notes</h2><p>${escapeHtml(job.notes).replace(/\n/g, "<br />")}</p></section>`
+    ? `<section class="notes"><h2>Additional Notes</h2><p>${escapeHtml(job.notes).replace(/\n/g, "<br />")}</p></section>`
     : "";
 
   const safeLogoUrl = escapeHtml(logoUrl || "/skywall-logo.png");
+  const quoteDate = job.createdAt ? new Date(job.createdAt) : new Date();
+  const quoteDateLabel = Number.isNaN(quoteDate.getTime())
+    ? new Date().toLocaleDateString()
+    : quoteDate.toLocaleDateString();
 
   return `<!doctype html>
 <html>
@@ -107,11 +177,10 @@ export function generateQuoteHTML(
   <title>${quoteNumber} - ${escapeHtml(job.clientName)}</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 28px; color: #172033; background: #fff; }
-    .page { max-width: 900px; margin: 0 auto; }
+    .page { max-width: 940px; margin: 0 auto; }
     .header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 3px solid #14213d; padding-bottom: 18px; margin-bottom: 24px; }
     .brand-block { display: flex; gap: 14px; align-items: flex-start; }
     .brand-logo { width: 190px; max-height: 66px; object-fit: contain; object-position: left top; }
-    .brand-fallback { font-size: 30px; font-weight: 800; letter-spacing: 1px; color: #14213d; }
     .brand-name { margin-top: 4px; font-size: 15px; color: #334155; }
     .company-details { margin-top: 10px; font-size: 12px; line-height: 1.5; color: #475569; }
     .quote-box { text-align: right; font-size: 13px; line-height: 1.6; color: #334155; }
@@ -124,9 +193,12 @@ export function generateQuoteHTML(
     table { width: 100%; border-collapse: collapse; margin-top: 12px; }
     th { background: #14213d; color: #fff; text-align: left; padding: 10px; font-size: 12px; }
     td { border-bottom: 1px solid #e2e8f0; padding: 10px; font-size: 13px; vertical-align: top; }
-    th:nth-child(1), td:nth-child(1) { width: 42px; text-align: center; }
-    th:nth-child(3), td:nth-child(3) { width: 150px; }
-    th:nth-child(4), td:nth-child(4) { width: 80px; text-align: center; }
+    th:nth-child(1), td:nth-child(1) { width: 38px; text-align: center; }
+    th:nth-child(3), td:nth-child(3) { width: 132px; }
+    th:nth-child(4), td:nth-child(4) { width: 62px; text-align: center; }
+    th:nth-child(5), td:nth-child(5), th:nth-child(6), td:nth-child(6) { width: 86px; text-align: right; }
+    .line-note { margin-top: 6px; color: #475569; font-size: 12px; }
+    .line-notes { margin: 6px 0 0; padding-left: 18px; color: #475569; font-size: 11px; line-height: 1.4; }
     .total { display: flex; justify-content: flex-end; margin-top: 22px; }
     .total-card { min-width: 280px; border: 2px solid #14213d; border-radius: 10px; padding: 16px; text-align: right; }
     .total-label { font-size: 13px; color: #475569; }
@@ -153,7 +225,7 @@ export function generateQuoteHTML(
       </div>
       <div class="quote-box">
         <div class="quote-number">${quoteNumber}</div>
-        <div>Date: ${new Date(job.createdAt).toLocaleDateString()}</div>
+        <div>Date: ${quoteDateLabel}</div>
         <div>Status: ${escapeHtml(job.status)}</div>
       </div>
     </header>
@@ -169,7 +241,7 @@ export function generateQuoteHTML(
       <div class="panel">
         <h2>Quote Summary</h2>
         <p>Supply and install quote for selected SKYWALL works.</p>
-        <p>Final measurements and site conditions to be confirmed before commencement.</p>
+        <p>Final measurements, join layout, and site conditions to be confirmed before commencement.</p>
       </div>
     </section>
 
@@ -177,7 +249,7 @@ export function generateQuoteHTML(
       <h1>Supply and Install</h1>
       <table>
         <thead>
-          <tr><th>#</th><th>Description</th><th>Dimensions</th><th>Qty</th></tr>
+          <tr><th>#</th><th>Description</th><th>Dimensions</th><th>Qty</th><th>Unit</th><th>Amount</th></tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
