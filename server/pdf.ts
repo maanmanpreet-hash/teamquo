@@ -31,6 +31,18 @@ function decodeWallNotes(notes: string | null | undefined) {
   return { obstructionStatus: "unknown", obstructionNotes: notes };
 }
 
+function formatQuoteStatus(status: string | null | undefined) {
+  const labels: Record<string, string> = {
+    quoted: "Draft",
+    booked: "Sent",
+    commenced: "Accepted",
+    completed: "Completed",
+    cancelled: "Rejected",
+  };
+
+  return labels[status || "quoted"] || "Draft";
+}
+
 /**
  * Generate customer-facing quote HTML for PDF export.
  */
@@ -206,6 +218,7 @@ export function generateQuoteHTML(
   const quoteDateLabel = Number.isNaN(quoteDate.getTime())
     ? new Date().toLocaleDateString()
     : quoteDate.toLocaleDateString();
+  const quoteStatusLabel = formatQuoteStatus(job.status);
 
   return `<!doctype html>
 <html>
@@ -265,7 +278,7 @@ export function generateQuoteHTML(
       <div class="quote-box">
         <div class="quote-number">${quoteNumber}</div>
         <div>Date: ${quoteDateLabel}</div>
-        <div>Status: ${escapeHtml(job.status)}</div>
+        <div>Status: ${escapeHtml(quoteStatusLabel)}</div>
       </div>
     </header>
 
