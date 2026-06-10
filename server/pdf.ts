@@ -1,4 +1,4 @@
-import { Job, JobItem, CladdingVariant } from "../drizzle/schema";
+import { Job, JobItem, CladdingVariant, Product } from "../drizzle/schema";
 
 /**
  * Generate HTML for a quote PDF
@@ -7,6 +7,7 @@ export function generateQuoteHTML(
   job: Job,
   jobItems: JobItem[],
   claddingVariants: Map<number, CladdingVariant>,
+  products: Map<number, Product> = new Map(),
   companyName: string = "TeamQuo",
   logoUrl?: string
 ): string {
@@ -15,52 +16,85 @@ export function generateQuoteHTML(
     return `$${(cents / 100).toFixed(2)}`;
   };
 
+  const escapeHtml = (value: string | null | undefined) =>
+    String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+  const formatDimensions = (item: JobItem, product?: Product) => {
+    if (item.itemType === "floating_cabinet") {
+      return (
+        [item.cabinetWidthMm, item.cabinetHeightMm, item.cabinetDepthMm]
+          .filter(Boolean)
+          .join("mm × ") + (item.cabinetWidthMm ? "mm" : "")
+      );
+    }
+
+    if (item.wallWidthMm && item.wallHeightMm) {
+      return `${item.wallWidthMm}mm × ${item.wallHeightMm}mm`;
+    }
+
+    if (product?.widthMm && product?.heightMm) {
+      return `${product.widthMm}mm × ${product.heightMm}mm${product.depthMm ? ` × ${product.depthMm}mm` : ""}`;
+    }
+
+    return "—";
+  };
+
+  const itemTypeLabels: Record<JobItem["itemType"], string> = {
+    cladding: "Cladding",
+    acoustic_panel: "Acoustic Panel",
+    floating_cabinet: "Floating Cabinet",
+    fireplace: "Fireplace",
+    mirror: "Mirror",
+    marble_sheet: "Marble Sheet",
+  };
+
   const itemsHTML = jobItems
-    .map((item) => {
-      if (item.itemType === "cladding") {
-        const variant = claddingVariants.get(item.claddingVariantId || 0);
-        return `
-          <tr>
-            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0;">
-              <strong>${variant?.name || "Cladding"}</strong><br/>
-              <small>Design: ${variant?.design || "N/A"}</small>
-            </td>
-            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: center;">
-              ${item.wallWidthMm}mm × ${item.wallHeightMm}mm
-            </td>
-            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: center;">
-              ${item.quantityRequired}
-            </td>
-            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: right;">
-              ${formatCurrency(item.unitPrice)}
-            </td>
-            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: right;">
-              <strong>${formatCurrency(item.totalPrice)}</strong>
-            </td>
-          </tr>
-        `;
-      } else if (item.itemType === "floating_cabinet") {
-        return `
-          <tr>
-            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0;">
-              <strong>Floating Cabinet</strong>
-            </td>
-            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: center;">
-              ${item.cabinetWidthMm}mm × ${item.cabinetHeightMm}mm × ${item.cabinetDepthMm}mm
-            </td>
-            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: center;">
-              1
-            </td>
-            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: right;">
-              ${formatCurrency(item.manualPriceOverride)}
-            </td>
-            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: right;">
-              <strong>${formatCurrency(item.manualPriceOverride)}</strong>
-            </td>
-          </tr>
-        `;
-      }
-      return "";
+    .map(item => {
+      const product = item.productId ? products.get(item.productId) : undefined;
+      const variant = item.claddingVariantId
+        ? claddingVariants.get(item.claddingVariantId)
+        : undefined;
+      const name =
+        product?.name || variant?.name || itemTypeLabels[item.itemType];
+      const design = product?.design || variant?.design;
+      const quantity = item.quantityRequired || 1;
+      const unitPrice = item.unitPrice || 0;
+      const totalPrice =
+        item.totalPrice ??
+        (item.manualPriceOverride !== null &&
+        item.manualPriceOverride !== undefined
+          ? item.manualPriceOverride
+          : quantity * unitPrice);
+      const cabinetFloorHeight = item.cabinetHeightFromFloorMm
+        ? `<br/><small>Height from floor: ${item.cabinetHeightFromFloorMm}mm</small>`
+        : "";
+
+      return `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid #e0e0e0;">
+            <strong>${escapeHtml(name)}</strong><br/>
+            <small>Type: ${itemTypeLabels[item.itemType]}</small>
+            ${design ? `<br/><small>Design: ${escapeHtml(design)}</small>` : ""}
+          </td>
+          <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: center;">
+            ${formatDimensions(item, product)}${cabinetFloorHeight}
+          </td>
+          <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: center;">
+            ${quantity}
+          </td>
+          <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: right;">
+            ${formatCurrency(unitPrice)}
+          </td>
+          <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: right;">
+            <strong>${formatCurrency(totalPrice)}</strong>
+          </td>
+        </tr>
+      `;
     })
     .join("");
 

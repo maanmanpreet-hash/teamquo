@@ -1,10 +1,22 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Plus, Eye, FileText, Edit } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { downloadPDF } from "@/lib/pdf";
@@ -23,11 +35,19 @@ const statusColors: Record<JobStatus, string> = {
 export default function Jobs() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
-  const [selectedStatus, setSelectedStatus] = useState<JobStatus | "all">("all");
+  const [selectedStatus, setSelectedStatus] = useState<JobStatus | "all">(
+    "all"
+  );
   const [selectedSuburb, setSelectedSuburb] = useState<string | "all">("all");
   const [downloadingJobId, setDownloadingJobId] = useState<number | null>(null);
 
-  const SUBURBS = ["Kalkallo", "Donnybrook", "Mickleham", "Craigieburn", "Beveridge"];
+  const SUBURBS = [
+    "Kalkallo",
+    "Donnybrook",
+    "Mickleham",
+    "Craigieburn",
+    "Beveridge",
+  ];
 
   // Fetch jobs
   const { data: jobs, isLoading, refetch } = trpc.jobs.list.useQuery();
@@ -55,54 +75,59 @@ export default function Jobs() {
   };
 
   // Watch for PDF data and download when ready
-  if (downloadingJobId !== null && generatePDFMutation.data) {
-    try {
-      const job = jobs?.find((j) => j.id === downloadingJobId);
-      downloadPDF(
-        generatePDFMutation.data.html,
-        `quote-${job?.clientName || "quote"}-${new Date().toISOString().split('T')[0]}.pdf`
-      ).then(() => {
+  useEffect(() => {
+    if (downloadingJobId === null || !generatePDFMutation.data) return;
+
+    const job = jobs?.find(j => j.id === downloadingJobId);
+    downloadPDF(
+      generatePDFMutation.data.html,
+      `quote-${job?.clientName || "quote"}-${new Date().toISOString().split("T")[0]}.pdf`
+    )
+      .then(() => {
         toast.success("PDF downloaded successfully");
         setDownloadingJobId(null);
-      }).catch((error) => {
+      })
+      .catch(() => {
         toast.error("Failed to download PDF");
         setDownloadingJobId(null);
       });
-    } catch (error) {
-      toast.error("Failed to process PDF");
-      setDownloadingJobId(null);
-    }
-  }
+  }, [downloadingJobId, generatePDFMutation.data, jobs]);
 
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Please log in to view jobs</h1>
+          <h1 className="text-2xl font-bold mb-4">
+            Please log in to view jobs
+          </h1>
         </div>
       </div>
     );
   }
 
   const filteredJobs = jobs
-    ?.filter((job) => selectedStatus === "all" || job.status === selectedStatus)
-    ?.filter((job) => selectedSuburb === "all" || job.suburb === selectedSuburb)
+    ?.filter(job => selectedStatus === "all" || job.status === selectedStatus)
+    ?.filter(job => selectedSuburb === "all" || job.suburb === selectedSuburb)
     ?.sort((a, b) => {
       // Sort by appointment date/time if available, then by creation date
       if (a.appointmentDate && b.appointmentDate) {
-        const aTime = new Date(`${a.appointmentDate}T${a.appointmentTime || "00:00"}`);
-        const bTime = new Date(`${b.appointmentDate}T${b.appointmentTime || "00:00"}`);
+        const aTime = new Date(
+          `${a.appointmentDate}T${a.appointmentTime || "00:00"}`
+        );
+        const bTime = new Date(
+          `${b.appointmentDate}T${b.appointmentTime || "00:00"}`
+        );
         return aTime.getTime() - bTime.getTime();
       }
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
   const statusCounts = {
-    quoted: jobs?.filter((j) => j.status === "quoted").length || 0,
-    booked: jobs?.filter((j) => j.status === "booked").length || 0,
-    commenced: jobs?.filter((j) => j.status === "commenced").length || 0,
-    completed: jobs?.filter((j) => j.status === "completed").length || 0,
-    cancelled: jobs?.filter((j) => j.status === "cancelled").length || 0,
+    quoted: jobs?.filter(j => j.status === "quoted").length || 0,
+    booked: jobs?.filter(j => j.status === "booked").length || 0,
+    commenced: jobs?.filter(j => j.status === "commenced").length || 0,
+    completed: jobs?.filter(j => j.status === "completed").length || 0,
+    cancelled: jobs?.filter(j => j.status === "cancelled").length || 0,
   };
 
   return (
@@ -112,7 +137,9 @@ export default function Jobs() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold">Jobs Dashboard</h1>
-            <p className="text-muted-foreground mt-2">Track and manage all your quotes</p>
+            <p className="text-muted-foreground mt-2">
+              Track and manage all your quotes
+            </p>
           </div>
           <Link href="/quote">
             <Button>
@@ -127,7 +154,9 @@ export default function Jobs() {
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600">{statusCounts.quoted}</div>
+                <div className="text-3xl font-bold text-blue-600">
+                  {statusCounts.quoted}
+                </div>
                 <div className="text-sm text-muted-foreground mt-2">Quoted</div>
               </div>
             </CardContent>
@@ -135,7 +164,9 @@ export default function Jobs() {
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
-                <div className="text-3xl font-bold text-green-600">{statusCounts.booked}</div>
+                <div className="text-3xl font-bold text-green-600">
+                  {statusCounts.booked}
+                </div>
                 <div className="text-sm text-muted-foreground mt-2">Booked</div>
               </div>
             </CardContent>
@@ -143,24 +174,36 @@ export default function Jobs() {
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
-                <div className="text-3xl font-bold text-orange-600">{statusCounts.commenced}</div>
-                <div className="text-sm text-muted-foreground mt-2">Commenced</div>
+                <div className="text-3xl font-bold text-orange-600">
+                  {statusCounts.commenced}
+                </div>
+                <div className="text-sm text-muted-foreground mt-2">
+                  Commenced
+                </div>
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
-                <div className="text-3xl font-bold text-purple-600">{statusCounts.completed}</div>
-                <div className="text-sm text-muted-foreground mt-2">Completed</div>
+                <div className="text-3xl font-bold text-purple-600">
+                  {statusCounts.completed}
+                </div>
+                <div className="text-sm text-muted-foreground mt-2">
+                  Completed
+                </div>
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
-                <div className="text-3xl font-bold text-red-600">{statusCounts.cancelled}</div>
-                <div className="text-sm text-muted-foreground mt-2">Cancelled</div>
+                <div className="text-3xl font-bold text-red-600">
+                  {statusCounts.cancelled}
+                </div>
+                <div className="text-sm text-muted-foreground mt-2">
+                  Cancelled
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -168,7 +211,12 @@ export default function Jobs() {
 
         {/* Filters */}
         <div className="mb-6 flex gap-4 flex-wrap">
-          <Select value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as JobStatus | "all")}>
+          <Select
+            value={selectedStatus}
+            onValueChange={value =>
+              setSelectedStatus(value as JobStatus | "all")
+            }
+          >
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Filter by status..." />
             </SelectTrigger>
@@ -181,13 +229,16 @@ export default function Jobs() {
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={selectedSuburb} onValueChange={(value) => setSelectedSuburb(value as string)}>
+          <Select
+            value={selectedSuburb}
+            onValueChange={value => setSelectedSuburb(value as string)}
+          >
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Filter by suburb..." />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Suburbs</SelectItem>
-              {SUBURBS.map((suburb) => (
+              {SUBURBS.map(suburb => (
                 <SelectItem key={suburb} value={suburb}>
                   {suburb}
                 </SelectItem>
@@ -203,18 +254,27 @@ export default function Jobs() {
           </div>
         ) : filteredJobs && filteredJobs.length > 0 ? (
           <div className="space-y-4">
-            {filteredJobs.map((job) => (
+            {filteredJobs.map(job => (
               <Card key={job.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="pt-6">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold">{job.clientName === "[Draft]" ? "📋 Draft Quote" : job.clientName}</h3>
-                        <Badge className={statusColors[job.status as JobStatus]}>
+                        <h3 className="text-lg font-semibold">
+                          {job.clientName === "[Draft]"
+                            ? "📋 Draft Quote"
+                            : job.clientName}
+                        </h3>
+                        <Badge
+                          className={statusColors[job.status as JobStatus]}
+                        >
                           {job.status}
                         </Badge>
                         {job.clientName === "[Draft]" && (
-                          <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-200">
+                          <Badge
+                            variant="outline"
+                            className="bg-yellow-50 text-yellow-800 border-yellow-200"
+                          >
                             Incomplete
                           </Badge>
                         )}
@@ -222,33 +282,40 @@ export default function Jobs() {
                       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-sm text-muted-foreground">
                         {job.clientEmail && (
                           <div>
-                            <span className="font-medium">Email:</span> {job.clientEmail || "—"}
+                            <span className="font-medium">Email:</span>{" "}
+                            {job.clientEmail || "—"}
                           </div>
                         )}
                         {job.clientPhone && (
                           <div>
-                            <span className="font-medium">Phone:</span> {job.clientPhone || "—"}
+                            <span className="font-medium">Phone:</span>{" "}
+                            {job.clientPhone || "—"}
                           </div>
                         )}
                         {job.suburb && (
                           <div>
-                            <span className="font-medium">📍 Suburb:</span> {job.suburb}
+                            <span className="font-medium">📍 Suburb:</span>{" "}
+                            {job.suburb}
                           </div>
                         )}
                         {job.appointmentDate && (
                           <div>
-                            <span className="font-medium">📅 Quote:</span> {new Date(job.appointmentDate).toLocaleDateString()} {job.appointmentTime && `@ ${job.appointmentTime}`}
+                            <span className="font-medium">📅 Quote:</span>{" "}
+                            {new Date(job.appointmentDate).toLocaleDateString()}{" "}
+                            {job.appointmentTime && `@ ${job.appointmentTime}`}
                           </div>
                         )}
                         {job.operatorName && (
                           <div>
-                            <span className="font-medium">Operator:</span> {job.operatorName}
+                            <span className="font-medium">Operator:</span>{" "}
+                            {job.operatorName}
                           </div>
                         )}
                       </div>
                       {job.clientAddress && (
                         <div className="text-sm text-muted-foreground mt-2">
-                          <span className="font-medium">Address:</span> {job.clientAddress}
+                          <span className="font-medium">Address:</span>{" "}
+                          {job.clientAddress}
                         </div>
                       )}
                     </div>
@@ -266,7 +333,10 @@ export default function Jobs() {
                       <Button
                         size="sm"
                         onClick={() => {
-                          localStorage.setItem("selectedOperator", job.operatorName || "");
+                          localStorage.setItem(
+                            "selectedOperator",
+                            job.operatorName || ""
+                          );
                           navigate(`/stage1?resumeJobId=${job.id}`);
                         }}
                         className="bg-amber-600 hover:bg-amber-700"
@@ -284,7 +354,10 @@ export default function Jobs() {
                         variant="outline"
                         size="sm"
                         onClick={() =>
-                          updateStatusMutation.mutate({ id: job.id, status: "quoted" })
+                          updateStatusMutation.mutate({
+                            id: job.id,
+                            status: "quoted",
+                          })
                         }
                         disabled={updateStatusMutation.isPending}
                       >
@@ -296,7 +369,10 @@ export default function Jobs() {
                         variant="outline"
                         size="sm"
                         onClick={() =>
-                          updateStatusMutation.mutate({ id: job.id, status: "booked" })
+                          updateStatusMutation.mutate({
+                            id: job.id,
+                            status: "booked",
+                          })
                         }
                         disabled={updateStatusMutation.isPending}
                       >
@@ -308,7 +384,10 @@ export default function Jobs() {
                         variant="outline"
                         size="sm"
                         onClick={() =>
-                          updateStatusMutation.mutate({ id: job.id, status: "commenced" })
+                          updateStatusMutation.mutate({
+                            id: job.id,
+                            status: "commenced",
+                          })
                         }
                         disabled={updateStatusMutation.isPending}
                       >
@@ -320,7 +399,10 @@ export default function Jobs() {
                         variant="outline"
                         size="sm"
                         onClick={() =>
-                          updateStatusMutation.mutate({ id: job.id, status: "completed" })
+                          updateStatusMutation.mutate({
+                            id: job.id,
+                            status: "completed",
+                          })
                         }
                         disabled={updateStatusMutation.isPending}
                       >
@@ -332,7 +414,10 @@ export default function Jobs() {
                         variant="outline"
                         size="sm"
                         onClick={() =>
-                          updateStatusMutation.mutate({ id: job.id, status: "cancelled" })
+                          updateStatusMutation.mutate({
+                            id: job.id,
+                            status: "cancelled",
+                          })
                         }
                         disabled={updateStatusMutation.isPending}
                       >

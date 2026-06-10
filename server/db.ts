@@ -1,7 +1,37 @@
-import { eq, and } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, claddingVariants, jobs, jobItems, CladdingVariant, Job, JobItem, InsertCladdingVariant, InsertJob, InsertJobItem, productTypes, products, volumeDiscounts, ProductType, Product, VolumeDiscount, InsertProduct, InsertProductType, InsertVolumeDiscount, operators, stageTransitions, Operator, InsertOperator, StageTransition, InsertStageTransition, walls, Wall, InsertWall } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import {
+  InsertUser,
+  users,
+  claddingVariants,
+  jobs,
+  jobItems,
+  CladdingVariant,
+  Job,
+  JobItem,
+  InsertCladdingVariant,
+  InsertJob,
+  InsertJobItem,
+  productTypes,
+  products,
+  volumeDiscounts,
+  ProductType,
+  Product,
+  VolumeDiscount,
+  InsertProduct,
+  InsertProductType,
+  InsertVolumeDiscount,
+  operators,
+  stageTransitions,
+  Operator,
+  InsertOperator,
+  StageTransition,
+  InsertStageTransition,
+  walls,
+  Wall,
+  InsertWall,
+} from "../drizzle/schema";
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -56,8 +86,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.role = user.role;
       updateSet.role = user.role;
     } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
+      values.role = "admin";
+      updateSet.role = "admin";
     }
 
     if (!values.lastSignedIn) {
@@ -84,7 +114,11 @@ export async function getUserByOpenId(openId: string) {
     return undefined;
   }
 
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.openId, openId))
+    .limit(1);
 
   return result.length > 0 ? result[0] : undefined;
 }
@@ -96,12 +130,17 @@ export async function getUserByOpenId(openId: string) {
 export async function getAllCladdingVariants() {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot get cladding variants: database not available");
+    console.warn(
+      "[Database] Cannot get cladding variants: database not available"
+    );
     return [];
   }
 
   try {
-    return await db.select().from(claddingVariants).where(eq(claddingVariants.isActive, 1));
+    return await db
+      .select()
+      .from(claddingVariants)
+      .where(eq(claddingVariants.isActive, 1));
   } catch (error) {
     console.error("[Database] Failed to get cladding variants:", error);
     throw error;
@@ -111,12 +150,18 @@ export async function getAllCladdingVariants() {
 export async function getCladdingVariantById(id: number) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot get cladding variant: database not available");
+    console.warn(
+      "[Database] Cannot get cladding variant: database not available"
+    );
     return undefined;
   }
 
   try {
-    const result = await db.select().from(claddingVariants).where(eq(claddingVariants.id, id)).limit(1);
+    const result = await db
+      .select()
+      .from(claddingVariants)
+      .where(eq(claddingVariants.id, id))
+      .limit(1);
     return result.length > 0 ? result[0] : undefined;
   } catch (error) {
     console.error("[Database] Failed to get cladding variant:", error);
@@ -127,7 +172,9 @@ export async function getCladdingVariantById(id: number) {
 export async function createCladdingVariant(variant: InsertCladdingVariant) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot create cladding variant: database not available");
+    console.warn(
+      "[Database] Cannot create cladding variant: database not available"
+    );
     return undefined;
   }
 
@@ -141,15 +188,23 @@ export async function createCladdingVariant(variant: InsertCladdingVariant) {
   }
 }
 
-export async function updateCladdingVariant(id: number, updates: Partial<InsertCladdingVariant>) {
+export async function updateCladdingVariant(
+  id: number,
+  updates: Partial<InsertCladdingVariant>
+) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot update cladding variant: database not available");
+    console.warn(
+      "[Database] Cannot update cladding variant: database not available"
+    );
     return undefined;
   }
 
   try {
-    await db.update(claddingVariants).set(updates).where(eq(claddingVariants.id, id));
+    await db
+      .update(claddingVariants)
+      .set(updates)
+      .where(eq(claddingVariants.id, id));
     return await getCladdingVariantById(id);
   } catch (error) {
     console.error("[Database] Failed to update cladding variant:", error);
@@ -160,13 +215,18 @@ export async function updateCladdingVariant(id: number, updates: Partial<InsertC
 export async function deleteCladdingVariant(id: number) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot delete cladding variant: database not available");
+    console.warn(
+      "[Database] Cannot delete cladding variant: database not available"
+    );
     return false;
   }
 
   try {
     // Soft delete by marking as inactive
-    await db.update(claddingVariants).set({ isActive: 0 }).where(eq(claddingVariants.id, id));
+    await db
+      .update(claddingVariants)
+      .set({ isActive: 0 })
+      .where(eq(claddingVariants.id, id));
     return true;
   } catch (error) {
     console.error("[Database] Failed to delete cladding variant:", error);
@@ -234,7 +294,10 @@ export async function updateJobStatus(id: number, status: string) {
   }
 
   try {
-    await db.update(jobs).set({ status: status as any }).where(eq(jobs.id, id));
+    await db
+      .update(jobs)
+      .set({ status: status as any })
+      .where(eq(jobs.id, id));
     return await getJobById(id);
   } catch (error) {
     console.error("[Database] Failed to update job status:", error);
@@ -272,7 +335,11 @@ export async function createJobItem(item: InsertJobItem) {
   try {
     const result = await db.insert(jobItems).values(item);
     const insertedId = (result as any).insertId;
-    const createdItem = await db.select().from(jobItems).where(eq(jobItems.id, insertedId)).limit(1);
+    const createdItem = await db
+      .select()
+      .from(jobItems)
+      .where(eq(jobItems.id, insertedId))
+      .limit(1);
     return createdItem.length > 0 ? createdItem[0] : undefined;
   } catch (error) {
     console.error("[Database] Failed to create job item:", error);
@@ -295,7 +362,46 @@ export async function getJobItemsByJobId(jobId: number) {
   }
 }
 
-export async function updateJobItem(id: number, updates: Partial<InsertJobItem>) {
+export async function getJobItemById(id: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get job item: database not available");
+    return undefined;
+  }
+
+  try {
+    const result = await db
+      .select()
+      .from(jobItems)
+      .where(eq(jobItems.id, id))
+      .limit(1);
+    return result.length > 0 ? result[0] : undefined;
+  } catch (error) {
+    console.error("[Database] Failed to get job item:", error);
+    throw error;
+  }
+}
+
+export async function deleteJobItemsByJobId(jobId: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot delete job items: database not available");
+    return false;
+  }
+
+  try {
+    await db.delete(jobItems).where(eq(jobItems.jobId, jobId));
+    return true;
+  } catch (error) {
+    console.error("[Database] Failed to delete job items by job:", error);
+    throw error;
+  }
+}
+
+export async function updateJobItem(
+  id: number,
+  updates: Partial<InsertJobItem>
+) {
   const db = await getDb();
   if (!db) {
     console.warn("[Database] Cannot update job item: database not available");
@@ -304,7 +410,11 @@ export async function updateJobItem(id: number, updates: Partial<InsertJobItem>)
 
   try {
     await db.update(jobItems).set(updates).where(eq(jobItems.id, id));
-    const result = await db.select().from(jobItems).where(eq(jobItems.id, id)).limit(1);
+    const result = await db
+      .select()
+      .from(jobItems)
+      .where(eq(jobItems.id, id))
+      .limit(1);
     return result.length > 0 ? result[0] : undefined;
   } catch (error) {
     console.error("[Database] Failed to update job item:", error);
@@ -336,7 +446,10 @@ export async function getAllProductTypes() {
     return [];
   }
   try {
-    return await db.select().from(productTypes).where(eq(productTypes.isActive, 1));
+    return await db
+      .select()
+      .from(productTypes)
+      .where(eq(productTypes.isActive, 1));
   } catch (error) {
     console.error("[Database] Failed to get product types:", error);
     throw error;
@@ -350,7 +463,11 @@ export async function getProductTypeBySlug(slug: string) {
     return undefined;
   }
   try {
-    const result = await db.select().from(productTypes).where(eq(productTypes.slug, slug)).limit(1);
+    const result = await db
+      .select()
+      .from(productTypes)
+      .where(eq(productTypes.slug, slug))
+      .limit(1);
     return result.length > 0 ? result[0] : undefined;
   } catch (error) {
     console.error("[Database] Failed to get product type:", error);
@@ -367,7 +484,15 @@ export async function getAllProducts(productTypeId?: number) {
   }
   try {
     if (productTypeId) {
-      return await db.select().from(products).where(and(eq(products.productTypeId, productTypeId), eq(products.isActive, 1)));
+      return await db
+        .select()
+        .from(products)
+        .where(
+          and(
+            eq(products.productTypeId, productTypeId),
+            eq(products.isActive, 1)
+          )
+        );
     }
     return await db.select().from(products).where(eq(products.isActive, 1));
   } catch (error) {
@@ -383,7 +508,11 @@ export async function getProductById(id: number) {
     return undefined;
   }
   try {
-    const result = await db.select().from(products).where(eq(products.id, id)).limit(1);
+    const result = await db
+      .select()
+      .from(products)
+      .where(eq(products.id, id))
+      .limit(1);
     return result.length > 0 ? result[0] : undefined;
   } catch (error) {
     console.error("[Database] Failed to get product:", error);
@@ -406,7 +535,10 @@ export async function createProduct(data: InsertProduct) {
   }
 }
 
-export async function updateProduct(id: number, updates: Partial<InsertProduct>) {
+export async function updateProduct(
+  id: number,
+  updates: Partial<InsertProduct>
+) {
   const db = await getDb();
   if (!db) {
     console.warn("[Database] Cannot update product: database not available");
@@ -440,27 +572,36 @@ export async function deleteProduct(id: number) {
 export async function getVolumeDiscounts(productTypeId: number) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot get volume discounts: database not available");
+    console.warn(
+      "[Database] Cannot get volume discounts: database not available"
+    );
     return [];
   }
   try {
-    return await db.select().from(volumeDiscounts).where(eq(volumeDiscounts.productTypeId, productTypeId)).orderBy(volumeDiscounts.minQuantity);
+    return await db
+      .select()
+      .from(volumeDiscounts)
+      .where(eq(volumeDiscounts.productTypeId, productTypeId))
+      .orderBy(volumeDiscounts.minQuantity);
   } catch (error) {
     console.error("[Database] Failed to get volume discounts:", error);
     throw error;
   }
 }
 
-export async function calculateDiscount(productTypeId: number, quantity: number): Promise<number> {
+export async function calculateDiscount(
+  productTypeId: number,
+  quantity: number
+): Promise<number> {
   const discounts = await getVolumeDiscounts(productTypeId);
   let applicableDiscount = 0;
-  
+
   for (const discount of discounts) {
     if (quantity >= discount.minQuantity) {
       applicableDiscount = discount.discountPercent;
     }
   }
-  
+
   return applicableDiscount;
 }
 
@@ -486,7 +627,11 @@ export async function getOperatorById(id: number) {
     return undefined;
   }
   try {
-    const result = await db.select().from(operators).where(eq(operators.id, id)).limit(1);
+    const result = await db
+      .select()
+      .from(operators)
+      .where(eq(operators.id, id))
+      .limit(1);
     return result.length > 0 ? result[0] : undefined;
   } catch (error) {
     console.error("[Database] Failed to get operator:", error);
@@ -498,7 +643,7 @@ export async function createOperator(data: InsertOperator) {
   const db = await getDb();
   if (!db) {
     console.warn("[Database] Cannot create operator: database not available");
-    return undefined;
+    return { id: 0, ...data };
   }
   try {
     const result = await db.insert(operators).values(data);
@@ -509,11 +654,14 @@ export async function createOperator(data: InsertOperator) {
   }
 }
 
-export async function updateOperator(id: number, updates: Partial<InsertOperator>) {
+export async function updateOperator(
+  id: number,
+  updates: Partial<InsertOperator>
+) {
   const db = await getDb();
   if (!db) {
     console.warn("[Database] Cannot update operator: database not available");
-    return undefined;
+    return { id, ...updates };
   }
   try {
     return await db.update(operators).set(updates).where(eq(operators.id, id));
@@ -527,10 +675,13 @@ export async function deleteOperator(id: number) {
   const db = await getDb();
   if (!db) {
     console.warn("[Database] Cannot delete operator: database not available");
-    return undefined;
+    return true;
   }
   try {
-    return await db.update(operators).set({ isActive: 0 }).where(eq(operators.id, id));
+    return await db
+      .update(operators)
+      .set({ isActive: 0 })
+      .where(eq(operators.id, id));
   } catch (error) {
     console.error("[Database] Failed to delete operator:", error);
     throw error;
@@ -541,7 +692,9 @@ export async function deleteOperator(id: number) {
 export async function createStageTransition(data: InsertStageTransition) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot create stage transition: database not available");
+    console.warn(
+      "[Database] Cannot create stage transition: database not available"
+    );
     return undefined;
   }
   try {
@@ -556,11 +709,16 @@ export async function createStageTransition(data: InsertStageTransition) {
 export async function getStageTransitionsByJobId(jobId: number) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot get stage transitions: database not available");
+    console.warn(
+      "[Database] Cannot get stage transitions: database not available"
+    );
     return [];
   }
   try {
-    return await db.select().from(stageTransitions).where(eq(stageTransitions.jobId, jobId));
+    return await db
+      .select()
+      .from(stageTransitions)
+      .where(eq(stageTransitions.jobId, jobId));
   } catch (error) {
     console.error("[Database] Failed to get stage transitions:", error);
     throw error;
@@ -577,7 +735,8 @@ export async function createWall(data: InsertWall) {
   }
   try {
     const result = await db.insert(walls).values(data);
-    return result;
+    const insertedId = (result as any).insertId;
+    return insertedId ? await getWallById(insertedId) : undefined;
   } catch (error) {
     console.error("[Database] Failed to create wall:", error);
     throw error;
@@ -598,6 +757,74 @@ export async function getWallsByJobId(jobId: number) {
   }
 }
 
+export async function getWallsWithItemsByJobId(jobId: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn(
+      "[Database] Cannot get walls with items: database not available"
+    );
+    return [];
+  }
+  try {
+    const wallRows = await db
+      .select()
+      .from(walls)
+      .where(eq(walls.jobId, jobId));
+    if (wallRows.length === 0) return [];
+
+    const items = await db
+      .select({
+        id: jobItems.id,
+        jobId: jobItems.jobId,
+        wallId: jobItems.wallId,
+        itemType: jobItems.itemType,
+        productId: jobItems.productId,
+        claddingVariantId: jobItems.claddingVariantId,
+        wallWidthMm: jobItems.wallWidthMm,
+        wallHeightMm: jobItems.wallHeightMm,
+        cabinetWidthMm: jobItems.cabinetWidthMm,
+        cabinetHeightMm: jobItems.cabinetHeightMm,
+        cabinetDepthMm: jobItems.cabinetDepthMm,
+        cabinetHeightFromFloorMm: jobItems.cabinetHeightFromFloorMm,
+        quantityRequired: jobItems.quantityRequired,
+        unitPrice: jobItems.unitPrice,
+        totalPrice: jobItems.totalPrice,
+        manualPriceOverride: jobItems.manualPriceOverride,
+        productName: products.name,
+        productDesign: products.design,
+        productWidthMm: products.widthMm,
+        productHeightMm: products.heightMm,
+        productDepthMm: products.depthMm,
+      })
+      .from(jobItems)
+      .leftJoin(products, eq(jobItems.productId, products.id))
+      .where(eq(jobItems.jobId, jobId));
+
+    return wallRows.map(wall => ({
+      ...wall,
+      products: items.filter(item => item.wallId === wall.id),
+    }));
+  } catch (error) {
+    console.error("[Database] Failed to get walls with items:", error);
+    throw error;
+  }
+}
+
+export async function deleteWallsByJobId(jobId: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot delete walls: database not available");
+    return false;
+  }
+  try {
+    await db.delete(walls).where(eq(walls.jobId, jobId));
+    return true;
+  } catch (error) {
+    console.error("[Database] Failed to delete walls by job:", error);
+    throw error;
+  }
+}
+
 export async function getWallById(id: number) {
   const db = await getDb();
   if (!db) {
@@ -605,7 +832,11 @@ export async function getWallById(id: number) {
     return undefined;
   }
   try {
-    const result = await db.select().from(walls).where(eq(walls.id, id)).limit(1);
+    const result = await db
+      .select()
+      .from(walls)
+      .where(eq(walls.id, id))
+      .limit(1);
     return result.length > 0 ? result[0] : undefined;
   } catch (error) {
     console.error("[Database] Failed to get wall:", error);

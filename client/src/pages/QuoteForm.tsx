@@ -5,7 +5,13 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocation } from "wouter";
@@ -23,7 +29,13 @@ interface WallWithProducts {
 
 interface WallProduct {
   id: string;
-  productType: string; // "cladding" | "acoustic_panel" | "floating_cabinet"
+  productType:
+    | "cladding"
+    | "acoustic_panel"
+    | "floating_cabinet"
+    | "fireplace"
+    | "mirror"
+    | "marble_sheet";
   productId: string;
   productName: string;
   quantity: number;
@@ -57,37 +69,68 @@ export default function Stage1QuotingWorkspace() {
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
   const [referenceImageUrl, setReferenceImageUrl] = useState("");
-  const [referenceImagePreview, setReferenceImagePreview] = useState<string | null>(null);
+  const [referenceImagePreview, setReferenceImagePreview] = useState<
+    string | null
+  >(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Walls with integrated products
-  const [wallsWithProducts, setWallsWithProducts] = useState<WallWithProducts[]>([]);
-  const [editingWallId, setEditingWallId] = useState<string | null>(null);
+  const [wallsWithProducts, setWallsWithProducts] = useState<
+    WallWithProducts[]
+  >([]);
   const [tempWallType, setTempWallType] = useState("regular");
   const [tempWallName, setTempWallName] = useState("");
   const [tempWallWidth, setTempWallWidth] = useState("");
   const [tempWallHeight, setTempWallHeight] = useState("");
 
   // Product selection for current wall
-  const [tempProductType, setTempProductType] = useState<"cladding" | "acoustic_panel" | "floating_cabinet" | "fireplace" | "mirror" | "marble_sheet" | null>(null);
+  const [tempProductType, setTempProductType] = useState<
+    | "cladding"
+    | "acoustic_panel"
+    | "floating_cabinet"
+    | "fireplace"
+    | "mirror"
+    | "marble_sheet"
+    | null
+  >(null);
   const [tempProductId, setTempProductId] = useState("");
-  const [tempQuantity, setTempQuantity] = useState("");
-  
+
   // Acoustic panel specific
   const [tempAcousticLength, setTempAcousticLength] = useState("");
   const [tempAcousticWidth, setTempAcousticWidth] = useState("");
-  
+
   // Floating cabinet specific
   const [tempCabinetWidth, setTempCabinetWidth] = useState("");
   const [tempCabinetHeight, setTempCabinetHeight] = useState("");
   const [tempCabinetDepth, setTempCabinetDepth] = useState("");
-  const [tempCabinetHeightFromFloor, setTempCabinetHeightFromFloor] = useState("");
+  const [tempCabinetHeightFromFloor, setTempCabinetHeightFromFloor] =
+    useState("");
 
   // Queries
   const { data: productTypes } = trpc.products.listTypes.useQuery();
+  const productTypeSlugAliases: Record<
+    NonNullable<typeof tempProductType>,
+    string[]
+  > = {
+    cladding: ["cladding"],
+    acoustic_panel: ["acoustic_panel", "acoustic-panels"],
+    floating_cabinet: [
+      "floating_cabinet",
+      "floating-cabinet",
+      "floating-cabinets",
+    ],
+    fireplace: ["fireplace"],
+    mirror: ["mirror", "mirrors"],
+    marble_sheet: ["marble_sheet", "marble-sheet"],
+  };
+  const selectedProductTypeId = tempProductType
+    ? productTypes?.find(type =>
+        productTypeSlugAliases[tempProductType].includes(type.slug)
+      )?.id || 0
+    : 0;
   const { data: productsByType } = trpc.products.listByType.useQuery(
-    { productTypeId: tempProductType === "cladding" ? 1 : tempProductType === "acoustic_panel" ? 2 : tempProductType === "floating_cabinet" ? 3 : tempProductType === "fireplace" ? 4 : tempProductType === "mirror" ? 5 : tempProductType === "marble_sheet" ? 6 : 0 },
-    { enabled: !!tempProductType }
+    { productTypeId: selectedProductTypeId },
+    { enabled: selectedProductTypeId > 0 }
   );
   const { data: operators } = trpc.operators.list.useQuery();
   const { data: draftJob } = trpc.jobs.getById.useQuery(
@@ -104,9 +147,18 @@ export default function Stage1QuotingWorkspace() {
   const createJobItemMutation = trpc.jobItems.create.useMutation();
   const uploadImageMutation = trpc.storage.uploadImage.useMutation();
   const createWallMutation = trpc.walls.create.useMutation();
-  const deleteWallMutation = trpc.walls.delete.useMutation();
+  const deleteJobItemsByJobIdMutation =
+    trpc.jobItems.deleteByJobId.useMutation();
+  const deleteWallsByJobIdMutation = trpc.walls.deleteByJobId.useMutation();
 
-  const selectedOperator = localStorage.getItem("selectedOperator");
+  const getSelectedOperatorName = () => {
+    const selectedOperator = localStorage.getItem("selectedOperator");
+    if (!selectedOperator) return undefined;
+    return (
+      operators?.find(operator => operator.id.toString() === selectedOperator)
+        ?.name || selectedOperator
+    );
+  };
 
   // Load draft on mount
   useEffect(() => {
@@ -121,14 +173,16 @@ export default function Stage1QuotingWorkspace() {
   // Load draft data
   useEffect(() => {
     if (draftJob && isLoadingDraft) {
-      setClientName(draftJob.clientName === "[Draft]" ? "" : draftJob.clientName);
+      setClientName(
+        draftJob.clientName === "[Draft]" ? "" : draftJob.clientName
+      );
       setClientEmail(draftJob.clientEmail || "");
       setClientPhone(draftJob.clientPhone || "");
       setClientAddress(draftJob.clientAddress || "");
       setSuburb(draftJob.suburb || "");
       if (draftJob.appointmentDate) {
         const date = new Date(draftJob.appointmentDate);
-        setAppointmentDate(date.toISOString().split('T')[0]);
+        setAppointmentDate(date.toISOString().split("T")[0]);
       }
       setAppointmentTime(draftJob.appointmentTime || "");
       if (draftJob.referenceImageUrl) {
@@ -145,17 +199,39 @@ export default function Stage1QuotingWorkspace() {
       const wallsData = savedWalls.map((wall: any) => ({
         id: wall.id.toString(),
         wallType: wall.wallType,
-        wallName: wall.wallName,
-        wallWidthMm: wall.wallWidthMm,
-        wallHeightMm: wall.wallHeightMm,
-        products: wall.products || [],
+        wallName: wall.wallName || "Wall",
+        wallWidthMm: wall.wallWidthMm || 0,
+        wallHeightMm: wall.wallHeightMm || 0,
+        products: (wall.products || []).map((item: any) => ({
+          id: item.id.toString(),
+          productType: item.itemType,
+          productId: String(item.productId || item.claddingVariantId || ""),
+          productName: item.productName || item.productDesign || item.itemType,
+          quantity: item.quantityRequired || 1,
+          unitPrice: item.unitPrice || 0,
+          panelWidthMm: item.productWidthMm,
+          panelHeightMm: item.productHeightMm,
+          cabinetWidthMm: item.cabinetWidthMm,
+          cabinetHeightMm: item.cabinetHeightMm,
+          cabinetDepthMm: item.cabinetDepthMm,
+          cabinetHeightFromFloorMm: item.cabinetHeightFromFloorMm,
+        })),
       }));
       setWallsWithProducts(wallsData);
     }
   }, [savedWalls]);
 
   // Calculate panel quantity for cladding/acoustic
-  const calculatePanelQuantity = (wallWidthMm: number, wallHeightMm: number, panelWidthMm: number, panelHeightMm: number) => {
+  const calculatePanelQuantity = (
+    wallWidthMm: number,
+    wallHeightMm: number,
+    panelWidthMm: number,
+    panelHeightMm: number
+  ) => {
+    if (panelWidthMm <= 0 || panelHeightMm <= 0) {
+      toast.error("Selected product dimensions are missing or invalid");
+      return null;
+    }
     const panelsHorizontal = Math.ceil(wallWidthMm / panelWidthMm);
     const panelsVertical = Math.ceil(wallHeightMm / panelHeightMm);
     return panelsHorizontal * panelsVertical;
@@ -168,12 +244,24 @@ export default function Stage1QuotingWorkspace() {
       return;
     }
 
+    const wallWidthMm = Math.round(Number(tempWallWidth) * 1000);
+    const wallHeightMm = Math.round(Number(tempWallHeight) * 1000);
+    if (
+      !Number.isFinite(wallWidthMm) ||
+      !Number.isFinite(wallHeightMm) ||
+      wallWidthMm <= 0 ||
+      wallHeightMm <= 0
+    ) {
+      toast.error("Wall dimensions must be valid positive numbers");
+      return;
+    }
+
     const newWall: WallWithProducts = {
       id: Date.now().toString(),
       wallType: tempWallType,
       wallName: tempWallName,
-      wallWidthMm: Math.round(parseFloat(tempWallWidth) * 1000),
-      wallHeightMm: Math.round(parseFloat(tempWallHeight) * 1000),
+      wallWidthMm,
+      wallHeightMm,
       products: [],
     };
 
@@ -206,12 +294,21 @@ export default function Stage1QuotingWorkspace() {
     };
 
     if (tempProductType === "cladding") {
-      const foundProduct = productsByType?.find(p => p.id.toString() === tempProductId);
+      const foundProduct = productsByType?.find(
+        p => p.id.toString() === tempProductId
+      );
       if (!foundProduct) {
         toast.error("Product not found");
         return;
       }
-      quantity = calculatePanelQuantity(wall.wallWidthMm, wall.wallHeightMm, foundProduct.widthMm || 0, foundProduct.heightMm || 0);
+      const calculatedQuantity = calculatePanelQuantity(
+        wall.wallWidthMm,
+        wall.wallHeightMm,
+        foundProduct.widthMm || 0,
+        foundProduct.heightMm || 0
+      );
+      if (!calculatedQuantity) return;
+      quantity = calculatedQuantity;
       newProduct = {
         ...newProduct,
         productName: foundProduct.name,
@@ -221,23 +318,38 @@ export default function Stage1QuotingWorkspace() {
         unitPrice: foundProduct.pricePerUnit,
       };
     } else if (tempProductType === "acoustic_panel") {
-      const foundProduct = productsByType?.find(p => p.id.toString() === tempProductId);
+      const foundProduct = productsByType?.find(
+        p => p.id.toString() === tempProductId
+      );
       if (!foundProduct) {
         toast.error("Product not found");
         return;
       }
       // Auto-calculate quantity based on wall dimensions and panel size
-      quantity = calculatePanelQuantity(wall.wallWidthMm, wall.wallHeightMm, foundProduct.widthMm || 1000, foundProduct.heightMm || 1000);
+      const calculatedQuantity = calculatePanelQuantity(
+        wall.wallWidthMm,
+        wall.wallHeightMm,
+        foundProduct.widthMm || 0,
+        foundProduct.heightMm || 0
+      );
+      if (!calculatedQuantity) return;
+      quantity = calculatedQuantity;
       newProduct = {
         ...newProduct,
         productName: foundProduct.name,
-        panelWidthMm: foundProduct.widthMm || 1000,
-        panelHeightMm: foundProduct.heightMm || 1000,
+        panelWidthMm: foundProduct.widthMm || 0,
+        panelHeightMm: foundProduct.heightMm || 0,
         quantity,
         unitPrice: foundProduct.pricePerUnit,
       };
-    } else if (tempProductType === "fireplace" || tempProductType === "mirror" || tempProductType === "marble_sheet") {
-      const foundProduct = productsByType?.find(p => p.id.toString() === tempProductId);
+    } else if (
+      tempProductType === "fireplace" ||
+      tempProductType === "mirror" ||
+      tempProductType === "marble_sheet"
+    ) {
+      const foundProduct = productsByType?.find(
+        p => p.id.toString() === tempProductId
+      );
       if (!foundProduct) {
         toast.error("Product not found");
         return;
@@ -249,49 +361,76 @@ export default function Stage1QuotingWorkspace() {
         unitPrice: foundProduct.pricePerUnit,
       };
     } else if (tempProductType === "floating_cabinet") {
-      if (!tempCabinetWidth || !tempCabinetHeight || !tempCabinetDepth || !tempCabinetHeightFromFloor) {
+      if (
+        !tempCabinetWidth ||
+        !tempCabinetHeight ||
+        !tempCabinetDepth ||
+        !tempCabinetHeightFromFloor
+      ) {
         toast.error("Please enter all cabinet dimensions");
         return;
       }
-      const foundProduct = productsByType?.find(p => p.id.toString() === tempProductId);
+      const foundProduct = productsByType?.find(
+        p => p.id.toString() === tempProductId
+      );
       if (!foundProduct) {
         toast.error("Product not found");
+        return;
+      }
+      const cabinetWidthMm = Math.round(Number(tempCabinetWidth));
+      const cabinetHeightMm = Math.round(Number(tempCabinetHeight));
+      const cabinetDepthMm = Math.round(Number(tempCabinetDepth));
+      const cabinetHeightFromFloorMm = Math.round(
+        Number(tempCabinetHeightFromFloor)
+      );
+      if (
+        !Number.isFinite(cabinetWidthMm) ||
+        !Number.isFinite(cabinetHeightMm) ||
+        !Number.isFinite(cabinetDepthMm) ||
+        !Number.isFinite(cabinetHeightFromFloorMm) ||
+        cabinetWidthMm <= 0 ||
+        cabinetHeightMm <= 0 ||
+        cabinetDepthMm <= 0 ||
+        cabinetHeightFromFloorMm < 0
+      ) {
+        toast.error("Cabinet dimensions must be valid positive numbers");
         return;
       }
       newProduct = {
         ...newProduct,
         productName: foundProduct.name,
-        cabinetWidthMm: Math.round(parseFloat(tempCabinetWidth)),
-        cabinetHeightMm: Math.round(parseFloat(tempCabinetHeight)),
-        cabinetDepthMm: Math.round(parseFloat(tempCabinetDepth)),
-        cabinetHeightFromFloorMm: Math.round(parseFloat(tempCabinetHeightFromFloor)),
+        cabinetWidthMm,
+        cabinetHeightMm,
+        cabinetDepthMm,
+        cabinetHeightFromFloorMm,
         quantity: 1,
         unitPrice: foundProduct.pricePerUnit,
       };
     }
 
-    const updatedWalls = wallsWithProducts.map(w => 
+    const updatedWalls = wallsWithProducts.map(w =>
       w.id === wallId ? { ...w, products: [...w.products, newProduct] } : w
     );
     setWallsWithProducts(updatedWalls);
-    
+
     // Reset product form
     setTempProductType(null);
     setTempProductId("");
-    setTempQuantity("");
 
     setTempCabinetWidth("");
     setTempCabinetHeight("");
     setTempCabinetDepth("");
     setTempCabinetHeightFromFloor("");
-    
+
     toast.success("Product added to wall");
   };
 
   // Remove product from wall
   const handleRemoveProduct = (wallId: string, productId: string) => {
     const updatedWalls = wallsWithProducts.map(w =>
-      w.id === wallId ? { ...w, products: w.products.filter(p => p.id !== productId) } : w
+      w.id === wallId
+        ? { ...w, products: w.products.filter(p => p.id !== productId) }
+        : w
     );
     setWallsWithProducts(updatedWalls);
     toast.success("Product removed");
@@ -300,10 +439,6 @@ export default function Stage1QuotingWorkspace() {
   // Delete wall
   const handleDeleteWall = (wallId: string) => {
     setWallsWithProducts(wallsWithProducts.filter(w => w.id !== wallId));
-    // Delete from backend if it has a numeric ID
-    if (!isNaN(parseInt(wallId))) {
-      deleteWallMutation.mutate({ id: parseInt(wallId) });
-    }
     toast.success("Wall deleted");
   };
 
@@ -317,7 +452,11 @@ export default function Stage1QuotingWorkspace() {
       return;
     }
 
-    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
+    if (
+      !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(
+        file.type
+      )
+    ) {
       toast.error("Only JPEG, PNG, WebP, and GIF are supported");
       return;
     }
@@ -325,11 +464,15 @@ export default function Stage1QuotingWorkspace() {
     setIsUploadingImage(true);
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const base64 = Buffer.from(arrayBuffer).toString('base64');
+      const base64 = Buffer.from(arrayBuffer).toString("base64");
       const result = await uploadImageMutation.mutateAsync({
         base64Data: base64,
         fileName: file.name,
-        mimeType: file.type as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
+        mimeType: file.type as
+          | "image/jpeg"
+          | "image/png"
+          | "image/webp"
+          | "image/gif",
       });
       setReferenceImageUrl(result.url);
       setReferenceImagePreview(result.url);
@@ -341,76 +484,142 @@ export default function Stage1QuotingWorkspace() {
     }
   };
 
+  const validateQuoteBeforeSave = () => {
+    if (!clientName.trim()) {
+      toast.error("Please enter client name before saving the quote");
+      return false;
+    }
+
+    for (const wall of wallsWithProducts) {
+      if (wall.wallWidthMm <= 0 || wall.wallHeightMm <= 0) {
+        toast.error(`Wall dimensions are invalid for ${wall.wallName}`);
+        return false;
+      }
+
+      for (const product of wall.products) {
+        if (!product.productId || Number.isNaN(Number(product.productId))) {
+          toast.error(`Please select a valid product for ${wall.wallName}`);
+          return false;
+        }
+        if (!Number.isFinite(product.quantity) || product.quantity <= 0) {
+          toast.error(`Quantity is invalid for ${product.productName}`);
+          return false;
+        }
+        if (!Number.isFinite(product.unitPrice) || product.unitPrice < 0) {
+          toast.error(`Unit price is invalid for ${product.productName}`);
+          return false;
+        }
+        if (
+          (product.productType === "cladding" ||
+            product.productType === "acoustic_panel") &&
+          (!product.panelWidthMm ||
+            product.panelWidthMm <= 0 ||
+            !product.panelHeightMm ||
+            product.panelHeightMm <= 0)
+        ) {
+          toast.error(
+            `Panel dimensions are invalid for ${product.productName}`
+          );
+          return false;
+        }
+        if (
+          product.productType === "floating_cabinet" &&
+          (!product.cabinetWidthMm ||
+            !product.cabinetHeightMm ||
+            !product.cabinetDepthMm ||
+            product.cabinetWidthMm <= 0 ||
+            product.cabinetHeightMm <= 0 ||
+            product.cabinetDepthMm <= 0 ||
+            product.cabinetHeightFromFloorMm === undefined ||
+            product.cabinetHeightFromFloorMm < 0)
+        ) {
+          toast.error(
+            `Cabinet dimensions are invalid for ${product.productName}`
+          );
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
   // Save draft
   const handleSaveDraft = async () => {
-    if (!clientName) {
-      toast.error("Please enter client name");
-      return;
-    }
+    if (!validateQuoteBeforeSave()) return;
 
     try {
       let jobId = resumeJobId;
+      const totalEstimate = calculateTotal();
+      const operatorName = getSelectedOperatorName();
 
       if (!jobId) {
         const job = await createJobMutation.mutateAsync({
-          clientName,
-          clientEmail,
-          clientPhone,
-          clientAddress,
-          suburb,
+          clientName: clientName.trim(),
+          clientEmail: clientEmail || undefined,
+          clientPhone: clientPhone || undefined,
+          clientAddress: clientAddress || undefined,
+          suburb: suburb || undefined,
           appointmentDate: appointmentDate || undefined,
-          appointmentTime,
-          referenceImageUrl,
+          appointmentTime: appointmentTime || undefined,
+          referenceImageUrl: referenceImageUrl || undefined,
+          operatorName,
+          totalEstimate,
         });
-        if (job && 'id' in job) {
+        if (job && "id" in job) {
           jobId = (job as any).id;
           setResumeJobId((job as any).id);
         }
       } else {
         await updateJobMutation.mutateAsync({
           id: jobId,
-          clientName,
-          clientEmail,
-          clientPhone,
-          clientAddress,
-          suburb,
+          clientName: clientName.trim(),
+          clientEmail: clientEmail || undefined,
+          clientPhone: clientPhone || undefined,
+          clientAddress: clientAddress || undefined,
+          suburb: suburb || undefined,
           appointmentDate: appointmentDate || undefined,
-          appointmentTime,
-          referenceImageUrl,
+          appointmentTime: appointmentTime || undefined,
+          referenceImageUrl: referenceImageUrl || undefined,
+          operatorName,
+          totalEstimate,
         });
+
+        await deleteJobItemsByJobIdMutation.mutateAsync({ jobId });
+        await deleteWallsByJobIdMutation.mutateAsync({ jobId });
       }
 
-      // Save walls
-      if (!jobId) return;
+      if (!jobId) throw new Error("Quote could not be created");
+
       for (const wall of wallsWithProducts) {
-        if (isNaN(parseInt(wall.id))) {
-          const createdWall = await createWallMutation.mutateAsync({
-            jobId: jobId,
-            wallType: wall.wallType as "regular" | "garage" | "custom",
-            wallName: wall.wallName,
+        const createdWall = await createWallMutation.mutateAsync({
+          jobId,
+          wallType: wall.wallType as "regular" | "garage" | "custom",
+          wallName: wall.wallName,
+          wallWidthMm: wall.wallWidthMm,
+          wallHeightMm: wall.wallHeightMm,
+        });
+
+        const wallId = (createdWall as any)?.id;
+        if (!wallId) throw new Error("Wall could not be saved");
+
+        for (const product of wall.products) {
+          await createJobItemMutation.mutateAsync({
+            jobId,
+            wallId,
+            itemType: product.productType,
+            productId: Number(product.productId),
+            claddingVariantId: undefined,
             wallWidthMm: wall.wallWidthMm,
             wallHeightMm: wall.wallHeightMm,
+            cabinetWidthMm: product.cabinetWidthMm,
+            cabinetHeightMm: product.cabinetHeightMm,
+            cabinetDepthMm: product.cabinetDepthMm,
+            cabinetHeightFromFloorMm: product.cabinetHeightFromFloorMm,
+            quantityRequired: product.quantity,
+            unitPrice: product.unitPrice,
+            totalPrice: product.quantity * product.unitPrice,
           });
-
-          // Save products for this wall
-          const wallId = (createdWall as any)?.id || parseInt(wall.id);
-          for (const product of wall.products) {
-            await createJobItemMutation.mutateAsync({
-              jobId: jobId,
-              wallId,
-              itemType: product.productType as "cladding" | "acoustic_panel" | "floating_cabinet",
-              claddingVariantId: product.productType === "cladding" ? parseInt(product.productId) : undefined,
-              wallWidthMm: wall.wallWidthMm,
-              wallHeightMm: wall.wallHeightMm,
-              cabinetWidthMm: product.cabinetWidthMm,
-              cabinetHeightMm: product.cabinetHeightMm,
-              cabinetDepthMm: product.cabinetDepthMm,
-              cabinetHeightFromFloorMm: product.cabinetHeightFromFloorMm,
-              quantityRequired: product.quantity,
-              unitPrice: product.unitPrice,
-              totalPrice: product.quantity * product.unitPrice,
-            });
-          }
         }
       }
 
@@ -424,9 +633,12 @@ export default function Stage1QuotingWorkspace() {
   // Calculate total cost
   const calculateTotal = () => {
     return wallsWithProducts.reduce((total, wall) => {
-      return total + wall.products.reduce((wallTotal, product) => {
-        return wallTotal + (product.quantity * product.unitPrice);
-      }, 0);
+      return (
+        total +
+        wall.products.reduce((wallTotal, product) => {
+          return wallTotal + product.quantity * product.unitPrice;
+        }, 0)
+      );
     }, 0);
   };
 
@@ -449,7 +661,11 @@ export default function Stage1QuotingWorkspace() {
           </div>
         </div>
 
-        <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
+        <Tabs
+          value={currentTab}
+          onValueChange={setCurrentTab}
+          className="w-full"
+        >
           <TabsList className="grid w-full grid-cols-3 mb-6">
             <TabsTrigger value="client">Client Details</TabsTrigger>
             <TabsTrigger value="walls">Walls & Products</TabsTrigger>
@@ -461,48 +677,61 @@ export default function Stage1QuotingWorkspace() {
             <Card className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="clientName" className="text-sm font-medium">Client Name *</Label>
+                  <Label htmlFor="clientName" className="text-sm font-medium">
+                    Client Name *
+                  </Label>
                   <Input
                     id="clientName"
                     value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
+                    onChange={e => setClientName(e.target.value)}
                     placeholder="John Smith"
                     className="mt-1 h-12 text-base border-2 border-gray-200"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="clientEmail" className="text-sm font-medium">Email</Label>
+                  <Label htmlFor="clientEmail" className="text-sm font-medium">
+                    Email
+                  </Label>
                   <Input
                     id="clientEmail"
                     type="email"
                     value={clientEmail}
-                    onChange={(e) => setClientEmail(e.target.value)}
+                    onChange={e => setClientEmail(e.target.value)}
                     placeholder="john@example.com"
                     className="mt-1 h-12 text-base border-2 border-gray-200"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="clientPhone" className="text-sm font-medium">Phone</Label>
+                  <Label htmlFor="clientPhone" className="text-sm font-medium">
+                    Phone
+                  </Label>
                   <Input
                     id="clientPhone"
                     value={clientPhone}
-                    onChange={(e) => setClientPhone(e.target.value)}
+                    onChange={e => setClientPhone(e.target.value)}
                     placeholder="0412 345 678"
                     className="mt-1 h-12 text-base border-2 border-gray-200"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="clientAddress" className="text-sm font-medium">Address</Label>
+                  <Label
+                    htmlFor="clientAddress"
+                    className="text-sm font-medium"
+                  >
+                    Address
+                  </Label>
                   <Input
                     id="clientAddress"
                     value={clientAddress}
-                    onChange={(e) => setClientAddress(e.target.value)}
+                    onChange={e => setClientAddress(e.target.value)}
                     placeholder="123 Main St"
                     className="mt-1 h-12 text-base border-2 border-gray-200"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="suburb" className="text-sm font-medium">Suburb</Label>
+                  <Label htmlFor="suburb" className="text-sm font-medium">
+                    Suburb
+                  </Label>
                   <Select value={suburb} onValueChange={setSuburb}>
                     <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
                       <SelectValue placeholder="Select suburb" />
@@ -517,18 +746,31 @@ export default function Stage1QuotingWorkspace() {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="appointmentDate" className="text-sm font-medium">Appointment Date</Label>
+                  <Label
+                    htmlFor="appointmentDate"
+                    className="text-sm font-medium"
+                  >
+                    Appointment Date
+                  </Label>
                   <Input
                     id="appointmentDate"
                     type="date"
                     value={appointmentDate}
-                    onChange={(e) => setAppointmentDate(e.target.value)}
+                    onChange={e => setAppointmentDate(e.target.value)}
                     className="mt-1 h-12 text-base border-2 border-gray-200"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="appointmentTime" className="text-sm font-medium">Appointment Time</Label>
-                  <Select value={appointmentTime} onValueChange={setAppointmentTime}>
+                  <Label
+                    htmlFor="appointmentTime"
+                    className="text-sm font-medium"
+                  >
+                    Appointment Time
+                  </Label>
+                  <Select
+                    value={appointmentTime}
+                    onValueChange={setAppointmentTime}
+                  >
                     <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
                       <SelectValue placeholder="Select time" />
                     </SelectTrigger>
@@ -536,8 +778,12 @@ export default function Stage1QuotingWorkspace() {
                       {Array.from({ length: 48 }).map((_, i) => {
                         const hour = Math.floor(i / 2);
                         const minute = (i % 2) * 30;
-                        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-                        return <SelectItem key={time} value={time}>{time}</SelectItem>;
+                        const time = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
+                        return (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        );
                       })}
                     </SelectContent>
                   </Select>
@@ -556,9 +802,9 @@ export default function Stage1QuotingWorkspace() {
                 />
                 {referenceImagePreview && (
                   <div className="mt-2 relative">
-                    <img 
-                      src={referenceImagePreview} 
-                      alt="Reference" 
+                    <img
+                      src={referenceImagePreview}
+                      alt="Reference"
                       className="max-h-48 rounded border-2 border-gray-200"
                     />
                     <button
@@ -581,7 +827,9 @@ export default function Stage1QuotingWorkspace() {
                 className="w-full h-12 text-base"
                 disabled={createJobMutation.isPending || !canSaveDraft}
               >
-                {createJobMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {createJobMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : null}
                 Save Draft
               </Button>
             </Card>
@@ -594,7 +842,9 @@ export default function Stage1QuotingWorkspace() {
               <h2 className="text-lg font-semibold">Add New Wall</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="wallType" className="text-sm font-medium">Wall Type *</Label>
+                  <Label htmlFor="wallType" className="text-sm font-medium">
+                    Wall Type *
+                  </Label>
                   <Select value={tempWallType} onValueChange={setTempWallType}>
                     <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
                       <SelectValue />
@@ -607,17 +857,22 @@ export default function Stage1QuotingWorkspace() {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="wallName" className="text-sm font-medium">Wall Name *</Label>
+                  <Label htmlFor="wallName" className="text-sm font-medium">
+                    Wall Name *
+                  </Label>
                   <Input
                     id="wallName"
                     value={tempWallName}
-                    onChange={(e) => setTempWallName(e.target.value)}
+                    onChange={e => setTempWallName(e.target.value)}
                     placeholder="e.g., Living Room"
                     className="mt-1 h-12 text-base border-2 border-gray-200"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="wallWidth" className="text-sm font-medium flex items-center gap-2">
+                  <Label
+                    htmlFor="wallWidth"
+                    className="text-sm font-medium flex items-center gap-2"
+                  >
                     <span>Width (m) *</span>
                     <span className="text-lg">↔️</span>
                   </Label>
@@ -626,13 +881,16 @@ export default function Stage1QuotingWorkspace() {
                     type="number"
                     step="0.1"
                     value={tempWallWidth}
-                    onChange={(e) => setTempWallWidth(e.target.value)}
+                    onChange={e => setTempWallWidth(e.target.value)}
                     placeholder="e.g., 3.5"
                     className="mt-1 h-12 text-base border-2 border-gray-200"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="wallHeight" className="text-sm font-medium flex items-center gap-2">
+                  <Label
+                    htmlFor="wallHeight"
+                    className="text-sm font-medium flex items-center gap-2"
+                  >
                     <span>Height (m) *</span>
                     <span className="text-lg">📏</span>
                   </Label>
@@ -641,7 +899,7 @@ export default function Stage1QuotingWorkspace() {
                     type="number"
                     step="0.1"
                     value={tempWallHeight}
-                    onChange={(e) => setTempWallHeight(e.target.value)}
+                    onChange={e => setTempWallHeight(e.target.value)}
                     placeholder="e.g., 2.4"
                     className="mt-1 h-12 text-base border-2 border-gray-200"
                   />
@@ -655,13 +913,14 @@ export default function Stage1QuotingWorkspace() {
 
             {/* Walls List with Products */}
             <div className="space-y-4">
-              {wallsWithProducts.map((wall) => (
+              {wallsWithProducts.map(wall => (
                 <Card key={wall.id} className="p-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-lg font-semibold">{wall.wallName}</h3>
                       <p className="text-sm text-gray-600">
-                        {wall.wallType} • {(wall.wallWidthMm / 1000).toFixed(1)}m × {(wall.wallHeightMm / 1000).toFixed(1)}m
+                        {wall.wallType} • {(wall.wallWidthMm / 1000).toFixed(1)}
+                        m × {(wall.wallHeightMm / 1000).toFixed(1)}m
                       </p>
                     </div>
                     <Button
@@ -679,35 +938,55 @@ export default function Stage1QuotingWorkspace() {
                     <h4 className="font-medium">Add Product to this Wall</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <Label className="text-sm font-medium">Product Type *</Label>
-                        <Select value={tempProductType || ""} onValueChange={(val) => {
-                          setTempProductType(val as any);
-                          setTempProductId("");
-                        }}>
+                        <Label className="text-sm font-medium">
+                          Product Type *
+                        </Label>
+                        <Select
+                          value={tempProductType || ""}
+                          onValueChange={val => {
+                            setTempProductType(val as any);
+                            setTempProductId("");
+                          }}
+                        >
                           <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="cladding">Cladding</SelectItem>
-                            <SelectItem value="acoustic_panel">Acoustic Panel</SelectItem>
-                            <SelectItem value="floating_cabinet">Floating Cabinet</SelectItem>
+                            <SelectItem value="acoustic_panel">
+                              Acoustic Panel
+                            </SelectItem>
+                            <SelectItem value="floating_cabinet">
+                              Floating Cabinet
+                            </SelectItem>
                             <SelectItem value="fireplace">Fireplace</SelectItem>
                             <SelectItem value="mirror">Mirror</SelectItem>
-                            <SelectItem value="marble_sheet">Marble Sheet</SelectItem>
+                            <SelectItem value="marble_sheet">
+                              Marble Sheet
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       {tempProductType && (
                         <div>
-                          <Label className="text-sm font-medium">Product *</Label>
-                          <Select value={tempProductId} onValueChange={setTempProductId}>
+                          <Label className="text-sm font-medium">
+                            Product *
+                          </Label>
+                          <Select
+                            value={tempProductId}
+                            onValueChange={setTempProductId}
+                          >
                             <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
                               <SelectValue placeholder="Select product" />
                             </SelectTrigger>
                             <SelectContent>
                               {productsByType?.map((product: any) => (
-                                <SelectItem key={product.id} value={product.id.toString()}>
-                                  {product.name} - ${(product.pricePerUnit / 100).toFixed(2)}
+                                <SelectItem
+                                  key={product.id}
+                                  value={product.id.toString()}
+                                >
+                                  {product.name} - $
+                                  {(product.pricePerUnit / 100).toFixed(2)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -723,41 +1002,51 @@ export default function Stage1QuotingWorkspace() {
                     {tempProductType === "floating_cabinet" && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-sm font-medium">Width (mm) *</Label>
+                          <Label className="text-sm font-medium">
+                            Width (mm) *
+                          </Label>
                           <Input
                             type="number"
                             value={tempCabinetWidth}
-                            onChange={(e) => setTempCabinetWidth(e.target.value)}
+                            onChange={e => setTempCabinetWidth(e.target.value)}
                             placeholder="e.g., 600"
                             className="mt-1 h-12 text-base border-2 border-gray-200"
                           />
                         </div>
                         <div>
-                          <Label className="text-sm font-medium">Height (mm) *</Label>
+                          <Label className="text-sm font-medium">
+                            Height (mm) *
+                          </Label>
                           <Input
                             type="number"
                             value={tempCabinetHeight}
-                            onChange={(e) => setTempCabinetHeight(e.target.value)}
+                            onChange={e => setTempCabinetHeight(e.target.value)}
                             placeholder="e.g., 400"
                             className="mt-1 h-12 text-base border-2 border-gray-200"
                           />
                         </div>
                         <div>
-                          <Label className="text-sm font-medium">Depth (mm) *</Label>
+                          <Label className="text-sm font-medium">
+                            Depth (mm) *
+                          </Label>
                           <Input
                             type="number"
                             value={tempCabinetDepth}
-                            onChange={(e) => setTempCabinetDepth(e.target.value)}
+                            onChange={e => setTempCabinetDepth(e.target.value)}
                             placeholder="e.g., 300"
                             className="mt-1 h-12 text-base border-2 border-gray-200"
                           />
                         </div>
                         <div>
-                          <Label className="text-sm font-medium">Height from Floor (mm) *</Label>
+                          <Label className="text-sm font-medium">
+                            Height from Floor (mm) *
+                          </Label>
                           <Input
                             type="number"
                             value={tempCabinetHeightFromFloor}
-                            onChange={(e) => setTempCabinetHeightFromFloor(e.target.value)}
+                            onChange={e =>
+                              setTempCabinetHeightFromFloor(e.target.value)
+                            }
                             placeholder="e.g., 800"
                             className="mt-1 h-12 text-base border-2 border-gray-200"
                           />
@@ -765,7 +1054,7 @@ export default function Stage1QuotingWorkspace() {
                       </div>
                     )}
 
-                    <Button 
+                    <Button
                       onClick={() => handleAddProductToWall(wall.id)}
                       className="w-full h-12 text-base"
                     >
@@ -777,17 +1066,29 @@ export default function Stage1QuotingWorkspace() {
                   {/* Products List */}
                   {wall.products.length > 0 && (
                     <div className="border-t pt-4 space-y-2">
-                      <h4 className="font-medium">Products ({wall.products.length})</h4>
-                      {wall.products.map((product) => (
-                        <div key={product.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <h4 className="font-medium">
+                        Products ({wall.products.length})
+                      </h4>
+                      {wall.products.map(product => (
+                        <div
+                          key={product.id}
+                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        >
                           <div>
                             <p className="font-medium">{product.productName}</p>
                             <p className="text-sm text-gray-600">
-                              Qty: {product.quantity} × ${(product.unitPrice / 100).toFixed(2)} = ${(product.quantity * product.unitPrice / 100).toFixed(2)}
+                              Qty: {product.quantity} × $
+                              {(product.unitPrice / 100).toFixed(2)} = $
+                              {(
+                                (product.quantity * product.unitPrice) /
+                                100
+                              ).toFixed(2)}
                             </p>
                           </div>
                           <Button
-                            onClick={() => handleRemoveProduct(wall.id, product.id)}
+                            onClick={() =>
+                              handleRemoveProduct(wall.id, product.id)
+                            }
                             variant="ghost"
                             size="sm"
                             className="text-red-600"
@@ -807,28 +1108,57 @@ export default function Stage1QuotingWorkspace() {
           <TabsContent value="summary" className="space-y-4">
             <Card className="p-6 space-y-4">
               <h2 className="text-lg font-semibold">Quote Summary</h2>
-              
+
               {/* Client Info */}
               <div className="border-b pb-4">
                 <h3 className="font-medium mb-2">Client Details</h3>
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>Name: <span className="font-medium">{clientName}</span></div>
-                  <div>Phone: <span className="font-medium">{clientPhone}</span></div>
-                  <div>Email: <span className="font-medium">{clientEmail}</span></div>
-                  <div>Address: <span className="font-medium">{clientAddress}</span></div>
-                  <div>Suburb: <span className="font-medium">{suburb}</span></div>
-                  <div>Appointment: <span className="font-medium">{appointmentDate} {appointmentTime}</span></div>
+                  <div>
+                    Name: <span className="font-medium">{clientName}</span>
+                  </div>
+                  <div>
+                    Phone: <span className="font-medium">{clientPhone}</span>
+                  </div>
+                  <div>
+                    Email: <span className="font-medium">{clientEmail}</span>
+                  </div>
+                  <div>
+                    Address:{" "}
+                    <span className="font-medium">{clientAddress}</span>
+                  </div>
+                  <div>
+                    Suburb: <span className="font-medium">{suburb}</span>
+                  </div>
+                  <div>
+                    Appointment:{" "}
+                    <span className="font-medium">
+                      {appointmentDate} {appointmentTime}
+                    </span>
+                  </div>
                 </div>
               </div>
 
               {/* Walls Summary */}
-              {wallsWithProducts.map((wall) => (
+              {wallsWithProducts.map(wall => (
                 <div key={wall.id} className="border-b pb-4">
-                  <h3 className="font-medium mb-2">{wall.wallName} ({(wall.wallWidthMm / 1000).toFixed(1)}m × {(wall.wallHeightMm / 1000).toFixed(1)}m)</h3>
-                  {wall.products.map((product) => (
+                  <h3 className="font-medium mb-2">
+                    {wall.wallName} ({(wall.wallWidthMm / 1000).toFixed(1)}m ×{" "}
+                    {(wall.wallHeightMm / 1000).toFixed(1)}m)
+                  </h3>
+                  {wall.products.map(product => (
                     <div key={product.id} className="text-sm ml-4 mb-2">
                       <p>{product.productName}</p>
-                      <p className="text-gray-600">Qty: {product.quantity} × ${(product.unitPrice / 100).toFixed(2)} = <span className="font-medium">${(product.quantity * product.unitPrice / 100).toFixed(2)}</span></p>
+                      <p className="text-gray-600">
+                        Qty: {product.quantity} × $
+                        {(product.unitPrice / 100).toFixed(2)} ={" "}
+                        <span className="font-medium">
+                          $
+                          {(
+                            (product.quantity * product.unitPrice) /
+                            100
+                          ).toFixed(2)}
+                        </span>
+                      </p>
                     </div>
                   ))}
                 </div>

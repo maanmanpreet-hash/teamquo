@@ -1,10 +1,46 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import {
+  adminProcedure,
+  publicProcedure,
+  protectedProcedure,
+  router,
+} from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 import { generateQuoteHTML } from "./pdf";
+
+const supportedItemTypes = [
+  "cladding",
+  "acoustic_panel",
+  "floating_cabinet",
+  "fireplace",
+  "mirror",
+  "marble_sheet",
+] as const;
+
+async function assertOwnsJob(jobId: number, userId: number) {
+  const job = await db.getJobById(jobId);
+  if (!job || job.userId !== userId) {
+    throw new Error("Unauthorized");
+  }
+  return job;
+}
+
+async function assertOwnsWall(wallId: number, userId: number) {
+  const wall = await db.getWallById(wallId);
+  if (!wall) throw new Error("Wall not found");
+  await assertOwnsJob(wall.jobId, userId);
+  return wall;
+}
+
+async function assertOwnsJobItem(itemId: number, userId: number) {
+  const item = await db.getJobItemById(itemId);
+  if (!item) throw new Error("Job item not found");
+  await assertOwnsJob(item.jobId, userId);
+  return item;
+}
 
 export const appRouter = router({
   system: systemRouter,
@@ -25,14 +61,16 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .query(({ input }) => db.getCladdingVariantById(input.id)),
     create: protectedProcedure
-      .input(z.object({
-        name: z.string().min(1),
-        design: z.string().min(1),
-        widthMm: z.number().int().positive(),
-        heightMm: z.number().int().positive(),
-        pricePerUnit: z.number().int().nonnegative(),
-        description: z.string().optional(),
-      }))
+      .input(
+        z.object({
+          name: z.string().min(1),
+          design: z.string().min(1),
+          widthMm: z.number().int().positive(),
+          heightMm: z.number().int().positive(),
+          pricePerUnit: z.number().int().nonnegative(),
+          description: z.string().optional(),
+        })
+      )
       .mutation(({ input }) =>
         db.createCladdingVariant({
           name: input.name,
@@ -45,15 +83,17 @@ export const appRouter = router({
         })
       ),
     update: protectedProcedure
-      .input(z.object({
-        id: z.number(),
-        name: z.string().optional(),
-        design: z.string().optional(),
-        widthMm: z.number().int().positive().optional(),
-        heightMm: z.number().int().positive().optional(),
-        pricePerUnit: z.number().int().nonnegative().optional(),
-        description: z.string().optional(),
-      }))
+      .input(
+        z.object({
+          id: z.number(),
+          name: z.string().optional(),
+          design: z.string().optional(),
+          widthMm: z.number().int().positive().optional(),
+          heightMm: z.number().int().positive().optional(),
+          pricePerUnit: z.number().int().nonnegative().optional(),
+          description: z.string().optional(),
+        })
+      )
       .mutation(({ input }) => {
         const { id, ...updates } = input;
         return db.updateCladdingVariant(id, updates);
@@ -77,17 +117,21 @@ export const appRouter = router({
         return job;
       }),
     create: protectedProcedure
-      .input(z.object({
-        clientName: z.string().min(1).optional(),
-        clientEmail: z.string().email().optional(),
-        clientPhone: z.string().optional(),
-        clientAddress: z.string().optional(),
-        suburb: z.string().optional(),
-        appointmentDate: z.string().optional(), // YYYY-MM-DD format
-        appointmentTime: z.string().optional(), // HH:MM format
-        referenceImageUrl: z.string().optional(),
-        notes: z.string().optional(),
-      }))
+      .input(
+        z.object({
+          clientName: z.string().min(1).optional(),
+          clientEmail: z.string().email().optional(),
+          clientPhone: z.string().optional(),
+          clientAddress: z.string().optional(),
+          suburb: z.string().optional(),
+          appointmentDate: z.string().optional(), // YYYY-MM-DD format
+          appointmentTime: z.string().optional(), // HH:MM format
+          referenceImageUrl: z.string().optional(),
+          operatorName: z.string().optional(),
+          totalEstimate: z.number().int().nonnegative().optional(),
+          notes: z.string().optional(),
+        })
+      )
       .mutation(({ input, ctx }) =>
         db.createJob({
           userId: ctx.user.id,
@@ -96,48 +140,59 @@ export const appRouter = router({
           clientPhone: input.clientPhone,
           clientAddress: input.clientAddress,
           suburb: input.suburb,
-          appointmentDate: input.appointmentDate ? new Date(input.appointmentDate) : null,
+          appointmentDate: input.appointmentDate
+            ? new Date(input.appointmentDate)
+            : null,
           appointmentTime: input.appointmentTime,
           referenceImageUrl: input.referenceImageUrl,
+          operatorName: input.operatorName,
+          totalEstimate: input.totalEstimate,
           notes: input.notes,
           status: "quoted",
         })
       ),
     updateStatus: protectedProcedure
-      .input(z.object({
-        id: z.number(),
-        status: z.enum(["quoted", "booked", "commenced", "completed", "cancelled"]),
-      }))
+      .input(
+        z.object({
+          id: z.number(),
+          status: z.enum([
+            "quoted",
+            "booked",
+            "commenced",
+            "completed",
+            "cancelled",
+          ]),
+        })
+      )
       .mutation(async ({ input, ctx }) => {
-        const job = await db.getJobById(input.id);
-        if (job && job.userId !== ctx.user.id) {
-          throw new Error("Unauthorized");
-        }
+        await assertOwnsJob(input.id, ctx.user.id);
         return db.updateJobStatus(input.id, input.status);
       }),
     update: protectedProcedure
-      .input(z.object({
-        id: z.number(),
-        clientName: z.string().optional(),
-        clientEmail: z.string().email().optional(),
-        clientPhone: z.string().optional(),
-        clientAddress: z.string().optional(),
-        suburb: z.string().optional(),
-        appointmentDate: z.string().optional(),
-        appointmentTime: z.string().optional(),
-        referenceImageUrl: z.string().optional(),
-        notes: z.string().optional(),
-        totalEstimate: z.number().int().nonnegative().optional(),
-      }))
+      .input(
+        z.object({
+          id: z.number(),
+          clientName: z.string().optional(),
+          clientEmail: z.string().email().optional(),
+          clientPhone: z.string().optional(),
+          clientAddress: z.string().optional(),
+          suburb: z.string().optional(),
+          appointmentDate: z.string().optional(),
+          appointmentTime: z.string().optional(),
+          referenceImageUrl: z.string().optional(),
+          operatorName: z.string().optional(),
+          notes: z.string().optional(),
+          totalEstimate: z.number().int().nonnegative().optional(),
+        })
+      )
       .mutation(async ({ input, ctx }) => {
-        const job = await db.getJobById(input.id);
-        if (job && job.userId !== ctx.user.id) {
-          throw new Error("Unauthorized");
-        }
+        await assertOwnsJob(input.id, ctx.user.id);
         const { id, appointmentDate, ...updates } = input;
         const updateData = {
           ...updates,
-          appointmentDate: appointmentDate ? new Date(appointmentDate) : undefined,
+          appointmentDate: appointmentDate
+            ? new Date(appointmentDate)
+            : undefined,
         };
         return db.updateJob(id, updateData);
       }),
@@ -147,10 +202,7 @@ export const appRouter = router({
     getByJobId: protectedProcedure
       .input(z.object({ jobId: z.number() }))
       .query(async ({ input, ctx }) => {
-        const job = await db.getJobById(input.jobId);
-        if (job && job.userId !== ctx.user.id) {
-          throw new Error("Unauthorized");
-        }
+        await assertOwnsJob(input.jobId, ctx.user.id);
         return db.getJobItemsByJobId(input.jobId);
       }),
     generatePDF: protectedProcedure
@@ -162,49 +214,70 @@ export const appRouter = router({
         }
         const items = await db.getJobItemsByJobId(input.jobId);
         const variants = await db.getAllCladdingVariants();
-        const variantMap = new Map(variants.map((v) => [v.id, v]));
-        const html = generateQuoteHTML(job, items, variantMap);
+        const products = await db.getAllProducts();
+        const variantMap = new Map(variants.map(v => [v.id, v]));
+        const productMap = new Map(
+          products.map(product => [product.id, product])
+        );
+        const html = generateQuoteHTML(job, items, variantMap, productMap);
         return { html, jobId: job.id, clientName: job.clientName };
       }),
     create: protectedProcedure
-      .input(z.object({
-        jobId: z.number(),
-        itemType: z.enum(["cladding", "acoustic_panel", "floating_cabinet"]),
-        claddingVariantId: z.number().optional(),
-        wallWidthMm: z.number().int().positive().optional(),
-        wallHeightMm: z.number().int().positive().optional(),
-        cabinetWidthMm: z.number().int().positive().optional(),
-        cabinetHeightMm: z.number().int().positive().optional(),
-        cabinetDepthMm: z.number().int().positive().optional(),
-        cabinetHeightFromFloorMm: z.number().int().nonnegative().optional(),
-        wallId: z.number().optional(),
-        quantityRequired: z.number().int().positive().optional(),
-        unitPrice: z.number().int().nonnegative().optional(),
-        totalPrice: z.number().int().nonnegative().optional(),
-        manualPriceOverride: z.number().int().nonnegative().optional(),
-      }))
+      .input(
+        z.object({
+          jobId: z.number(),
+          itemType: z.enum(supportedItemTypes),
+          productId: z.number().optional(),
+          claddingVariantId: z.number().optional(),
+          wallWidthMm: z.number().int().positive().optional(),
+          wallHeightMm: z.number().int().positive().optional(),
+          cabinetWidthMm: z.number().int().positive().optional(),
+          cabinetHeightMm: z.number().int().positive().optional(),
+          cabinetDepthMm: z.number().int().positive().optional(),
+          cabinetHeightFromFloorMm: z.number().int().nonnegative().optional(),
+          wallId: z.number().optional(),
+          quantityRequired: z.number().int().positive().optional(),
+          unitPrice: z.number().int().nonnegative().optional(),
+          totalPrice: z.number().int().nonnegative().optional(),
+          manualPriceOverride: z.number().int().nonnegative().optional(),
+        })
+      )
       .mutation(async ({ input, ctx }) => {
-        const job = await db.getJobById(input.jobId);
-        if (job && job.userId !== ctx.user.id) {
-          throw new Error("Unauthorized");
+        await assertOwnsJob(input.jobId, ctx.user.id);
+        if (input.wallId) {
+          const wall = await assertOwnsWall(input.wallId, ctx.user.id);
+          if (wall.jobId !== input.jobId)
+            throw new Error("Wall does not belong to this quote");
         }
         const { jobId, ...itemData } = input;
         return db.createJobItem({ jobId, ...itemData });
       }),
     update: protectedProcedure
-      .input(z.object({
-        id: z.number(),
-        quantityRequired: z.number().int().positive().optional(),
-        totalPrice: z.number().int().nonnegative().optional(),
-        manualPriceOverride: z.number().int().nonnegative().optional(),
-      }))
-      .mutation(({ input }) => {
+      .input(
+        z.object({
+          id: z.number(),
+          quantityRequired: z.number().int().positive().optional(),
+          totalPrice: z.number().int().nonnegative().optional(),
+          manualPriceOverride: z.number().int().nonnegative().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        await assertOwnsJobItem(input.id, ctx.user.id);
         const { id, ...updates } = input;
         return db.updateJobItem(id, updates);
       }),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-            .mutation(({ input }) => db.deleteJobItem(input.id)),
+      .mutation(async ({ input, ctx }) => {
+        await assertOwnsJobItem(input.id, ctx.user.id);
+        return db.deleteJobItem(input.id);
+      }),
+    deleteByJobId: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        await assertOwnsJob(input.jobId, ctx.user.id);
+        return db.deleteJobItemsByJobId(input.jobId);
+      }),
   }),
 
   products: router({
@@ -215,43 +288,54 @@ export const appRouter = router({
     getById: publicProcedure
       .input(z.object({ id: z.number() }))
       .query(({ input }) => db.getProductById(input.id)),
-    create: protectedProcedure
-      .input(z.object({
-        productTypeId: z.number(),
-        name: z.string().min(1),
-        design: z.string().optional(),
-        widthMm: z.number().int().positive().optional(),
-        heightMm: z.number().int().positive().optional(),
-        depthMm: z.number().int().positive().optional(),
-        pricePerUnit: z.number().int().nonnegative(),
-        description: z.string().optional(),
-      }))
+    create: adminProcedure
+      .input(
+        z.object({
+          productTypeId: z.number(),
+          name: z.string().min(1),
+          design: z.string().optional(),
+          widthMm: z.number().int().positive().optional(),
+          heightMm: z.number().int().positive().optional(),
+          depthMm: z.number().int().positive().optional(),
+          pricePerUnit: z.number().int().nonnegative(),
+          description: z.string().optional(),
+        })
+      )
       .mutation(({ input }) => db.createProduct(input)),
-    update: protectedProcedure
-      .input(z.object({
-        id: z.number(),
-        name: z.string().optional(),
-        design: z.string().optional(),
-        widthMm: z.number().int().positive().optional(),
-        heightMm: z.number().int().positive().optional(),
-        depthMm: z.number().int().positive().optional(),
-        pricePerUnit: z.number().int().nonnegative().optional(),
-        description: z.string().optional(),
-        isActive: z.number().optional(),
-      }))
+    update: adminProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          name: z.string().optional(),
+          design: z.string().optional(),
+          widthMm: z.number().int().positive().optional(),
+          heightMm: z.number().int().positive().optional(),
+          depthMm: z.number().int().positive().optional(),
+          pricePerUnit: z.number().int().nonnegative().optional(),
+          description: z.string().optional(),
+          isActive: z.number().optional(),
+        })
+      )
       .mutation(({ input }) => {
         const { id, ...updates } = input;
         return db.updateProduct(id, updates);
       }),
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(({ input }) => db.deleteProduct(input.id)),
     getDiscounts: publicProcedure
       .input(z.object({ productTypeId: z.number() }))
       .query(({ input }) => db.getVolumeDiscounts(input.productTypeId)),
-        calculateDiscount: publicProcedure
-      .input(z.object({ productTypeId: z.number(), quantity: z.number().int().positive() }))
-      .query(({ input }) => db.calculateDiscount(input.productTypeId, input.quantity)),
+    calculateDiscount: publicProcedure
+      .input(
+        z.object({
+          productTypeId: z.number(),
+          quantity: z.number().int().positive(),
+        })
+      )
+      .query(({ input }) =>
+        db.calculateDiscount(input.productTypeId, input.quantity)
+      ),
   }),
 
   operators: router({
@@ -259,66 +343,82 @@ export const appRouter = router({
     getById: publicProcedure
       .input(z.object({ id: z.number() }))
       .query(({ input }) => db.getOperatorById(input.id)),
-    create: protectedProcedure
-      .input(z.object({
-        name: z.string().min(1, "Operator name is required"),
-      }))
-      .mutation(({ input }) => db.createOperator({ name: input.name, isActive: 1 })),
-    update: protectedProcedure
-      .input(z.object({
-        id: z.number(),
-        name: z.string().optional(),
-        isActive: z.number().optional(),
-      }))
+    create: adminProcedure
+      .input(
+        z.object({
+          name: z.string().min(1, "Operator name is required"),
+        })
+      )
+      .mutation(({ input }) =>
+        db.createOperator({ name: input.name, isActive: 1 })
+      ),
+    update: adminProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          name: z.string().optional(),
+          isActive: z.number().optional(),
+        })
+      )
       .mutation(({ input }) => {
         const { id, ...updates } = input;
         return db.updateOperator(id, updates);
       }),
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(({ input }) => db.deleteOperator(input.id)),
   }),
 
   storage: router({
     uploadImage: protectedProcedure
-      .input(z.object({
-        fileName: z.string(),
-        base64Data: z.string(),
-        mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
-      }))
+      .input(
+        z.object({
+          fileName: z.string(),
+          base64Data: z.string(),
+          mimeType: z.enum([
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/gif",
+          ]),
+        })
+      )
       .mutation(async ({ input, ctx }) => {
         const { storagePut } = await import("./storage");
-        
+
         // Decode base64 to buffer
         const buffer = Buffer.from(input.base64Data, "base64");
-        
+
         // Validate size (5MB limit)
         if (buffer.length > 5 * 1024 * 1024) {
           throw new Error("Image exceeds 5MB limit");
         }
-        
+
         // Upload to storage
         const { url } = await storagePut(
           `reference-images/${ctx.user.id}/${Date.now()}-${input.fileName}`,
           buffer,
           input.mimeType
         );
-        
+
         return { url };
       }),
   }),
 
   walls: router({
     create: protectedProcedure
-      .input(z.object({
-        jobId: z.number(),
-        wallType: z.enum(["regular", "garage", "custom"]).default("regular"),
-        wallName: z.string().optional(),
-        wallWidthMm: z.number().int().positive().optional(),
-        wallHeightMm: z.number().int().positive().optional(),
-        notes: z.string().optional(),
-      }))
-      .mutation(({ input, ctx }) => {
+      .input(
+        z.object({
+          jobId: z.number(),
+          wallType: z.enum(["regular", "garage", "custom"]).default("regular"),
+          wallName: z.string().optional(),
+          wallWidthMm: z.number().int().positive().optional(),
+          wallHeightMm: z.number().int().positive().optional(),
+          notes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        await assertOwnsJob(input.jobId, ctx.user.id);
         return db.createWall({
           jobId: input.jobId,
           wallType: input.wallType,
@@ -330,23 +430,38 @@ export const appRouter = router({
       }),
     getByJobId: protectedProcedure
       .input(z.object({ jobId: z.number() }))
-      .query(({ input }) => db.getWallsByJobId(input.jobId)),
+      .query(async ({ input, ctx }) => {
+        await assertOwnsJob(input.jobId, ctx.user.id);
+        return db.getWallsWithItemsByJobId(input.jobId);
+      }),
+    deleteByJobId: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        await assertOwnsJob(input.jobId, ctx.user.id);
+        return db.deleteWallsByJobId(input.jobId);
+      }),
     update: protectedProcedure
-      .input(z.object({
-        id: z.number(),
-        wallType: z.enum(["regular", "garage", "custom"]).optional(),
-        wallName: z.string().optional(),
-        wallWidthMm: z.number().int().positive().optional(),
-        wallHeightMm: z.number().int().positive().optional(),
-        notes: z.string().optional(),
-      }))
-      .mutation(({ input }) => {
+      .input(
+        z.object({
+          id: z.number(),
+          wallType: z.enum(["regular", "garage", "custom"]).optional(),
+          wallName: z.string().optional(),
+          wallWidthMm: z.number().int().positive().optional(),
+          wallHeightMm: z.number().int().positive().optional(),
+          notes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        await assertOwnsWall(input.id, ctx.user.id);
         const { id, ...updates } = input;
         return db.updateWall(id, updates);
       }),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(({ input }) => db.deleteWall(input.id)),
+      .mutation(async ({ input, ctx }) => {
+        await assertOwnsWall(input.id, ctx.user.id);
+        return db.deleteWall(input.id);
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;

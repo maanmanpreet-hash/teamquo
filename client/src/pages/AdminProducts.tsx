@@ -4,7 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, Trash2, Edit2 } from "lucide-react";
 
@@ -31,11 +37,19 @@ export default function AdminProducts() {
   const createMutation = trpc.products.create.useMutation({
     onSuccess: () => {
       toast.success("Product created successfully");
-      setFormData({ name: "", design: "", widthMm: "", heightMm: "", depthMm: "", pricePerUnit: "", description: "" });
+      setFormData({
+        name: "",
+        design: "",
+        widthMm: "",
+        heightMm: "",
+        depthMm: "",
+        pricePerUnit: "",
+        description: "",
+      });
       setShowForm(false);
       products.refetch();
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(`Error: ${error.message}`);
     },
   });
@@ -43,12 +57,20 @@ export default function AdminProducts() {
   const updateMutation = trpc.products.update.useMutation({
     onSuccess: () => {
       toast.success("Product updated successfully");
-      setFormData({ name: "", design: "", widthMm: "", heightMm: "", depthMm: "", pricePerUnit: "", description: "" });
+      setFormData({
+        name: "",
+        design: "",
+        widthMm: "",
+        heightMm: "",
+        depthMm: "",
+        pricePerUnit: "",
+        description: "",
+      });
       setEditingId(null);
       setShowForm(false);
       products.refetch();
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(`Error: ${error.message}`);
     },
   });
@@ -58,10 +80,23 @@ export default function AdminProducts() {
       toast.success("Product deleted successfully");
       products.refetch();
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(`Error: ${error.message}`);
     },
   });
+
+  const parsePriceToCents = (value: string) => {
+    const dollars = Number(value);
+    if (!Number.isFinite(dollars)) {
+      toast.error("Price must be a numeric dollar amount");
+      return null;
+    }
+    if (dollars < 0) {
+      toast.error("Price must be greater than or equal to $0.00");
+      return null;
+    }
+    return Math.round(dollars * 100);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +105,9 @@ export default function AdminProducts() {
       return;
     }
 
+    const pricePerUnit = parsePriceToCents(formData.pricePerUnit);
+    if (pricePerUnit === null) return;
+
     const data = {
       productTypeId: parseInt(selectedTypeId),
       name: formData.name,
@@ -77,7 +115,7 @@ export default function AdminProducts() {
       widthMm: formData.widthMm ? parseInt(formData.widthMm) : undefined,
       heightMm: formData.heightMm ? parseInt(formData.heightMm) : undefined,
       depthMm: formData.depthMm ? parseInt(formData.depthMm) : undefined,
-      pricePerUnit: parseInt(formData.pricePerUnit),
+      pricePerUnit,
       description: formData.description || undefined,
     };
 
@@ -96,7 +134,7 @@ export default function AdminProducts() {
       widthMm: product.widthMm ? String(product.widthMm) : "",
       heightMm: product.heightMm ? String(product.heightMm) : "",
       depthMm: product.depthMm ? String(product.depthMm) : "",
-      pricePerUnit: String(product.pricePerUnit / 100),
+      pricePerUnit: (product.pricePerUnit / 100).toFixed(2),
       description: product.description || "",
     });
     setShowForm(true);
@@ -130,7 +168,7 @@ export default function AdminProducts() {
                   <SelectValue placeholder="Choose a product type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {productTypes.data?.map((type) => (
+                  {productTypes.data?.map(type => (
                     <SelectItem key={type.id} value={String(type.id)}>
                       {type.name}
                     </SelectItem>
@@ -146,14 +184,24 @@ export default function AdminProducts() {
             {/* Add/Edit Product Form */}
             <Card className="mb-6">
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>{editingId ? "Edit Product" : "Add New Product"}</CardTitle>
+                <CardTitle>
+                  {editingId ? "Edit Product" : "Add New Product"}
+                </CardTitle>
                 {showForm && (
                   <Button
                     variant="outline"
                     onClick={() => {
                       setShowForm(false);
                       setEditingId(null);
-                      setFormData({ name: "", design: "", widthMm: "", heightMm: "", depthMm: "", pricePerUnit: "", description: "" });
+                      setFormData({
+                        name: "",
+                        design: "",
+                        widthMm: "",
+                        heightMm: "",
+                        depthMm: "",
+                        pricePerUnit: "",
+                        description: "",
+                      });
                     }}
                   >
                     Cancel
@@ -169,7 +217,9 @@ export default function AdminProducts() {
                         <Input
                           id="name"
                           value={formData.name}
-                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          onChange={e =>
+                            setFormData({ ...formData, name: e.target.value })
+                          }
                           required
                           placeholder="e.g., Timber Look Panel"
                         />
@@ -179,7 +229,9 @@ export default function AdminProducts() {
                         <Input
                           id="design"
                           value={formData.design}
-                          onChange={(e) => setFormData({ ...formData, design: e.target.value })}
+                          onChange={e =>
+                            setFormData({ ...formData, design: e.target.value })
+                          }
                           placeholder="e.g., Timber, Stone, Modern"
                         />
                       </div>
@@ -189,7 +241,12 @@ export default function AdminProducts() {
                           id="widthMm"
                           type="number"
                           value={formData.widthMm}
-                          onChange={(e) => setFormData({ ...formData, widthMm: e.target.value })}
+                          onChange={e =>
+                            setFormData({
+                              ...formData,
+                              widthMm: e.target.value,
+                            })
+                          }
                           placeholder="e.g., 300"
                         />
                       </div>
@@ -199,7 +256,12 @@ export default function AdminProducts() {
                           id="heightMm"
                           type="number"
                           value={formData.heightMm}
-                          onChange={(e) => setFormData({ ...formData, heightMm: e.target.value })}
+                          onChange={e =>
+                            setFormData({
+                              ...formData,
+                              heightMm: e.target.value,
+                            })
+                          }
                           placeholder="e.g., 600"
                         />
                       </div>
@@ -209,7 +271,12 @@ export default function AdminProducts() {
                           id="depthMm"
                           type="number"
                           value={formData.depthMm}
-                          onChange={(e) => setFormData({ ...formData, depthMm: e.target.value })}
+                          onChange={e =>
+                            setFormData({
+                              ...formData,
+                              depthMm: e.target.value,
+                            })
+                          }
                           placeholder="e.g., 21"
                         />
                       </div>
@@ -220,7 +287,12 @@ export default function AdminProducts() {
                           type="number"
                           step="0.01"
                           value={formData.pricePerUnit}
-                          onChange={(e) => setFormData({ ...formData, pricePerUnit: e.target.value })}
+                          onChange={e =>
+                            setFormData({
+                              ...formData,
+                              pricePerUnit: e.target.value,
+                            })
+                          }
                           required
                           placeholder="e.g., 75.00"
                         />
@@ -231,11 +303,21 @@ export default function AdminProducts() {
                       <Input
                         id="description"
                         value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        onChange={e =>
+                          setFormData({
+                            ...formData,
+                            description: e.target.value,
+                          })
+                        }
                         placeholder="Optional description"
                       />
                     </div>
-                    <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                    <Button
+                      type="submit"
+                      disabled={
+                        createMutation.isPending || updateMutation.isPending
+                      }
+                    >
                       {createMutation.isPending || updateMutation.isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -252,7 +334,9 @@ export default function AdminProducts() {
               )}
               {!showForm && (
                 <CardContent>
-                  <Button onClick={() => setShowForm(true)}>+ Add New Product</Button>
+                  <Button onClick={() => setShowForm(true)}>
+                    + Add New Product
+                  </Button>
                 </CardContent>
               )}
             </Card>
@@ -269,7 +353,9 @@ export default function AdminProducts() {
                     Loading products...
                   </div>
                 ) : products.data?.length === 0 ? (
-                  <p className="text-muted-foreground">No products found for this type.</p>
+                  <p className="text-muted-foreground">
+                    No products found for this type.
+                  </p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -283,16 +369,23 @@ export default function AdminProducts() {
                         </tr>
                       </thead>
                       <tbody>
-                        {products.data?.map((product) => (
-                          <tr key={product.id} className="border-b hover:bg-muted/50">
+                        {products.data?.map(product => (
+                          <tr
+                            key={product.id}
+                            className="border-b hover:bg-muted/50"
+                          >
                             <td className="py-2 px-2">{product.name}</td>
-                            <td className="py-2 px-2">{product.design || "-"}</td>
+                            <td className="py-2 px-2">
+                              {product.design || "-"}
+                            </td>
                             <td className="py-2 px-2 text-xs">
                               {product.widthMm && product.heightMm
                                 ? `${product.widthMm}×${product.heightMm}${product.depthMm ? `×${product.depthMm}` : ""} mm`
                                 : "-"}
                             </td>
-                            <td className="py-2 px-2 font-semibold">${(product.pricePerUnit / 100).toFixed(2)}</td>
+                            <td className="py-2 px-2 font-semibold">
+                              ${(product.pricePerUnit / 100).toFixed(2)}
+                            </td>
                             <td className="py-2 px-2 text-right">
                               <Button
                                 variant="ghost"
