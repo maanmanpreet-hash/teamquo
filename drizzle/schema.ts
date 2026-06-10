@@ -160,6 +160,9 @@ export const jobItems = mysqlTable("job_items", {
     "fireplace",
     "mirror",
     "marble_sheet",
+    "tv_backdrop",
+    "side_tower",
+    "shelving",
   ]).notNull(),
   productId: int("product_id"), // General product reference for all product table items
   claddingVariantId: int("cladding_variant_id"), // Reference to cladding variant (if itemType = 'cladding')
