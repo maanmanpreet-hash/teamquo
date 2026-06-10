@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useAuth } from "@/_core/hooks/useAuth";
+import { MaterialSummaryCard } from "@/components/quote/MaterialSummaryCard";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,7 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { hasCustomerIdentifier, getCustomerIdentifierError } from "@/lib/customerIdentity";
+import { buildQuoteFormMaterialSummary } from "@/lib/quoteMaterialSummary";
 import { trpc } from "@/lib/trpc";
 import {
   calculatePanelRequirement,
@@ -43,7 +46,10 @@ type ProductTypeSlug =
   | "floating_cabinet"
   | "fireplace"
   | "mirror"
-  | "marble_sheet";
+  | "marble_sheet"
+  | "tv_backdrop"
+  | "side_tower"
+  | "shelving";
 
 interface WallWithProducts {
   id: string;
@@ -74,6 +80,8 @@ interface WallProduct {
   cabinetHeightMm?: number;
   cabinetDepthMm?: number;
   cabinetHeightFromFloorMm?: number;
+  acousticFixingMethod?: "screws" | "glue" | "screws_and_glue" | "none";
+  tvSizeInches?: number;
 }
 
 const workflowSteps: Array<{ id: WorkflowStep; title: string; icon: typeof ClipboardList }> = [
@@ -89,6 +97,9 @@ const productTypeSlugAliases: Record<ProductTypeSlug, string[]> = {
   fireplace: ["fireplace"],
   mirror: ["mirror", "mirrors"],
   marble_sheet: ["marble_sheet", "marble-sheet"],
+  tv_backdrop: ["tv_backdrop", "tv-backdrop", "tv-backdrops"],
+  side_tower: ["side_tower", "side-tower", "side-towers"],
+  shelving: ["shelving", "shelf", "shelves"],
 };
 
 const productTypeLabels: Record<ProductTypeSlug, string> = {
@@ -98,6 +109,9 @@ const productTypeLabels: Record<ProductTypeSlug, string> = {
   fireplace: "Fireplace",
   mirror: "Mirror",
   marble_sheet: "Marble Sheet",
+  tv_backdrop: "TV Backdrop",
+  side_tower: "Side Tower",
+  shelving: "Shelving",
 };
 
 function formatMoney(cents: number) {
@@ -179,6 +193,8 @@ export default function QuoteForm() {
   const [tempCabinetHeight, setTempCabinetHeight] = useState("");
   const [tempCabinetDepth, setTempCabinetDepth] = useState("");
   const [tempCabinetHeightFromFloor, setTempCabinetHeightFromFloor] = useState("");
+  const [tempTvSizeInches, setTempTvSizeInches] = useState("");
+  const [tempAcousticFixingMethod, setTempAcousticFixingMethod] = useState<"screws" | "glue" | "screws_and_glue" | "none">("none");
 
   const { data: productTypes } = trpc.products.listTypes.useQuery();
   const selectedProductTypeId = tempProductType
@@ -300,6 +316,8 @@ export default function QuoteForm() {
       0
     );
 
+  const materialSummary = useMemo(() => buildQuoteFormMaterialSummary(wallsWithProducts), [wallsWithProducts]);
+
   const manualReviewItems = useMemo(
     () =>
       wallsWithProducts.flatMap(wall =>
@@ -308,7 +326,7 @@ export default function QuoteForm() {
     [wallsWithProducts]
   );
 
-  const hasClientDetails = clientName.trim().length > 0;
+  const hasClientDetails = hasCustomerIdentifier({ clientName, clientEmail, clientPhone, clientAddress });
   const hasWalls = wallsWithProducts.length > 0;
   const hasProducts = wallsWithProducts.some(wall => wall.products.length > 0);
   const wallsWithoutProducts = wallsWithProducts.filter(wall => wall.products.length === 0);
@@ -322,6 +340,8 @@ export default function QuoteForm() {
     setTempCabinetHeight("");
     setTempCabinetDepth("");
     setTempCabinetHeightFromFloor("");
+    setTempTvSizeInches("");
+    setTempAcousticFixingMethod("none");
   };
 
   const openProductPicker = (wallId: string) => {
@@ -336,12 +356,12 @@ export default function QuoteForm() {
 
   const goToStep = (step: WorkflowStep) => {
     if (step === "walls" && !hasClientDetails) {
-      toast.error("Enter the client name before adding walls");
+      toast.error(getCustomerIdentifierError({ clientName, clientEmail, clientPhone, clientAddress }));
       setCurrentStep("client");
       return;
     }
     if (step === "review" && !workflowReady) {
-      toast.error("Add client, wall dimensions, and products before review");
+      toast.error("Add customer details, wall dimensions, and products before review");
       setCurrentStep(!hasClientDetails ? "client" : "walls");
       return;
     }
@@ -461,13 +481,26 @@ export default function QuoteForm() {
       };
     }
 
-    if (tempProductType === "floating_cabinet") {
+    if (tempProductType === "acoustic_panel") {
+      newProduct = { ...newProduct, acousticFixingMethod: tempAcousticFixingMethod };
+    }
+
+    if (tempProductType === "tv_backdrop") {
+      const tvSizeInches = Number(tempTvSizeInches);
+      if (!Number.isFinite(tvSizeInches) || tvSizeInches <= 0) {
+        toast.error("Enter TV size in inches before adding TV Backdrop");
+        return;
+      }
+      newProduct = { ...newProduct, tvSizeInches };
+    }
+
+    if (tempProductType === "floating_cabinet" || tempProductType === "side_tower") {
       const cabinetWidthMm = Number(tempCabinetWidth);
       const cabinetHeightMm = Number(tempCabinetHeight);
       const cabinetDepthMm = Number(tempCabinetDepth);
-      const cabinetHeightFromFloorMm = Number(tempCabinetHeightFromFloor);
-      if ([cabinetWidthMm, cabinetHeightMm, cabinetDepthMm, cabinetHeightFromFloorMm].some(value => !Number.isFinite(value) || value <= 0)) {
-        toast.error("Enter valid cabinet dimensions before adding floating cabinet");
+      const cabinetHeightFromFloorMm = Number(tempCabinetHeightFromFloor || 0);
+      if ([cabinetWidthMm, cabinetHeightMm, cabinetDepthMm].some(value => !Number.isFinite(value) || value <= 0)) {
+        toast.error("Enter valid cabinet/tower dimensions before adding");
         return;
       }
       newProduct = {
@@ -475,7 +508,7 @@ export default function QuoteForm() {
         cabinetWidthMm,
         cabinetHeightMm,
         cabinetDepthMm,
-        cabinetHeightFromFloorMm,
+        cabinetHeightFromFloorMm: Number.isFinite(cabinetHeightFromFloorMm) ? cabinetHeightFromFloorMm : undefined,
       };
     }
 
@@ -503,7 +536,7 @@ export default function QuoteForm() {
 
   const handleSaveDraft = async (requireComplete = false) => {
     if (!hasClientDetails) {
-      toast.error("Client name is required before saving");
+      toast.error(getCustomerIdentifierError({ clientName, clientEmail, clientPhone, clientAddress }));
       setCurrentStep("client");
       return;
     }
@@ -515,7 +548,7 @@ export default function QuoteForm() {
 
     try {
       const jobInput = {
-        clientName: clientName.trim(),
+        clientName: clientName.trim() || clientPhone.trim() || clientEmail.trim() || clientAddress.trim() || "[Draft]",
         clientEmail: clientEmail.trim() || undefined,
         clientPhone: clientPhone.trim() || undefined,
         clientAddress: clientAddress.trim() || undefined,
@@ -633,7 +666,7 @@ export default function QuoteForm() {
           <Card className="space-y-4 p-4">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
-                <Label htmlFor="clientName">Client Name *</Label>
+                <Label htmlFor="clientName">Client Name</Label>
                 <Input id="clientName" value={clientName} onChange={e => setClientName(e.target.value)} placeholder="John Smith" className="mt-1 h-10" />
               </div>
               <div>
@@ -769,6 +802,8 @@ export default function QuoteForm() {
                             <div>
                               <p className="font-medium">{product.productName}</p>
                               <p className="text-sm text-gray-600">Qty {product.quantity} x {formatMoney(product.unitPrice)} = {formatMoney(product.quantity * product.unitPrice)}</p>
+                              {product.tvSizeInches && <p className="text-xs text-gray-600">TV size: {product.tvSizeInches}"</p>}
+                              {product.acousticFixingMethod && product.acousticFixingMethod !== "none" && <p className="text-xs text-gray-600">Fixing: {product.acousticFixingMethod.replace(/_/g, " ")}</p>}
                               {product.manualReviewRequired && <p className="text-xs font-semibold text-amber-700">Manual review required</p>}
                             </div>
                             <Button onClick={() => handleRemoveProduct(wall.id, product.id)} variant="ghost" size="sm" className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
@@ -820,12 +855,34 @@ export default function QuoteForm() {
                         </div>
                       </div>
 
-                      {tempProductType === "floating_cabinet" && (
+                      {(tempProductType === "floating_cabinet" || tempProductType === "side_tower") && (
                         <div className="grid grid-cols-2 gap-2 rounded-lg border bg-white p-3 md:grid-cols-4">
                           <Input type="number" value={tempCabinetWidth} onChange={e => setTempCabinetWidth(e.target.value)} placeholder="Width mm" className="h-10" />
                           <Input type="number" value={tempCabinetHeight} onChange={e => setTempCabinetHeight(e.target.value)} placeholder="Height mm" className="h-10" />
                           <Input type="number" value={tempCabinetDepth} onChange={e => setTempCabinetDepth(e.target.value)} placeholder="Depth mm" className="h-10" />
                           <Input type="number" value={tempCabinetHeightFromFloor} onChange={e => setTempCabinetHeightFromFloor(e.target.value)} placeholder="From floor mm" className="h-10" />
+                        </div>
+                      )}
+
+                      {tempProductType === "tv_backdrop" && (
+                        <div className="rounded-lg border bg-white p-3">
+                          <Label>TV Size inches *</Label>
+                          <Input type="number" value={tempTvSizeInches} onChange={e => setTempTvSizeInches(e.target.value)} placeholder="75" className="mt-1 h-10" />
+                        </div>
+                      )}
+
+                      {tempProductType === "acoustic_panel" && (
+                        <div className="rounded-lg border bg-white p-3">
+                          <Label>Fixing Method</Label>
+                          <Select value={tempAcousticFixingMethod} onValueChange={value => setTempAcousticFixingMethod(value as "screws" | "glue" | "screws_and_glue" | "none")}>
+                            <SelectTrigger className="mt-1 h-10"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
+                              <SelectItem value="screws">Screws</SelectItem>
+                              <SelectItem value="glue">Glue</SelectItem>
+                              <SelectItem value="screws_and_glue">Screws + Glue</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                       )}
                     </div>
@@ -839,46 +896,51 @@ export default function QuoteForm() {
         )}
 
         {currentStep === "review" && (
-          <Card className="space-y-4 p-4">
-            <h2 className="text-lg font-semibold">Review Quote</h2>
-            <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
-              <div>Client: <span className="font-medium">{clientName}</span></div>
-              <div>Phone: <span className="font-medium">{clientPhone}</span></div>
-              <div>Address: <span className="font-medium">{clientAddress}</span></div>
-              <div>Suburb: <span className="font-medium">{suburb}</span></div>
-            </div>
-
-            <div className="space-y-3">
-              {wallsWithProducts.map(wall => (
-                <div key={wall.id} className="rounded-lg border p-3">
-                  <h4 className="font-semibold">{wall.wallName} ({formatMetres(wall.wallWidthMm)} x {formatMetres(wall.wallHeightMm)})</h4>
-                  <div className="mt-2 space-y-2">
-                    {wall.products.map(product => (
-                      <div key={product.id} className="flex justify-between gap-3 text-sm">
-                        <span>Supply and install {product.productName}</span>
-                        <span className="font-medium whitespace-nowrap">{product.quantity} x {formatMoney(product.unitPrice)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {manualReviewItems.length > 0 && (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                <p className="font-medium">Manual review flags</p>
-                <ul className="mt-1 list-disc pl-5">
-                  {manualReviewItems.map(({ wall, product }) => <li key={`${wall.id}-${product.id}`}>{wall.wallName} - {product.productName}</li>)}
-                </ul>
+          <div className="space-y-4">
+            <Card className="space-y-4 p-4">
+              <h2 className="text-lg font-semibold">Review Quote</h2>
+              <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
+                <div>Client: <span className="font-medium">{clientName || "Not provided"}</span></div>
+                <div>Phone: <span className="font-medium">{clientPhone || "Not provided"}</span></div>
+                <div>Email: <span className="font-medium">{clientEmail || "Not provided"}</span></div>
+                <div>Address: <span className="font-medium">{clientAddress || "Not provided"}</span></div>
+                <div>Suburb: <span className="font-medium">{suburb || "Not provided"}</span></div>
               </div>
-            )}
 
-            <div className="text-right"><p className="text-2xl font-bold">Total: {formatMoney(calculateTotal())}</p></div>
-            <Button onClick={() => handleSaveDraft(true)} className="h-10 w-full" disabled={saveInProgress || !workflowReady}>
-              {saveInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Quote
-            </Button>
-          </Card>
+              <div className="space-y-3">
+                {wallsWithProducts.map(wall => (
+                  <div key={wall.id} className="rounded-lg border p-3">
+                    <h4 className="font-semibold">{wall.wallName} ({formatMetres(wall.wallWidthMm)} x {formatMetres(wall.wallHeightMm)})</h4>
+                    <div className="mt-2 space-y-2">
+                      {wall.products.map(product => (
+                        <div key={product.id} className="flex justify-between gap-3 text-sm">
+                          <span>Supply and install {product.productName}</span>
+                          <span className="font-medium whitespace-nowrap">{product.quantity} x {formatMoney(product.unitPrice)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {manualReviewItems.length > 0 && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                  <p className="font-medium">Manual review flags</p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {manualReviewItems.map(({ wall, product }) => <li key={`${wall.id}-${product.id}`}>{wall.wallName} - {product.productName}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              <div className="text-right"><p className="text-2xl font-bold">Total: {formatMoney(calculateTotal())}</p></div>
+              <Button onClick={() => handleSaveDraft(true)} className="h-10 w-full" disabled={saveInProgress || !workflowReady}>
+                {saveInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Quote
+              </Button>
+            </Card>
+
+            <MaterialSummaryCard summary={materialSummary} />
+          </div>
         )}
       </div>
     </div>
