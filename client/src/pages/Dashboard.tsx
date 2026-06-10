@@ -71,6 +71,7 @@ export default function Dashboard() {
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [downloadingJobId, setDownloadingJobId] = useState<number | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<number | null>(null);
+  const [updatingStatusJobId, setUpdatingStatusJobId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<JobStatus | "all">("all");
 
@@ -90,6 +91,18 @@ export default function Dashboard() {
     onError: error => {
       setDeletingJobId(null);
       toast.error(error.message || "Failed to delete quote");
+    },
+  });
+
+  const updateStatusMutation = trpc.jobs.updateStatus.useMutation({
+    onSuccess: () => {
+      setUpdatingStatusJobId(null);
+      refetch();
+      toast.success("Quote status updated");
+    },
+    onError: error => {
+      setUpdatingStatusJobId(null);
+      toast.error(error.message || "Failed to update quote status");
     },
   });
 
@@ -148,37 +161,65 @@ export default function Dashboard() {
     window.location.href = "/quote";
   };
 
+  const updateQuoteStatus = (jobId: number, status: JobStatus) => {
+    setUpdatingStatusJobId(jobId);
+    updateStatusMutation.mutate({ id: jobId, status });
+  };
+
   const deleteQuote = (jobId: number) => {
     if (!window.confirm("Delete this quote? This cannot be undone.")) return;
     setDeletingJobId(jobId);
     deleteJobMutation.mutate({ id: jobId });
   };
 
-  const jobCard = (job: NonNullable<typeof jobs>[number], compact = false) => (
-    <Card key={job.id} className="p-4 bg-white shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
-      <div className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-blue-700">{formatQuoteNumber(job)}</p>
-            <p className="font-semibold text-gray-900 truncate">{job.clientName === "[Draft]" ? "Draft Quote" : job.clientName}</p>
-            <p className="text-sm text-gray-600">{job.clientPhone || "No phone"}</p>
+  const jobCard = (job: NonNullable<typeof jobs>[number], compact = false) => {
+    const currentStatus = (job.status || "quoted") as JobStatus;
+    const isUpdatingStatus = updatingStatusJobId === job.id;
+
+    return (
+      <Card key={job.id} className="p-4 bg-white shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+        <div className="space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-blue-700">{formatQuoteNumber(job)}</p>
+              <p className="font-semibold text-gray-900 truncate">{job.clientName === "[Draft]" ? "Draft Quote" : job.clientName}</p>
+              <p className="text-sm text-gray-600">{job.clientPhone || "No phone"}</p>
+            </div>
+            <Badge className={getStatusColor(job.status)}>{getStatusLabel(job.status)}</Badge>
           </div>
-          <Badge className={getStatusColor(job.status)}>{getStatusLabel(job.status)}</Badge>
+          <div className="grid grid-cols-1 gap-2 text-sm text-gray-600">
+            {job.suburb && <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /><span>{job.suburb}</span></div>}
+            {job.appointmentDate && <div className="flex items-center gap-2"><Calendar className="w-4 h-4" /><span>{new Date(job.appointmentDate).toLocaleDateString()}</span></div>}
+            {!compact && job.operatorName && <div><span className="font-medium">Operator:</span> {job.operatorName}</div>}
+            {!compact && <div className="font-semibold text-gray-900">Supply & Install Total: {formatMoneyFromCents(job.totalEstimate ?? 0)}</div>}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-gray-500">Status</span>
+            <Select
+              value={currentStatus}
+              onValueChange={value => updateQuoteStatus(job.id, value as JobStatus)}
+              disabled={isUpdatingStatus}
+            >
+              <SelectTrigger className="h-9 flex-1 bg-white text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {quoteStatusOrder.map(status => (
+                  <SelectItem key={status} value={status}>{statusLabels[status]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {isUpdatingStatus && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button size="sm" variant="outline" onClick={() => { window.location.href = `/quote?resumeJobId=${job.id}`; }} className="flex-1 h-9 text-xs"><Edit className="w-3 h-3 mr-1" />{job.clientName === "[Draft]" ? "Resume" : "Edit"}</Button>
+            <Button size="sm" variant="outline" onClick={() => setDownloadingJobId(job.id)} disabled={downloadingJobId === job.id} className="flex-1 h-9 text-xs">{downloadingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Quote PDF</Button>
+            <Button size="sm" variant="outline" onClick={() => deleteQuote(job.id)} disabled={deletingJobId === job.id} className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50">{deletingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}</Button>
+          </div>
         </div>
-        <div className="grid grid-cols-1 gap-2 text-sm text-gray-600">
-          {job.suburb && <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /><span>{job.suburb}</span></div>}
-          {job.appointmentDate && <div className="flex items-center gap-2"><Calendar className="w-4 h-4" /><span>{new Date(job.appointmentDate).toLocaleDateString()}</span></div>}
-          {!compact && job.operatorName && <div><span className="font-medium">Operator:</span> {job.operatorName}</div>}
-          {!compact && <div className="font-semibold text-gray-900">Supply & Install Total: {formatMoneyFromCents(job.totalEstimate ?? 0)}</div>}
-        </div>
-        <div className="flex gap-2 pt-1">
-          <Button size="sm" variant="outline" onClick={() => { window.location.href = `/quote?resumeJobId=${job.id}`; }} className="flex-1 h-9 text-xs"><Edit className="w-3 h-3 mr-1" />{job.clientName === "[Draft]" ? "Resume" : "Edit"}</Button>
-          <Button size="sm" variant="outline" onClick={() => setDownloadingJobId(job.id)} disabled={downloadingJobId === job.id} className="flex-1 h-9 text-xs">{downloadingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Quote PDF</Button>
-          <Button size="sm" variant="outline" onClick={() => deleteQuote(job.id)} disabled={deletingJobId === job.id} className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50">{deletingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}</Button>
-        </div>
-      </div>
-    </Card>
-  );
+      </Card>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
