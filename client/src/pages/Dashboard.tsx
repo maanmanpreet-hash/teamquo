@@ -34,17 +34,24 @@ function fallbackPdfHtml(job: any) {
     <main style="font-family:Arial,sans-serif;padding:32px;color:#111827">
       <header style="display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #111827;padding-bottom:16px;margin-bottom:24px">
         <img src="/skywall-logo.png" alt="SKYWALL" style="height:72px;width:auto" />
-        <div style="text-align:right"><h1 style="margin:0">Quote</h1><p>${formatQuoteNumber(job)}</p></div>
+        <div style="text-align:right"><h1 style="margin:0">Supply and Install Quote</h1><p>${formatQuoteNumber(job)}</p></div>
       </header>
       <h2>${job?.clientName || "Preview Client"}</h2>
       <p><b>Phone:</b> ${job?.clientPhone || ""}</p>
       <p><b>Address:</b> ${job?.clientAddress || ""}</p>
       <p><b>Suburb:</b> ${job?.suburb || ""}</p>
       <p><b>Operator:</b> ${job?.operatorName || ""}</p>
-      <h2>Total: ${formatMoneyFromCents(job?.totalEstimate ?? 0)}</h2>
-      <p>This preview PDF is generated locally when the database PDF route is unavailable.</p>
+      <h2>Supply and Install Total Estimate: ${formatMoneyFromCents(job?.totalEstimate ?? 0)}</h2>
+      <p>This fallback preview shows the single supply-and-install total only. Wall/product scope is shown when the server PDF route is available.</p>
     </main>
   `;
+}
+
+function safeFilePart(value: string | null | undefined) {
+  return (value || "quote")
+    .replace(/[^a-z0-9\-_ ]/gi, "")
+    .trim()
+    .replace(/\s+/g, "-") || "quote";
 }
 
 export default function Dashboard() {
@@ -88,18 +95,18 @@ export default function Dashboard() {
   useEffect(() => {
     if (downloadingJobId === null) return;
     const job = jobs?.find(j => j.id === downloadingJobId);
-    const fileName = `${formatQuoteNumber(job)}-${job?.clientName || "quote"}.pdf`;
+    const fileName = `${formatQuoteNumber(job)}-supply-install-${safeFilePart(job?.clientName)}.pdf`;
 
     if (pdfQuery.data) {
       downloadPDF(pdfQuery.data.html, fileName)
-        .then(() => toast.success("PDF downloaded"))
+        .then(() => toast.success("Supply-and-install quote PDF downloaded"))
         .catch(() => downloadPDF(fallbackPdfHtml(job), fileName))
         .finally(() => setDownloadingJobId(null));
     }
 
     if (pdfQuery.error) {
       downloadPDF(fallbackPdfHtml(job), fileName)
-        .then(() => toast.success("Preview PDF downloaded"))
+        .then(() => toast.success("Fallback supply-and-install PDF downloaded"))
         .catch(() => toast.error("Failed to generate PDF"))
         .finally(() => setDownloadingJobId(null));
     }
@@ -152,11 +159,11 @@ export default function Dashboard() {
           {job.suburb && <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /><span>{job.suburb}</span></div>}
           {job.appointmentDate && <div className="flex items-center gap-2"><Calendar className="w-4 h-4" /><span>{new Date(job.appointmentDate).toLocaleDateString()}</span></div>}
           {!compact && job.operatorName && <div><span className="font-medium">Operator:</span> {job.operatorName}</div>}
-          {!compact && <div className="font-semibold text-gray-900">Estimate: {formatMoneyFromCents(job.totalEstimate ?? 0)}</div>}
+          {!compact && <div className="font-semibold text-gray-900">Supply & Install Total: {formatMoneyFromCents(job.totalEstimate ?? 0)}</div>}
         </div>
         <div className="flex gap-2 pt-1">
           <Button size="sm" variant="outline" onClick={() => { window.location.href = `/quote?resumeJobId=${job.id}`; }} className="flex-1 h-9 text-xs"><Edit className="w-3 h-3 mr-1" />{job.clientName === "[Draft]" ? "Resume" : "Edit"}</Button>
-          <Button size="sm" variant="outline" onClick={() => setDownloadingJobId(job.id)} disabled={downloadingJobId === job.id} className="flex-1 h-9 text-xs">{downloadingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}PDF</Button>
+          <Button size="sm" variant="outline" onClick={() => setDownloadingJobId(job.id)} disabled={downloadingJobId === job.id} className="flex-1 h-9 text-xs">{downloadingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Quote PDF</Button>
           <Button size="sm" variant="outline" onClick={() => deleteQuote(job.id)} disabled={deletingJobId === job.id} className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50">{deletingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}</Button>
         </div>
       </div>
