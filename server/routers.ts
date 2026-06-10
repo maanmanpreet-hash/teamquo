@@ -335,13 +335,16 @@ export const appRouter = router({
     }),
     generatePDF: protectedProcedure.input(z.object({ jobId: z.number() })).query(async ({ input, ctx }) => {
       const job = await assertOwnsJob(input.jobId, ctx.user.id);
-      const items = (await isPreviewMode()) ? previewJobItems.filter(item => item.jobId === input.jobId) : await db.getJobItemsByJobId(input.jobId);
+      const previewMode = await isPreviewMode();
+      const items = previewMode ? previewJobItems.filter(item => item.jobId === input.jobId) : await db.getJobItemsByJobId(input.jobId);
       if (!items.length) throw new Error("Cannot generate PDF until the quote has at least one saved product.");
-      const variants = (await isPreviewMode()) ? previewCladdingVariants : await db.getAllCladdingVariants();
-      const products = (await isPreviewMode()) ? previewProducts : await db.getAllProducts();
+      const variants = previewMode ? previewCladdingVariants : await db.getAllCladdingVariants();
+      const products = previewMode ? previewProducts : await db.getAllProducts();
+      const wallRows = previewMode ? previewWalls.filter(wall => wall.jobId === input.jobId) : await db.getWallsByJobId(input.jobId);
       const variantMap = new Map(variants.map(v => [v.id, v]));
       const productMap = new Map(products.map(product => [product.id, product]));
-      const html = generateQuoteHTML(job as any, items as any, variantMap as any, productMap as any);
+      const wallMap = new Map(wallRows.map(wall => [wall.id, wall]));
+      const html = generateQuoteHTML(job as any, items as any, variantMap as any, productMap as any, undefined, undefined, wallMap as any);
       return { html, jobId: job.id, clientName: job.clientName, quoteNumber: formatQuoteNumber(job as any) };
     }),
     create: protectedProcedure
