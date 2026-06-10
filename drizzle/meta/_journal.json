@@ -64,6 +64,13 @@
       "when": 1779927171886,
       "tag": "0008_short_grey_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1781053558871,
+      "tag": "0009_stable_quote_items",
+      "breakpoints": true
     }
   ]
 }

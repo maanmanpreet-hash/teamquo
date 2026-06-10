@@ -2,11 +2,25 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useLocation } from "wouter";
-import { Loader2, Plus, Eye, FileText, Edit, Calendar, MapPin } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  Eye,
+  FileText,
+  Edit,
+  Calendar,
+  MapPin,
+} from "lucide-react";
 import { downloadPDF } from "@/lib/pdf";
 import { toast } from "sonner";
 
@@ -37,8 +51,13 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<JobStatus | "all">("all");
 
-  const { data: operators, isLoading: operatorsLoading } = trpc.operators.list.useQuery();
-  const { data: jobs, isLoading: jobsLoading, refetch } = trpc.jobs.list.useQuery();
+  const { data: operators, isLoading: operatorsLoading } =
+    trpc.operators.list.useQuery();
+  const {
+    data: jobs,
+    isLoading: jobsLoading,
+    refetch,
+  } = trpc.jobs.list.useQuery();
 
   // PDF generation mutation
   const generatePDFMutation = trpc.jobItems.generatePDF.useQuery(
@@ -84,24 +103,23 @@ export default function Dashboard() {
   };
 
   // Watch for PDF data and download when ready
-  if (downloadingJobId !== null && generatePDFMutation.data) {
-    try {
-      const job = jobs?.find((j) => j.id === downloadingJobId);
-      downloadPDF(
-        generatePDFMutation.data.html,
-        `quote-${job?.clientName || "quote"}-${new Date().toISOString().split('T')[0]}.pdf`
-      ).then(() => {
+  useEffect(() => {
+    if (downloadingJobId === null || !generatePDFMutation.data) return;
+
+    const job = jobs?.find(j => j.id === downloadingJobId);
+    downloadPDF(
+      generatePDFMutation.data.html,
+      `quote-${job?.clientName || "quote"}-${new Date().toISOString().split("T")[0]}.pdf`
+    )
+      .then(() => {
         toast.success("PDF downloaded successfully");
         setDownloadingJobId(null);
-      }).catch((error) => {
+      })
+      .catch(() => {
         toast.error("Failed to download PDF");
         setDownloadingJobId(null);
       });
-    } catch (error) {
-      toast.error("Failed to process PDF");
-      setDownloadingJobId(null);
-    }
-  }
+  }, [downloadingJobId, generatePDFMutation.data, jobs]);
 
   if (authLoading) {
     return (
@@ -116,14 +134,18 @@ export default function Dashboard() {
   }
 
   // Filter and search jobs
-  const filteredJobs = jobs?.filter(job => {
-    const matchesSearch = searchQuery === "" || 
-      job.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (job.clientPhone && job.clientPhone.includes(searchQuery)) ||
-      (job.suburb && job.suburb.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesStatus = filterStatus === "all" || job.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  }) || [];
+  const filteredJobs =
+    jobs?.filter(job => {
+      const matchesSearch =
+        searchQuery === "" ||
+        job.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (job.clientPhone && job.clientPhone.includes(searchQuery)) ||
+        (job.suburb &&
+          job.suburb.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesStatus =
+        filterStatus === "all" || job.status === filterStatus;
+      return matchesSearch && matchesStatus;
+    }) || [];
 
   // Group filtered jobs by status
   const jobsByStatus: Record<JobStatus, typeof filteredJobs> = {
@@ -143,8 +165,12 @@ export default function Dashboard() {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-4xl font-bold text-gray-900">TeamQuo Dashboard</h1>
-              <p className="text-gray-600 mt-2">Manage your job quotes and track progress</p>
+              <h1 className="text-4xl font-bold text-gray-900">
+                TeamQuo Dashboard
+              </h1>
+              <p className="text-gray-600 mt-2">
+                Manage your job quotes and track progress
+              </p>
             </div>
             <Button
               onClick={handleStartQuoting}
@@ -158,28 +184,40 @@ export default function Dashboard() {
 
           {/* Operator Selection */}
           <div className="flex items-center gap-4">
-            <label className="text-sm font-medium text-gray-700">Operator:</label>
-            <Select value={selectedOperator} onValueChange={handleOperatorSelect}>
+            <label className="text-sm font-medium text-gray-700">
+              Operator:
+            </label>
+            <Select
+              value={selectedOperator}
+              onValueChange={handleOperatorSelect}
+            >
               <SelectTrigger className="w-48 h-10">
                 <SelectValue placeholder="Select operator..." />
               </SelectTrigger>
               <SelectContent>
                 {operatorsLoading ? (
-                  <div className="p-2 text-center text-gray-500">Loading...</div>
+                  <div className="p-2 text-center text-gray-500">
+                    Loading...
+                  </div>
                 ) : operators && operators.length > 0 ? (
-                  operators.map((op) => (
+                  operators.map(op => (
                     <SelectItem key={op.id} value={op.id.toString()}>
                       {op.name}
                     </SelectItem>
                   ))
                 ) : (
-                  <div className="p-2 text-center text-gray-500">No operators</div>
+                  <div className="p-2 text-center text-gray-500">
+                    No operators
+                  </div>
                 )}
               </SelectContent>
             </Select>
             {selectedOperator && (
               <Badge className="bg-blue-100 text-blue-800">
-                {operators?.find(op => op.id.toString() === selectedOperator)?.name}
+                {
+                  operators?.find(op => op.id.toString() === selectedOperator)
+                    ?.name
+                }
               </Badge>
             )}
           </div>
@@ -192,11 +230,14 @@ export default function Dashboard() {
               type="text"
               placeholder="Search by name, phone, or suburb..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as JobStatus | "all")}>
+          <Select
+            value={filterStatus}
+            onValueChange={value => setFilterStatus(value as JobStatus | "all")}
+          >
             <SelectTrigger className="w-40 h-10">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
@@ -231,11 +272,17 @@ export default function Dashboard() {
         {/* Kanban Board */}
         {viewMode === "kanban" && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {statuses.map((status) => (
+            {statuses.map(status => (
               <div key={status} className="flex flex-col">
-                <div className={`${statusColors[status]} rounded-t-lg p-4 border-b-2 border-current`}>
-                  <h3 className="font-semibold text-lg">{statusLabels[status]}</h3>
-                  <p className="text-sm opacity-75">{jobsByStatus[status]?.length || 0} jobs</p>
+                <div
+                  className={`${statusColors[status]} rounded-t-lg p-4 border-b-2 border-current`}
+                >
+                  <h3 className="font-semibold text-lg">
+                    {statusLabels[status]}
+                  </h3>
+                  <p className="text-sm opacity-75">
+                    {jobsByStatus[status]?.length || 0} jobs
+                  </p>
                 </div>
                 <div className="flex-1 bg-gray-100 rounded-b-lg p-4 space-y-3 min-h-96">
                   {jobsLoading ? (
@@ -243,20 +290,28 @@ export default function Dashboard() {
                       <Loader2 className="animate-spin w-6 h-6 text-gray-400" />
                     </div>
                   ) : jobsByStatus[status]?.length === 0 ? (
-                    <div className="text-center text-gray-400 py-8">No jobs</div>
+                    <div className="text-center text-gray-400 py-8">
+                      No jobs
+                    </div>
                   ) : (
-                    jobsByStatus[status]?.map((job) => (
+                    jobsByStatus[status]?.map(job => (
                       <Card
                         key={job.id}
                         className="p-4 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer border-l-4"
                         style={{
-                          borderLeftColor: statusColors[status as JobStatus].split(" ")[0].replace("bg-", ""),
+                          borderLeftColor: statusColors[status as JobStatus]
+                            .split(" ")[0]
+                            .replace("bg-", ""),
                         }}
                       >
                         <div className="space-y-2">
                           <div>
-                            <p className="font-semibold text-gray-900 truncate">{job.clientName}</p>
-                            <p className="text-sm text-gray-600">{job.clientPhone}</p>
+                            <p className="font-semibold text-gray-900 truncate">
+                              {job.clientName}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              {job.clientPhone}
+                            </p>
                           </div>
 
                           {job.suburb && (
@@ -269,7 +324,11 @@ export default function Dashboard() {
                           {job.appointmentDate && (
                             <div className="flex items-center gap-2 text-sm text-gray-600">
                               <Calendar className="w-4 h-4" />
-                              <span>{new Date(job.appointmentDate).toLocaleDateString()}</span>
+                              <span>
+                                {new Date(
+                                  job.appointmentDate
+                                ).toLocaleDateString()}
+                              </span>
                             </div>
                           )}
 
@@ -277,7 +336,9 @@ export default function Dashboard() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => navigate(`/stage1?resumeJobId=${job.id}`)}
+                              onClick={() =>
+                                navigate(`/stage1?resumeJobId=${job.id}`)
+                              }
                               className="flex-1 h-8 text-xs"
                             >
                               <Edit className="w-3 h-3 mr-1" />
@@ -286,7 +347,9 @@ export default function Dashboard() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => handleDownloadPDF(job.id, job.clientName)}
+                              onClick={() =>
+                                handleDownloadPDF(job.id, job.clientName)
+                              }
                               disabled={downloadingJobId === job.id}
                               className="flex-1 h-8 text-xs"
                             >
@@ -316,16 +379,22 @@ export default function Dashboard() {
                 <Loader2 className="animate-spin w-8 h-8" />
               </div>
             ) : filteredJobs && filteredJobs.length > 0 ? (
-              filteredJobs.map((job) => (
+              filteredJobs.map(job => (
                 <Card key={job.id} className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-4">
                         <div>
-                          <p className="font-semibold text-gray-900">{job.clientName}</p>
-                          <p className="text-sm text-gray-600">{job.clientPhone}</p>
+                          <p className="font-semibold text-gray-900">
+                            {job.clientName}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {job.clientPhone}
+                          </p>
                         </div>
-                        <Badge className={statusColors[job.status as JobStatus]}>
+                        <Badge
+                          className={statusColors[job.status as JobStatus]}
+                        >
                           {statusLabels[job.status as JobStatus]}
                         </Badge>
                         {job.suburb && (
@@ -346,7 +415,9 @@ export default function Dashboard() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => navigate(`/stage1?resumeJobId=${job.id}`)}
+                        onClick={() =>
+                          navigate(`/stage1?resumeJobId=${job.id}`)
+                        }
                       >
                         <Edit className="w-4 h-4 mr-1" />
                         Edit
@@ -354,7 +425,9 @@ export default function Dashboard() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleDownloadPDF(job.id, job.clientName)}
+                        onClick={() =>
+                          handleDownloadPDF(job.id, job.clientName)
+                        }
                         disabled={downloadingJobId === job.id}
                       >
                         {downloadingJobId === job.id ? (
@@ -370,7 +443,9 @@ export default function Dashboard() {
               ))
             ) : (
               <div className="text-center py-12">
-                <p className="text-gray-600">No jobs yet. Start by creating a new quote!</p>
+                <p className="text-gray-600">
+                  No jobs yet. Start by creating a new quote!
+                </p>
               </div>
             )}
           </div>

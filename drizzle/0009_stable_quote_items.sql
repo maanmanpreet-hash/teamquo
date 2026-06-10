@@ -1,0 +1,2 @@
+ALTER TABLE `job_items` MODIFY COLUMN `item_type` enum('cladding','acoustic_panel','floating_cabinet','fireplace','mirror','marble_sheet') NOT NULL;--> statement-breakpoint
+ALTER TABLE `job_items` ADD `product_id` int;

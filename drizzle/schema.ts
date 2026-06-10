@@ -1,4 +1,12 @@
-import { date, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  date,
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+} from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -111,8 +119,23 @@ export const jobs = mysqlTable("jobs", {
   appointmentDate: date("appointment_date"), // Date agreed to provide quote
   appointmentTime: varchar("appointment_time", { length: 5 }), // Time in HH:MM format
   referenceImageUrl: text("reference_image_url"), // URL to reference image from site visit
-  status: mysqlEnum("status", ["quoted", "booked", "commenced", "completed", "cancelled"]).default("quoted").notNull(),
-  stage: mysqlEnum("stage", ["quoting", "procurement", "installation", "invoicing"]).default("quoting").notNull(),
+  status: mysqlEnum("status", [
+    "quoted",
+    "booked",
+    "commenced",
+    "completed",
+    "cancelled",
+  ])
+    .default("quoted")
+    .notNull(),
+  stage: mysqlEnum("stage", [
+    "quoting",
+    "procurement",
+    "installation",
+    "invoicing",
+  ])
+    .default("quoting")
+    .notNull(),
   stageStatus: varchar("stage_status", { length: 100 }).default("in_progress"),
   totalEstimate: int("total_estimate"),
   notes: text("notes"),
@@ -130,7 +153,15 @@ export const jobItems = mysqlTable("job_items", {
   id: int("id").autoincrement().primaryKey(),
   jobId: int("job_id").notNull(), // Reference to the job
   wallId: int("wall_id"), // Reference to the wall (if applicable)
-  itemType: mysqlEnum("item_type", ["cladding", "acoustic_panel", "floating_cabinet"]).notNull(),
+  itemType: mysqlEnum("item_type", [
+    "cladding",
+    "acoustic_panel",
+    "floating_cabinet",
+    "fireplace",
+    "mirror",
+    "marble_sheet",
+  ]).notNull(),
+  productId: int("product_id"), // General product reference for all product table items
   claddingVariantId: int("cladding_variant_id"), // Reference to cladding variant (if itemType = 'cladding')
   wallWidthMm: int("wall_width_mm"), // Wall width in millimeters
   wallHeightMm: int("wall_height_mm"), // Wall height in millimeters
@@ -155,7 +186,9 @@ export type InsertJobItem = typeof jobItems.$inferInsert;
 export const walls = mysqlTable("walls", {
   id: int("id").autoincrement().primaryKey(),
   jobId: int("job_id").notNull(), // Reference to the job
-  wallType: mysqlEnum("wall_type", ["regular", "garage", "custom"]).default("regular").notNull(),
+  wallType: mysqlEnum("wall_type", ["regular", "garage", "custom"])
+    .default("regular")
+    .notNull(),
   wallName: varchar("wall_name", { length: 255 }), // e.g., "Living Room", "Garage", "Master Bedroom"
   wallWidthMm: int("wall_width_mm"), // Wall width in millimeters
   wallHeightMm: int("wall_height_mm"), // Wall height in millimeters
@@ -187,8 +220,18 @@ export type InsertOperator = typeof operators.$inferInsert;
 export const stageTransitions = mysqlTable("stage_transitions", {
   id: int("id").autoincrement().primaryKey(),
   jobId: int("job_id").notNull(),
-  fromStage: mysqlEnum("from_stage", ["quoting", "procurement", "installation", "invoicing"]),
-  toStage: mysqlEnum("to_stage", ["quoting", "procurement", "installation", "invoicing"]).notNull(),
+  fromStage: mysqlEnum("from_stage", [
+    "quoting",
+    "procurement",
+    "installation",
+    "invoicing",
+  ]),
+  toStage: mysqlEnum("to_stage", [
+    "quoting",
+    "procurement",
+    "installation",
+    "invoicing",
+  ]).notNull(),
   transitionedBy: int("transitioned_by"), // User ID who made the transition
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
