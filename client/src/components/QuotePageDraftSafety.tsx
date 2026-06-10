@@ -14,11 +14,6 @@ function markQuoteDirty() {
   sessionStorage.setItem(QUOTE_DIRTY_KEY, "1");
 }
 
-function clearQuoteDirty() {
-  sessionStorage.removeItem(QUOTE_DIRTY_KEY);
-  localStorage.removeItem(QUOTE_RECOVERY_KEY);
-}
-
 function hasUnsavedQuoteChanges() {
   return isQuotePath() && sessionStorage.getItem(QUOTE_DIRTY_KEY) === "1";
 }
@@ -83,6 +78,10 @@ function collectFieldSnapshot() {
   );
 }
 
+function safeCss(value: string) {
+  return window.CSS?.escape ? window.CSS.escape(value) : value.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+}
+
 function restoreSimpleFields() {
   if (!isQuotePath()) return;
 
@@ -95,7 +94,8 @@ function restoreSimpleFields() {
 
     for (const { key, value } of snapshot.fields) {
       if (!key || !value) continue;
-      const selector = `#${CSS.escape(key)}, [name="${CSS.escape(key)}"], [aria-label="${CSS.escape(key)}"]`;
+      const escapedKey = safeCss(key);
+      const selector = `#${escapedKey}, [name="${escapedKey}"], [aria-label="${escapedKey}"]`;
       const element = document.querySelector(selector) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
       if (!element || element.value) continue;
       element.value = value;
@@ -124,7 +124,7 @@ export function QuotePageDraftSafety() {
       const target = event.target as HTMLElement | null;
       const button = target?.closest("button");
       if (button && isSaveButton(button)) {
-        clearQuoteDirty();
+        collectFieldSnapshot();
         return;
       }
 
