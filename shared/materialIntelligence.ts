@@ -65,6 +65,13 @@ export interface TvBackdropDimensions extends TvDimensions {
   backdropHeightMm: number;
 }
 
+export interface InternalMaterialListTextOptions {
+  quoteNumber?: string;
+  clientName?: string;
+  clientAddress?: string;
+  includeReferenceCosts?: boolean;
+}
+
 export const TV_BACKDROP_EXTENSION_MM = 100;
 export const ACOUSTIC_SCREWS_PER_PANEL = 9;
 export const ACOUSTIC_GLUE_PANEL_RATIO = 2;
@@ -108,6 +115,10 @@ export const MATERIAL_BASELINES = {
 
 function positiveNumber(value: number | undefined): number {
   return Number.isFinite(value) && value && value > 0 ? value : 0;
+}
+
+function formatCurrency(cents: number) {
+  return `$${(cents / 100).toFixed(2)}`;
 }
 
 export function calculateSheetQuantity(
@@ -344,4 +355,62 @@ export function buildQuoteMaterialSummary(walls: WallForMaterials[]): QuoteMater
     referenceCostCents: consolidatedLines.reduce((total, line) => total + line.referenceCostCents, 0),
     notes,
   };
+}
+
+export function buildInternalMaterialListText(
+  summary: QuoteMaterialSummary,
+  options: InternalMaterialListTextOptions = {}
+): string {
+  const includeCosts = options.includeReferenceCosts ?? true;
+  const output: string[] = [];
+
+  output.push("INTERNAL MATERIAL LIST");
+  output.push("======================");
+  output.push(`Quote: ${options.quoteNumber || "Draft"}`);
+  output.push(`Customer: ${options.clientName || "Not provided"}`);
+  output.push(`Address: ${options.clientAddress || "Not provided"}`);
+  output.push("");
+
+  for (const wall of summary.walls) {
+    output.push(wall.wallName.toUpperCase());
+    output.push("-".repeat(wall.wallName.length));
+
+    if (wall.lines.length === 0) {
+      output.push("No automatic material lines.");
+    }
+
+    for (const line of wall.lines) {
+      const cost = includeCosts ? ` | ${formatCurrency(line.quantity * (line.unitCostCents || 0))}` : "";
+      output.push(`${line.name} x ${line.quantity}${cost}`);
+    }
+
+    if (wall.notes.length > 0) {
+      output.push("Notes:");
+      for (const note of wall.notes) output.push(`- ${note}`);
+    }
+
+    output.push("");
+  }
+
+  output.push("CONSOLIDATED TOTALS");
+  output.push("-------------------");
+
+  for (const line of summary.consolidatedLines) {
+    const cost = includeCosts ? ` | ${formatCurrency(line.referenceCostCents)}` : "";
+    output.push(`${line.name} x ${line.quantity}${cost}`);
+  }
+
+  if (includeCosts) {
+    output.push("");
+    output.push(`Reference Material Cost: ${formatCurrency(summary.referenceCostCents)}`);
+  }
+
+  if (summary.notes.length > 0) {
+    output.push("");
+    output.push("SUMMARY NOTES");
+    output.push("-------------");
+    for (const note of summary.notes) output.push(`- ${note}`);
+  }
+
+  return output.join("\n");
 }
