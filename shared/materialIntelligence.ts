@@ -43,6 +43,17 @@ export interface MaterialEstimate {
   notes: string[];
 }
 
+export interface ConsolidatedMaterialLine extends MaterialLine {
+  referenceCostCents: number;
+}
+
+export interface QuoteMaterialSummary {
+  walls: MaterialEstimate[];
+  consolidatedLines: ConsolidatedMaterialLine[];
+  referenceCostCents: number;
+  notes: string[];
+}
+
 export interface TvDimensions {
   diagonalInches: number;
   widthMm: number;
@@ -296,4 +307,41 @@ export function estimateWallMaterials(wall: WallForMaterials): MaterialEstimate 
 
 export function estimateQuoteMaterials(walls: WallForMaterials[]): MaterialEstimate[] {
   return walls.map(estimateWallMaterials);
+}
+
+export function consolidateMaterialLines(wallEstimates: MaterialEstimate[]): ConsolidatedMaterialLine[] {
+  const lineMap = new Map<string, ConsolidatedMaterialLine>();
+
+  for (const estimate of wallEstimates) {
+    for (const line of estimate.lines) {
+      const mapKey = `${line.key}:${line.unitCostCents ?? ""}`;
+      const existing = lineMap.get(mapKey);
+      if (existing) {
+        existing.quantity += line.quantity;
+        existing.referenceCostCents += line.quantity * (line.unitCostCents || 0);
+        if (line.notes?.length) existing.notes = [...(existing.notes || []), ...line.notes];
+      } else {
+        lineMap.set(mapKey, {
+          ...line,
+          notes: line.notes ? [...line.notes] : undefined,
+          referenceCostCents: line.quantity * (line.unitCostCents || 0),
+        });
+      }
+    }
+  }
+
+  return Array.from(lineMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function buildQuoteMaterialSummary(walls: WallForMaterials[]): QuoteMaterialSummary {
+  const wallEstimates = estimateQuoteMaterials(walls);
+  const consolidatedLines = consolidateMaterialLines(wallEstimates);
+  const notes = wallEstimates.flatMap(estimate => estimate.notes.map(note => `${estimate.wallName}: ${note}`));
+
+  return {
+    walls: wallEstimates,
+    consolidatedLines,
+    referenceCostCents: consolidatedLines.reduce((total, line) => total + line.referenceCostCents, 0),
+    notes,
+  };
 }
