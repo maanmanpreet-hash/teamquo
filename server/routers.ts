@@ -8,9 +8,11 @@ import {
   router,
 } from "./_core/trpc";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import * as db from "./db";
 import { generateQuoteHTML } from "./pdf";
 import { formatQuoteNumber } from "../shared/quote";
+import { jobs as jobsTable } from "../drizzle/schema";
 
 const supportedItemTypes = [
   "cladding",
@@ -196,6 +198,17 @@ export const appRouter = router({
             : undefined,
         };
         return db.updateJob(id, updateData);
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        await assertOwnsJob(input.id, ctx.user.id);
+        const database = await db.getDb();
+        if (!database) throw new Error("Database not available");
+        await db.deleteJobItemsByJobId(input.id);
+        await db.deleteWallsByJobId(input.id);
+        await database.delete(jobsTable).where(eq(jobsTable.id, input.id));
+        return true;
       }),
   }),
 
