@@ -1,4 +1,5 @@
 export type OrientationRule = "vertical" | "horizontal" | "either";
+export type ObstructionStatus = "unknown" | "none" | "present";
 
 export interface MaterialMetadata {
   supplier?: string;
@@ -16,6 +17,8 @@ export interface PanelCalculationInput {
   productDescription?: string | null;
   wastagePercent?: number;
   orientationRule?: OrientationRule;
+  obstructionStatus?: ObstructionStatus;
+  obstructionNotes?: string;
 }
 
 export interface PanelCalculationResult {
@@ -194,6 +197,8 @@ export function calculatePanelRequirement(input: PanelCalculationInput): PanelCa
   }
 
   const orientationRule = input.orientationRule ?? metadata.orientationRule ?? "vertical";
+  const obstructionStatus = input.obstructionStatus ?? "unknown";
+  const obstructionNotes = input.obstructionNotes?.trim();
   const wastagePercent = Math.max(
     0,
     Math.min(100, input.wastagePercent ?? metadata.wastagePercent ?? DEFAULT_WASTAGE_PERCENT)
@@ -254,10 +259,22 @@ export function calculatePanelRequirement(input: PanelCalculationInput): PanelCa
     internalNotes.push("Orientation rule allows either direction. Selected the option with lower join/quantity risk.");
   }
 
-  reviewReasons.push("Openings/obstructions such as TV recesses, power points, windows, corners, or fireplaces are not included in this automatic calculation.");
+  if (obstructionStatus === "unknown") {
+    reviewReasons.push("Openings/obstructions have not been confirmed. Check TV recesses, power points, windows, corners, fireplaces, shelves, and returns.");
+  } else if (obstructionStatus === "present") {
+    reviewReasons.push(
+      obstructionNotes
+        ? `Openings/obstructions present: ${obstructionNotes}`
+        : "Openings/obstructions are present, but no cut details have been entered."
+    );
+  } else {
+    internalNotes.push("Operator confirmed no known openings or obstructions for this wall at quoting stage.");
+  }
 
   customerNotes.push("Quote is based on supplied wall dimensions and selected product size.");
-  customerNotes.push("Final material quantity may change after site measurement and obstruction review.");
+  if (reviewReasons.length > 0) {
+    customerNotes.push("Final material quantity may change after site measurement and obstruction review.");
+  }
 
   return {
     status: reviewReasons.length ? "manual_review_required" : "calculated",
