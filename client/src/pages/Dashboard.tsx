@@ -13,20 +13,22 @@ import { formatMoneyFromCents, formatQuoteNumber } from "@shared/quote";
 
 type JobStatus = "quoted" | "booked" | "commenced" | "completed" | "cancelled";
 
+const quoteStatusOrder: JobStatus[] = ["quoted", "booked", "commenced", "cancelled", "completed"];
+
 const statusColors: Record<JobStatus, string> = {
   quoted: "bg-blue-100 text-blue-800 border-blue-300",
-  booked: "bg-green-100 text-green-800 border-green-300",
-  commenced: "bg-orange-100 text-orange-800 border-orange-300",
+  booked: "bg-amber-100 text-amber-800 border-amber-300",
+  commenced: "bg-green-100 text-green-800 border-green-300",
   completed: "bg-purple-100 text-purple-800 border-purple-300",
   cancelled: "bg-red-100 text-red-800 border-red-300",
 };
 
 const statusLabels: Record<JobStatus, string> = {
-  quoted: "Quoted",
-  booked: "Booked",
-  commenced: "Commenced",
+  quoted: "Draft",
+  booked: "Sent",
+  commenced: "Accepted",
   completed: "Completed",
-  cancelled: "Cancelled",
+  cancelled: "Rejected",
 };
 
 function fallbackPdfHtml(job: any) {
@@ -52,6 +54,14 @@ function safeFilePart(value: string | null | undefined) {
     .replace(/[^a-z0-9\-_ ]/gi, "")
     .trim()
     .replace(/\s+/g, "-") || "quote";
+}
+
+function getStatusLabel(status: string | null | undefined) {
+  return statusLabels[(status || "quoted") as JobStatus] || "Draft";
+}
+
+function getStatusColor(status: string | null | undefined) {
+  return statusColors[(status || "quoted") as JobStatus] || statusColors.quoted;
 }
 
 export default function Dashboard() {
@@ -153,7 +163,7 @@ export default function Dashboard() {
             <p className="font-semibold text-gray-900 truncate">{job.clientName === "[Draft]" ? "Draft Quote" : job.clientName}</p>
             <p className="text-sm text-gray-600">{job.clientPhone || "No phone"}</p>
           </div>
-          <Badge className={statusColors[job.status as JobStatus]}>{statusLabels[job.status as JobStatus]}</Badge>
+          <Badge className={getStatusColor(job.status)}>{getStatusLabel(job.status)}</Badge>
         </div>
         <div className="grid grid-cols-1 gap-2 text-sm text-gray-600">
           {job.suburb && <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /><span>{job.suburb}</span></div>}
@@ -192,11 +202,19 @@ export default function Dashboard() {
         </div>
         <div className="mb-6 flex gap-4 flex-wrap">
           <input type="text" placeholder="Search by quote number, name, phone, or suburb..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="flex-1 min-w-64 px-4 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          <Select value={filterStatus} onValueChange={value => setFilterStatus(value as JobStatus | "all")}><SelectTrigger className="w-44 h-10 bg-white"><SelectValue placeholder="Filter by status" /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem><SelectItem value="quoted">Quoted</SelectItem><SelectItem value="booked">Booked</SelectItem><SelectItem value="commenced">Commenced</SelectItem><SelectItem value="completed">Completed</SelectItem></SelectContent></Select>
+          <Select value={filterStatus} onValueChange={value => setFilterStatus(value as JobStatus | "all")}>
+            <SelectTrigger className="w-44 h-10 bg-white"><SelectValue placeholder="Filter by status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              {quoteStatusOrder.map(status => (
+                <SelectItem key={status} value={status}>{statusLabels[status]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex gap-2 mb-6"><Button variant={viewMode === "kanban" ? "default" : "outline"} onClick={() => setViewMode("kanban")} className="h-10">Kanban View</Button><Button variant={viewMode === "list" ? "default" : "outline"} onClick={() => setViewMode("list")} className="h-10">List View</Button></div>
-        {viewMode === "kanban" && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">{(["quoted", "booked", "commenced", "completed"] as JobStatus[]).map(status => <div key={status} className="flex flex-col"><div className={`${statusColors[status]} rounded-t-lg p-4 border-b-2 border-current`}><h3 className="font-semibold text-lg">{statusLabels[status]}</h3><p className="text-sm opacity-75">{jobsByStatus[status]?.length || 0} jobs</p></div><div className="flex-1 bg-gray-100 rounded-b-lg p-4 space-y-3 min-h-96">{jobsLoading ? <div className="flex items-center justify-center h-32"><Loader2 className="animate-spin w-6 h-6 text-gray-400" /></div> : jobsByStatus[status]?.length === 0 ? <div className="text-center text-gray-400 py-8">No jobs</div> : jobsByStatus[status]?.map(job => jobCard(job, true))}</div></div>)}</div>}
-        {viewMode === "list" && <div className="space-y-4">{jobsLoading ? <div className="flex items-center justify-center h-32"><Loader2 className="animate-spin w-8 h-8" /></div> : filteredJobs.length > 0 ? filteredJobs.map(job => jobCard(job)) : <div className="text-center py-12"><p className="text-gray-600">No jobs yet. Start by creating a new quote.</p></div>}</div>}
+        {viewMode === "kanban" && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">{quoteStatusOrder.map(status => <div key={status} className="flex flex-col"><div className={`${statusColors[status]} rounded-t-lg p-4 border-b-2 border-current`}><h3 className="font-semibold text-lg">{statusLabels[status]}</h3><p className="text-sm opacity-75">{jobsByStatus[status]?.length || 0} quotes</p></div><div className="flex-1 bg-gray-100 rounded-b-lg p-4 space-y-3 min-h-96">{jobsLoading ? <div className="flex items-center justify-center h-32"><Loader2 className="animate-spin w-6 h-6 text-gray-400" /></div> : jobsByStatus[status]?.length === 0 ? <div className="text-center text-gray-400 py-8">No quotes</div> : jobsByStatus[status]?.map(job => jobCard(job, true))}</div></div>)}</div>}
+        {viewMode === "list" && <div className="space-y-4">{jobsLoading ? <div className="flex items-center justify-center h-32"><Loader2 className="animate-spin w-8 h-8" /></div> : filteredJobs.length > 0 ? filteredJobs.map(job => jobCard(job)) : <div className="text-center py-12"><p className="text-gray-600">No quotes yet. Start by creating a new quote.</p></div>}</div>}
         {user.role === "admin" && <div className="mt-12 pt-8 border-t"><Button onClick={() => navigate("/admin")} variant="outline" className="h-10">Admin Panel</Button></div>}
       </div>
     </div>
