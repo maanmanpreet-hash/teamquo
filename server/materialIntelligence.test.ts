@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildQuoteMaterialSummary,
   calculateTvBackdropDimensions,
   calculateTvDimensions,
+  consolidateMaterialLines,
   estimateWallMaterials,
 } from "../shared/materialIntelligence";
 
@@ -175,5 +177,73 @@ describe("material intelligence", () => {
 
     expect(estimate.lines).toHaveLength(0);
     expect(estimate.notes.join(" ")).toContain("custom joinery");
+  });
+
+  it("consolidates material lines across multiple walls", () => {
+    const wallEstimates = [
+      estimateWallMaterials({
+        wallName: "TV Wall",
+        wallWidthMm: 3800,
+        wallHeightMm: 2600,
+        products: [
+          { productType: "tv_backdrop", productName: "TV Backdrop", quantity: 1, tvSizeInches: 75 },
+          { productType: "marble_sheet", productName: "PVC Marble Sheet", quantity: 1 },
+        ],
+      }),
+      estimateWallMaterials({
+        wallName: "Bedroom Wall",
+        wallWidthMm: 3600,
+        wallHeightMm: 2600,
+        products: [
+          { productType: "acoustic_panel", productName: "Acoustic Slat Panel", quantity: 6, acousticFixingMethod: "glue" },
+        ],
+      }),
+    ];
+
+    const totals = consolidateMaterialLines(wallEstimates);
+
+    expect(totals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "pvc-marble-sheet", quantity: 2, referenceCostCents: 11818 }),
+        expect.objectContaining({ key: "mdf-backing-6mm", quantity: 2, referenceCostCents: 6800 }),
+        expect.objectContaining({ key: "high-tack-glue", quantity: 2, referenceCostCents: 1456 }),
+        expect.objectContaining({ key: "acoustic-glue", quantity: 3, referenceCostCents: 2184 }),
+      ])
+    );
+  });
+
+  it("builds a quote material summary with wall breakdown, consolidated totals, cost and notes", () => {
+    const summary = buildQuoteMaterialSummary([
+      {
+        wallName: "TV Wall",
+        wallWidthMm: 3800,
+        wallHeightMm: 2600,
+        products: [
+          { productType: "tv_backdrop", productName: "TV Backdrop", quantity: 1, tvSizeInches: 75 },
+          { productType: "marble_sheet", productName: "PVC Marble Sheet", quantity: 1 },
+          { productType: "tv_backdrop", productName: "Supply & Install TV Bracket", quantity: 1 },
+        ],
+      },
+      {
+        wallName: "Cabinet Wall",
+        wallWidthMm: 3800,
+        wallHeightMm: 2600,
+        products: [
+          { productType: "floating_cabinet", productName: "Floating Cabinet - Custom", quantity: 1 },
+        ],
+      },
+    ]);
+
+    expect(summary.walls).toHaveLength(2);
+    expect(summary.consolidatedLines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "pvc-marble-sheet", quantity: 2 }),
+        expect.objectContaining({ key: "mdf-backing-6mm", quantity: 2 }),
+        expect.objectContaining({ key: "high-tack-glue", quantity: 2 }),
+        expect.objectContaining({ key: "tv-bracket", quantity: 1, referenceCostCents: 5000 }),
+      ])
+    );
+    expect(summary.referenceCostCents).toBe(25074);
+    expect(summary.notes.join(" ")).toContain("custom joinery");
   });
 });
