@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { trpc } from "@/lib/trpc";
+import { useState, type FormEvent } from "react";
+import { Edit2, Loader2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,22 +13,104 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { toast } from "sonner";
-import { Loader2, Trash2, Edit2 } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import {
+  parseMaterialMetadata,
+  type OrientationRule,
+} from "@shared/quoteCalculations";
+
+interface ProductFormData {
+  name: string;
+  design: string;
+  widthMm: string;
+  heightMm: string;
+  depthMm: string;
+  pricePerUnit: string;
+  supplier: string;
+  wastagePercent: string;
+  orientationRule: OrientationRule;
+  materialNotes: string;
+}
+
+const emptyFormData: ProductFormData = {
+  name: "",
+  design: "",
+  widthMm: "",
+  heightMm: "",
+  depthMm: "",
+  pricePerUnit: "",
+  supplier: "",
+  wastagePercent: "10",
+  orientationRule: "vertical",
+  materialNotes: "",
+};
+
+function formatMoney(cents: number) {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+function parsePositiveInteger(value: string, label: string) {
+  if (!value.trim()) return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    toast.error(`${label} must be a positive whole number`);
+    return null;
+  }
+  return parsed;
+}
+
+function buildStructuredDescription(formData: ProductFormData) {
+  const lines: string[] = [];
+
+  if (formData.supplier.trim()) {
+    lines.push(`Supplier: ${formData.supplier.trim()}`);
+  }
+
+  if (formData.wastagePercent.trim()) {
+    lines.push(`Wastage: ${formData.wastagePercent.trim()}%`);
+  }
+
+  lines.push(`Orientation: ${formData.orientationRule}`);
+
+  if (formData.materialNotes.trim()) {
+    lines.push(`Notes: ${formData.materialNotes.trim()}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formDataFromProduct(product: any): ProductFormData {
+  const metadata = parseMaterialMetadata(product.description);
+  const hasStructuredMetadata =
+    metadata.supplier !== undefined ||
+    metadata.wastagePercent !== undefined ||
+    metadata.orientationRule !== undefined ||
+    metadata.notes !== undefined;
+
+  return {
+    name: product.name,
+    design: product.design || "",
+    widthMm: product.widthMm ? String(product.widthMm) : "",
+    heightMm: product.heightMm ? String(product.heightMm) : "",
+    depthMm: product.depthMm ? String(product.depthMm) : "",
+    pricePerUnit: (product.pricePerUnit / 100).toFixed(2),
+    supplier: metadata.supplier || "",
+    wastagePercent:
+      metadata.wastagePercent !== undefined ? String(metadata.wastagePercent) : "10",
+    orientationRule: metadata.orientationRule || "vertical",
+    materialNotes: metadata.notes || (!hasStructuredMetadata ? product.description || "" : ""),
+  };
+}
+
+function resetFormData() {
+  return { ...emptyFormData };
+}
 
 export default function AdminProducts() {
   const [selectedTypeId, setSelectedTypeId] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    design: "",
-    widthMm: "",
-    heightMm: "",
-    depthMm: "",
-    pricePerUnit: "",
-    description: "",
-  });
+  const [formData, setFormData] = useState<ProductFormData>(resetFormData());
 
   const productTypes = trpc.products.listTypes.useQuery();
   const products = trpc.products.listByType.useQuery(
@@ -34,19 +118,16 @@ export default function AdminProducts() {
     { enabled: !!selectedTypeId }
   );
 
+  const resetAndCloseForm = () => {
+    setFormData(resetFormData());
+    setEditingId(null);
+    setShowForm(false);
+  };
+
   const createMutation = trpc.products.create.useMutation({
     onSuccess: () => {
       toast.success("Product created successfully");
-      setFormData({
-        name: "",
-        design: "",
-        widthMm: "",
-        heightMm: "",
-        depthMm: "",
-        pricePerUnit: "",
-        description: "",
-      });
-      setShowForm(false);
+      resetAndCloseForm();
       products.refetch();
     },
     onError: error => {
@@ -57,17 +138,7 @@ export default function AdminProducts() {
   const updateMutation = trpc.products.update.useMutation({
     onSuccess: () => {
       toast.success("Product updated successfully");
-      setFormData({
-        name: "",
-        design: "",
-        widthMm: "",
-        heightMm: "",
-        depthMm: "",
-        pricePerUnit: "",
-        description: "",
-      });
-      setEditingId(null);
-      setShowForm(false);
+      resetAndCloseForm();
       products.refetch();
     },
     onError: error => {
@@ -98,25 +169,52 @@ export default function AdminProducts() {
     return Math.round(dollars * 100);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const parseWastage = (value: string) => {
+    const wastage = Number(value);
+    if (!Number.isFinite(wastage) || wastage < 0 || wastage > 100) {
+      toast.error("Wastage must be a number from 0 to 100");
+      return null;
+    }
+    return wastage;
+  };
+
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!selectedTypeId) {
       toast.error("Please select a product type");
       return;
     }
 
+    if (!formData.name.trim()) {
+      toast.error("Product name is required");
+      return;
+    }
+
     const pricePerUnit = parsePriceToCents(formData.pricePerUnit);
     if (pricePerUnit === null) return;
 
+    const widthMm = parsePositiveInteger(formData.widthMm, "Width");
+    if (widthMm === null) return;
+    const heightMm = parsePositiveInteger(formData.heightMm, "Height");
+    if (heightMm === null) return;
+    const depthMm = parsePositiveInteger(formData.depthMm, "Depth");
+    if (depthMm === null) return;
+
+    const wastage = parseWastage(formData.wastagePercent);
+    if (wastage === null) return;
+
     const data = {
       productTypeId: parseInt(selectedTypeId),
-      name: formData.name,
-      design: formData.design || undefined,
-      widthMm: formData.widthMm ? parseInt(formData.widthMm) : undefined,
-      heightMm: formData.heightMm ? parseInt(formData.heightMm) : undefined,
-      depthMm: formData.depthMm ? parseInt(formData.depthMm) : undefined,
+      name: formData.name.trim(),
+      design: formData.design.trim() || undefined,
+      widthMm,
+      heightMm,
+      depthMm,
       pricePerUnit,
-      description: formData.description || undefined,
+      description: buildStructuredDescription({
+        ...formData,
+        wastagePercent: String(wastage),
+      }),
     };
 
     if (editingId) {
@@ -128,15 +226,7 @@ export default function AdminProducts() {
 
   const handleEdit = (product: any) => {
     setEditingId(product.id);
-    setFormData({
-      name: product.name,
-      design: product.design || "",
-      widthMm: product.widthMm ? String(product.widthMm) : "",
-      heightMm: product.heightMm ? String(product.heightMm) : "",
-      depthMm: product.depthMm ? String(product.depthMm) : "",
-      pricePerUnit: (product.pricePerUnit / 100).toFixed(2),
-      description: product.description || "",
-    });
+    setFormData(formDataFromProduct(product));
     setShowForm(true);
   };
 
@@ -146,12 +236,19 @@ export default function AdminProducts() {
     }
   };
 
+  const handleSelectedTypeChange = (value: string) => {
+    setSelectedTypeId(value);
+    resetAndCloseForm();
+  };
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">Product Management</h1>
+        <h1 className="text-3xl font-bold mb-2">Product Management</h1>
+        <p className="text-sm text-muted-foreground mb-8">
+          Edit product size, cost, supplier, wastage, and orientation rules used by the quote calculator.
+        </p>
 
-        {/* Product Type Selection */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Select Product Type</CardTitle>
@@ -163,7 +260,7 @@ export default function AdminProducts() {
                 Loading product types...
               </div>
             ) : (
-              <Select value={selectedTypeId} onValueChange={setSelectedTypeId}>
+              <Select value={selectedTypeId} onValueChange={handleSelectedTypeChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Choose a product type" />
                 </SelectTrigger>
@@ -181,36 +278,18 @@ export default function AdminProducts() {
 
         {selectedTypeId && (
           <>
-            {/* Add/Edit Product Form */}
             <Card className="mb-6">
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>
-                  {editingId ? "Edit Product" : "Add New Product"}
-                </CardTitle>
+                <CardTitle>{editingId ? "Edit Product" : "Add New Product"}</CardTitle>
                 {showForm && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowForm(false);
-                      setEditingId(null);
-                      setFormData({
-                        name: "",
-                        design: "",
-                        widthMm: "",
-                        heightMm: "",
-                        depthMm: "",
-                        pricePerUnit: "",
-                        description: "",
-                      });
-                    }}
-                  >
+                  <Button variant="outline" onClick={resetAndCloseForm}>
                     Cancel
                   </Button>
                 )}
               </CardHeader>
-              {showForm && (
+              {showForm ? (
                 <CardContent>
-                  <form onSubmit={handleSubmit} className="space-y-4">
+                  <form onSubmit={handleSubmit} className="space-y-5">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="name">Product Name *</Label>
@@ -242,12 +321,9 @@ export default function AdminProducts() {
                           type="number"
                           value={formData.widthMm}
                           onChange={e =>
-                            setFormData({
-                              ...formData,
-                              widthMm: e.target.value,
-                            })
+                            setFormData({ ...formData, widthMm: e.target.value })
                           }
-                          placeholder="e.g., 300"
+                          placeholder="e.g., 600"
                         />
                       </div>
                       <div>
@@ -257,31 +333,25 @@ export default function AdminProducts() {
                           type="number"
                           value={formData.heightMm}
                           onChange={e =>
-                            setFormData({
-                              ...formData,
-                              heightMm: e.target.value,
-                            })
+                            setFormData({ ...formData, heightMm: e.target.value })
                           }
-                          placeholder="e.g., 600"
+                          placeholder="e.g., 2900"
                         />
                       </div>
                       <div>
-                        <Label htmlFor="depthMm">Depth (mm)</Label>
+                        <Label htmlFor="depthMm">Thickness / Depth (mm)</Label>
                         <Input
                           id="depthMm"
                           type="number"
                           value={formData.depthMm}
                           onChange={e =>
-                            setFormData({
-                              ...formData,
-                              depthMm: e.target.value,
-                            })
+                            setFormData({ ...formData, depthMm: e.target.value })
                           }
                           placeholder="e.g., 21"
                         />
                       </div>
                       <div>
-                        <Label htmlFor="pricePerUnit">Price ($) *</Label>
+                        <Label htmlFor="pricePerUnit">Price per panel/sheet ($) *</Label>
                         <Input
                           id="pricePerUnit"
                           type="number"
@@ -297,26 +367,80 @@ export default function AdminProducts() {
                           placeholder="e.g., 75.00"
                         />
                       </div>
+                      <div>
+                        <Label htmlFor="supplier">Supplier</Label>
+                        <Input
+                          id="supplier"
+                          value={formData.supplier}
+                          onChange={e =>
+                            setFormData({ ...formData, supplier: e.target.value })
+                          }
+                          placeholder="e.g., Bunnings, Laminex, Supplier name"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="wastagePercent">Default Wastage (%) *</Label>
+                        <Input
+                          id="wastagePercent"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={formData.wastagePercent}
+                          onChange={e =>
+                            setFormData({
+                              ...formData,
+                              wastagePercent: e.target.value,
+                            })
+                          }
+                          required
+                          placeholder="e.g., 10"
+                        />
+                      </div>
+                      <div>
+                        <Label>Install Orientation Rule *</Label>
+                        <Select
+                          value={formData.orientationRule}
+                          onValueChange={value =>
+                            setFormData({
+                              ...formData,
+                              orientationRule: value as OrientationRule,
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="vertical">Vertical / as supplied</SelectItem>
+                            <SelectItem value="horizontal">Horizontal / rotated</SelectItem>
+                            <SelectItem value="either">Either - choose lower risk</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
+
                     <div>
-                      <Label htmlFor="description">Description</Label>
+                      <Label htmlFor="materialNotes">Material Notes</Label>
                       <Input
-                        id="description"
-                        value={formData.description}
+                        id="materialNotes"
+                        value={formData.materialNotes}
                         onChange={e =>
                           setFormData({
                             ...formData,
-                            description: e.target.value,
+                            materialNotes: e.target.value,
                           })
                         }
-                        placeholder="Optional description"
+                        placeholder="e.g., check batch colour, avoid visible joins, confirm stock before quote"
                       />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Saved into the existing product description field in structured format. No database migration required.
+                      </p>
                     </div>
+
                     <Button
                       type="submit"
-                      disabled={
-                        createMutation.isPending || updateMutation.isPending
-                      }
+                      disabled={createMutation.isPending || updateMutation.isPending}
                     >
                       {createMutation.isPending || updateMutation.isPending ? (
                         <>
@@ -331,17 +455,13 @@ export default function AdminProducts() {
                     </Button>
                   </form>
                 </CardContent>
-              )}
-              {!showForm && (
+              ) : (
                 <CardContent>
-                  <Button onClick={() => setShowForm(true)}>
-                    + Add New Product
-                  </Button>
+                  <Button onClick={() => setShowForm(true)}>+ Add New Product</Button>
                 </CardContent>
               )}
             </Card>
 
-            {/* Products List */}
             <Card>
               <CardHeader>
                 <CardTitle>Products</CardTitle>
@@ -364,48 +484,70 @@ export default function AdminProducts() {
                           <th className="text-left py-2 px-2">Name</th>
                           <th className="text-left py-2 px-2">Design</th>
                           <th className="text-left py-2 px-2">Dimensions</th>
+                          <th className="text-left py-2 px-2">Rules</th>
                           <th className="text-left py-2 px-2">Price</th>
                           <th className="text-right py-2 px-2">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {products.data?.map(product => (
-                          <tr
-                            key={product.id}
-                            className="border-b hover:bg-muted/50"
-                          >
-                            <td className="py-2 px-2">{product.name}</td>
-                            <td className="py-2 px-2">
-                              {product.design || "-"}
-                            </td>
-                            <td className="py-2 px-2 text-xs">
-                              {product.widthMm && product.heightMm
-                                ? `${product.widthMm}×${product.heightMm}${product.depthMm ? `×${product.depthMm}` : ""} mm`
-                                : "-"}
-                            </td>
-                            <td className="py-2 px-2 font-semibold">
-                              ${(product.pricePerUnit / 100).toFixed(2)}
-                            </td>
-                            <td className="py-2 px-2 text-right">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEdit(product)}
-                                className="mr-2"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDelete(product.id)}
-                                className="text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
+                        {products.data?.map(product => {
+                          const metadata = parseMaterialMetadata(product.description);
+                          return (
+                            <tr
+                              key={product.id}
+                              className="border-b hover:bg-muted/50"
+                            >
+                              <td className="py-2 px-2">
+                                <div className="font-medium">{product.name}</div>
+                                {metadata.supplier && (
+                                  <div className="text-xs text-muted-foreground">
+                                    Supplier: {metadata.supplier}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2 px-2">{product.design || "-"}</td>
+                              <td className="py-2 px-2 text-xs">
+                                {product.widthMm && product.heightMm
+                                  ? `${product.widthMm}×${product.heightMm}${product.depthMm ? `×${product.depthMm}` : ""} mm`
+                                  : "-"}
+                              </td>
+                              <td className="py-2 px-2 text-xs">
+                                <div>
+                                  Wastage: {metadata.wastagePercent ?? 10}%
+                                </div>
+                                <div>
+                                  Orientation: {metadata.orientationRule || "vertical"}
+                                </div>
+                                {metadata.notes && (
+                                  <div className="text-muted-foreground max-w-[260px] truncate">
+                                    {metadata.notes}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2 px-2 font-semibold">
+                                {formatMoney(product.pricePerUnit)}
+                              </td>
+                              <td className="py-2 px-2 text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEdit(product)}
+                                  className="mr-2"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(product.id)}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
