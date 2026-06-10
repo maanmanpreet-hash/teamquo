@@ -1,8 +1,12 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { trpc } from "@/lib/trpc";
+
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
+import { ArrowLeft, FileWarning, Loader2, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -12,11 +16,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useLocation } from "wouter";
-import { Loader2, ArrowLeft, Plus, Trash2, Edit2 } from "lucide-react";
-import { toast } from "sonner";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
+import {
+  calculatePanelRequirement,
+  parseMaterialMetadata,
+  type PanelCalculationResult,
+} from "@shared/quoteCalculations";
+
+type ProductTypeSlug =
+  | "cladding"
+  | "acoustic_panel"
+  | "floating_cabinet"
+  | "fireplace"
+  | "mirror"
+  | "marble_sheet";
 
 interface WallWithProducts {
   id: string;
@@ -29,38 +44,65 @@ interface WallWithProducts {
 
 interface WallProduct {
   id: string;
-  productType:
-    | "cladding"
-    | "acoustic_panel"
-    | "floating_cabinet"
-    | "fireplace"
-    | "mirror"
-    | "marble_sheet";
+  productType: ProductTypeSlug;
   productId: string;
   productName: string;
   quantity: number;
   unitPrice: number;
-  // For cladding/acoustic panels
   panelWidthMm?: number;
   panelHeightMm?: number;
-  // For acoustic panels
-  acousticLengthM?: number;
-  acousticWidthM?: number;
-  // For floating cabinet
+  panelCalculation?: PanelCalculationResult;
+  manualReviewRequired?: boolean;
+  reviewReasons?: string[];
+  internalNotes?: string[];
+  customerNotes?: string[];
   cabinetWidthMm?: number;
   cabinetHeightMm?: number;
   cabinetDepthMm?: number;
   cabinetHeightFromFloorMm?: number;
 }
 
-export default function Stage1QuotingWorkspace() {
+const productTypeSlugAliases: Record<ProductTypeSlug, string[]> = {
+  cladding: ["cladding"],
+  acoustic_panel: ["acoustic_panel", "acoustic-panels"],
+  floating_cabinet: [
+    "floating_cabinet",
+    "floating-cabinet",
+    "floating-cabinets",
+  ],
+  fireplace: ["fireplace"],
+  mirror: ["mirror", "mirrors"],
+  marble_sheet: ["marble_sheet", "marble-sheet"],
+};
+
+const productTypeLabels: Record<ProductTypeSlug, string> = {
+  cladding: "Cladding",
+  acoustic_panel: "Acoustic Panel",
+  floating_cabinet: "Floating Cabinet",
+  fireplace: "Fireplace",
+  mirror: "Mirror",
+  marble_sheet: "Marble Sheet",
+};
+
+function formatMoney(cents: number) {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+function formatMetres(mm: number) {
+  return `${(mm / 1000).toFixed(2)}m`;
+}
+
+function panelTypes(productType: ProductTypeSlug) {
+  return ["cladding", "acoustic_panel", "marble_sheet"].includes(productType);
+}
+
+export default function QuoteForm() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [currentTab, setCurrentTab] = useState("client");
   const [resumeJobId, setResumeJobId] = useState<number | null>(null);
   const [isLoadingDraft, setIsLoadingDraft] = useState(false);
 
-  // Client Details
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [clientPhone, setClientPhone] = useState("");
@@ -69,60 +111,30 @@ export default function Stage1QuotingWorkspace() {
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
   const [referenceImageUrl, setReferenceImageUrl] = useState("");
-  const [referenceImagePreview, setReferenceImagePreview] = useState<
-    string | null
-  >(null);
+  const [referenceImagePreview, setReferenceImagePreview] = useState<string | null>(
+    null
+  );
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
-  // Walls with integrated products
-  const [wallsWithProducts, setWallsWithProducts] = useState<
-    WallWithProducts[]
-  >([]);
+  const [wallsWithProducts, setWallsWithProducts] = useState<WallWithProducts[]>(
+    []
+  );
   const [tempWallType, setTempWallType] = useState("regular");
   const [tempWallName, setTempWallName] = useState("");
   const [tempWallWidth, setTempWallWidth] = useState("");
   const [tempWallHeight, setTempWallHeight] = useState("");
 
-  // Product selection for current wall
-  const [tempProductType, setTempProductType] = useState<
-    | "cladding"
-    | "acoustic_panel"
-    | "floating_cabinet"
-    | "fireplace"
-    | "mirror"
-    | "marble_sheet"
-    | null
-  >(null);
+  const [tempProductType, setTempProductType] = useState<ProductTypeSlug | null>(
+    null
+  );
   const [tempProductId, setTempProductId] = useState("");
-
-  // Acoustic panel specific
-  const [tempAcousticLength, setTempAcousticLength] = useState("");
-  const [tempAcousticWidth, setTempAcousticWidth] = useState("");
-
-  // Floating cabinet specific
   const [tempCabinetWidth, setTempCabinetWidth] = useState("");
   const [tempCabinetHeight, setTempCabinetHeight] = useState("");
   const [tempCabinetDepth, setTempCabinetDepth] = useState("");
   const [tempCabinetHeightFromFloor, setTempCabinetHeightFromFloor] =
     useState("");
 
-  // Queries
   const { data: productTypes } = trpc.products.listTypes.useQuery();
-  const productTypeSlugAliases: Record<
-    NonNullable<typeof tempProductType>,
-    string[]
-  > = {
-    cladding: ["cladding"],
-    acoustic_panel: ["acoustic_panel", "acoustic-panels"],
-    floating_cabinet: [
-      "floating_cabinet",
-      "floating-cabinet",
-      "floating-cabinets",
-    ],
-    fireplace: ["fireplace"],
-    mirror: ["mirror", "mirrors"],
-    marble_sheet: ["marble_sheet", "marble-sheet"],
-  };
   const selectedProductTypeId = tempProductType
     ? productTypes?.find(type =>
         productTypeSlugAliases[tempProductType].includes(type.slug)
@@ -151,31 +163,18 @@ export default function Stage1QuotingWorkspace() {
     trpc.jobItems.deleteByJobId.useMutation();
   const deleteWallsByJobIdMutation = trpc.walls.deleteByJobId.useMutation();
 
-  const getSelectedOperatorName = () => {
-    const selectedOperator = localStorage.getItem("selectedOperator");
-    if (!selectedOperator) return undefined;
-    return (
-      operators?.find(operator => operator.id.toString() === selectedOperator)
-        ?.name || selectedOperator
-    );
-  };
-
-  // Load draft on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const jobId = params.get("resumeJobId");
     if (jobId) {
-      setResumeJobId(parseInt(jobId));
+      setResumeJobId(parseInt(jobId, 10));
       setIsLoadingDraft(true);
     }
   }, []);
 
-  // Load draft data
   useEffect(() => {
     if (draftJob && isLoadingDraft) {
-      setClientName(
-        draftJob.clientName === "[Draft]" ? "" : draftJob.clientName
-      );
+      setClientName(draftJob.clientName === "[Draft]" ? "" : draftJob.clientName);
       setClientEmail(draftJob.clientEmail || "");
       setClientPhone(draftJob.clientPhone || "");
       setClientAddress(draftJob.clientAddress || "");
@@ -193,7 +192,6 @@ export default function Stage1QuotingWorkspace() {
     }
   }, [draftJob, isLoadingDraft]);
 
-  // Load walls and their products
   useEffect(() => {
     if (savedWalls && savedWalls.length > 0) {
       const wallsData = savedWalls.map((wall: any) => ({
@@ -202,42 +200,52 @@ export default function Stage1QuotingWorkspace() {
         wallName: wall.wallName || "Wall",
         wallWidthMm: wall.wallWidthMm || 0,
         wallHeightMm: wall.wallHeightMm || 0,
-        products: (wall.products || []).map((item: any) => ({
-          id: item.id.toString(),
-          productType: item.itemType,
-          productId: String(item.productId || item.claddingVariantId || ""),
-          productName: item.productName || item.productDesign || item.itemType,
-          quantity: item.quantityRequired || 1,
-          unitPrice: item.unitPrice || 0,
-          panelWidthMm: item.productWidthMm,
-          panelHeightMm: item.productHeightMm,
-          cabinetWidthMm: item.cabinetWidthMm,
-          cabinetHeightMm: item.cabinetHeightMm,
-          cabinetDepthMm: item.cabinetDepthMm,
-          cabinetHeightFromFloorMm: item.cabinetHeightFromFloorMm,
-        })),
+        products: (wall.products || []).map((item: any) => {
+          const productType = item.itemType as ProductTypeSlug;
+          const panelCalculation = panelTypes(productType)
+            ? calculatePanelRequirement({
+                wallWidthMm: wall.wallWidthMm || 0,
+                wallHeightMm: wall.wallHeightMm || 0,
+                panelWidthMm: item.productWidthMm || 0,
+                panelHeightMm: item.productHeightMm || 0,
+                productName: item.productName || item.productDesign || item.itemType,
+              })
+            : undefined;
+
+          return {
+            id: item.id.toString(),
+            productType,
+            productId: String(item.productId || item.claddingVariantId || ""),
+            productName: item.productName || item.productDesign || item.itemType,
+            quantity: item.quantityRequired || panelCalculation?.finalQuantity || 1,
+            unitPrice: item.unitPrice || 0,
+            panelWidthMm: item.productWidthMm,
+            panelHeightMm: item.productHeightMm,
+            panelCalculation,
+            manualReviewRequired: panelCalculation?.manualReviewRequired,
+            reviewReasons: panelCalculation?.reviewReasons,
+            internalNotes: panelCalculation?.internalNotes,
+            customerNotes: panelCalculation?.customerNotes,
+            cabinetWidthMm: item.cabinetWidthMm,
+            cabinetHeightMm: item.cabinetHeightMm,
+            cabinetDepthMm: item.cabinetDepthMm,
+            cabinetHeightFromFloorMm: item.cabinetHeightFromFloorMm,
+          };
+        }),
       }));
       setWallsWithProducts(wallsData);
     }
   }, [savedWalls]);
 
-  // Calculate panel quantity for cladding/acoustic
-  const calculatePanelQuantity = (
-    wallWidthMm: number,
-    wallHeightMm: number,
-    panelWidthMm: number,
-    panelHeightMm: number
-  ) => {
-    if (panelWidthMm <= 0 || panelHeightMm <= 0) {
-      toast.error("Selected product dimensions are missing or invalid");
-      return null;
-    }
-    const panelsHorizontal = Math.ceil(wallWidthMm / panelWidthMm);
-    const panelsVertical = Math.ceil(wallHeightMm / panelHeightMm);
-    return panelsHorizontal * panelsVertical;
+  const getSelectedOperatorName = () => {
+    const selectedOperator = localStorage.getItem("selectedOperator");
+    if (!selectedOperator) return undefined;
+    return (
+      operators?.find(operator => operator.id.toString() === selectedOperator)
+        ?.name || selectedOperator
+    );
   };
 
-  // Add new wall
   const handleAddWall = () => {
     if (!tempWallType || !tempWallName || !tempWallWidth || !tempWallHeight) {
       toast.error("Please fill all wall details");
@@ -256,16 +264,17 @@ export default function Stage1QuotingWorkspace() {
       return;
     }
 
-    const newWall: WallWithProducts = {
-      id: Date.now().toString(),
-      wallType: tempWallType,
-      wallName: tempWallName,
-      wallWidthMm,
-      wallHeightMm,
-      products: [],
-    };
-
-    setWallsWithProducts([...wallsWithProducts, newWall]);
+    setWallsWithProducts([
+      ...wallsWithProducts,
+      {
+        id: Date.now().toString(),
+        wallType: tempWallType,
+        wallName: tempWallName,
+        wallWidthMm,
+        wallHeightMm,
+        products: [],
+      },
+    ]);
     setTempWallType("regular");
     setTempWallName("");
     setTempWallWidth("");
@@ -273,7 +282,6 @@ export default function Stage1QuotingWorkspace() {
     toast.success("Wall added");
   };
 
-  // Add product to wall
   const handleAddProductToWall = (wallId: string) => {
     if (!tempProductType || !tempProductId) {
       toast.error("Please select a product");
@@ -283,84 +291,56 @@ export default function Stage1QuotingWorkspace() {
     const wall = wallsWithProducts.find(w => w.id === wallId);
     if (!wall) return;
 
-    let quantity = 1;
+    const foundProduct = productsByType?.find(
+      product => product.id.toString() === tempProductId
+    );
+    if (!foundProduct) {
+      toast.error("Product not found");
+      return;
+    }
+
     let newProduct: WallProduct = {
       id: Date.now().toString(),
       productType: tempProductType,
       productId: tempProductId,
-      productName: "Product",
+      productName: foundProduct.name,
       quantity: 1,
-      unitPrice: 0,
+      unitPrice: foundProduct.pricePerUnit,
     };
 
-    if (tempProductType === "cladding") {
-      const foundProduct = productsByType?.find(
-        p => p.id.toString() === tempProductId
-      );
-      if (!foundProduct) {
-        toast.error("Product not found");
-        return;
-      }
-      const calculatedQuantity = calculatePanelQuantity(
-        wall.wallWidthMm,
-        wall.wallHeightMm,
-        foundProduct.widthMm || 0,
-        foundProduct.heightMm || 0
-      );
-      if (!calculatedQuantity) return;
-      quantity = calculatedQuantity;
-      newProduct = {
-        ...newProduct,
-        productName: foundProduct.name,
+    if (panelTypes(tempProductType)) {
+      const panelCalculation = calculatePanelRequirement({
+        wallWidthMm: wall.wallWidthMm,
+        wallHeightMm: wall.wallHeightMm,
         panelWidthMm: foundProduct.widthMm || 0,
         panelHeightMm: foundProduct.heightMm || 0,
-        quantity,
-        unitPrice: foundProduct.pricePerUnit,
-      };
-    } else if (tempProductType === "acoustic_panel") {
-      const foundProduct = productsByType?.find(
-        p => p.id.toString() === tempProductId
-      );
-      if (!foundProduct) {
-        toast.error("Product not found");
+        productName: foundProduct.name,
+        productDescription: foundProduct.description,
+      });
+
+      if (panelCalculation.finalQuantity <= 0) {
+        toast.error("Manual review required: product dimensions are missing");
         return;
       }
-      // Auto-calculate quantity based on wall dimensions and panel size
-      const calculatedQuantity = calculatePanelQuantity(
-        wall.wallWidthMm,
-        wall.wallHeightMm,
-        foundProduct.widthMm || 0,
-        foundProduct.heightMm || 0
-      );
-      if (!calculatedQuantity) return;
-      quantity = calculatedQuantity;
+
       newProduct = {
         ...newProduct,
-        productName: foundProduct.name,
         panelWidthMm: foundProduct.widthMm || 0,
         panelHeightMm: foundProduct.heightMm || 0,
-        quantity,
-        unitPrice: foundProduct.pricePerUnit,
+        quantity: panelCalculation.finalQuantity,
+        panelCalculation,
+        manualReviewRequired: panelCalculation.manualReviewRequired,
+        reviewReasons: panelCalculation.reviewReasons,
+        internalNotes: panelCalculation.internalNotes,
+        customerNotes: panelCalculation.customerNotes,
       };
-    } else if (
-      tempProductType === "fireplace" ||
-      tempProductType === "mirror" ||
-      tempProductType === "marble_sheet"
-    ) {
-      const foundProduct = productsByType?.find(
-        p => p.id.toString() === tempProductId
-      );
-      if (!foundProduct) {
-        toast.error("Product not found");
-        return;
+
+      if (panelCalculation.manualReviewRequired) {
+        toast.warning("Product added, but manual review is required");
       }
-      newProduct = {
-        ...newProduct,
-        productName: foundProduct.name,
-        quantity: 1,
-        unitPrice: foundProduct.pricePerUnit,
-      };
-    } else if (tempProductType === "floating_cabinet") {
+    }
+
+    if (tempProductType === "floating_cabinet") {
       if (
         !tempCabinetWidth ||
         !tempCabinetHeight ||
@@ -370,19 +350,14 @@ export default function Stage1QuotingWorkspace() {
         toast.error("Please enter all cabinet dimensions");
         return;
       }
-      const foundProduct = productsByType?.find(
-        p => p.id.toString() === tempProductId
-      );
-      if (!foundProduct) {
-        toast.error("Product not found");
-        return;
-      }
+
       const cabinetWidthMm = Math.round(Number(tempCabinetWidth));
       const cabinetHeightMm = Math.round(Number(tempCabinetHeight));
       const cabinetDepthMm = Math.round(Number(tempCabinetDepth));
       const cabinetHeightFromFloorMm = Math.round(
         Number(tempCabinetHeightFromFloor)
       );
+
       if (
         !Number.isFinite(cabinetWidthMm) ||
         !Number.isFinite(cabinetHeightMm) ||
@@ -396,53 +371,47 @@ export default function Stage1QuotingWorkspace() {
         toast.error("Cabinet dimensions must be valid positive numbers");
         return;
       }
+
       newProduct = {
         ...newProduct,
-        productName: foundProduct.name,
         cabinetWidthMm,
         cabinetHeightMm,
         cabinetDepthMm,
         cabinetHeightFromFloorMm,
-        quantity: 1,
-        unitPrice: foundProduct.pricePerUnit,
       };
     }
 
-    const updatedWalls = wallsWithProducts.map(w =>
-      w.id === wallId ? { ...w, products: [...w.products, newProduct] } : w
+    setWallsWithProducts(
+      wallsWithProducts.map(w =>
+        w.id === wallId ? { ...w, products: [...w.products, newProduct] } : w
+      )
     );
-    setWallsWithProducts(updatedWalls);
 
-    // Reset product form
     setTempProductType(null);
     setTempProductId("");
-
     setTempCabinetWidth("");
     setTempCabinetHeight("");
     setTempCabinetDepth("");
     setTempCabinetHeightFromFloor("");
-
     toast.success("Product added to wall");
   };
 
-  // Remove product from wall
   const handleRemoveProduct = (wallId: string, productId: string) => {
-    const updatedWalls = wallsWithProducts.map(w =>
-      w.id === wallId
-        ? { ...w, products: w.products.filter(p => p.id !== productId) }
-        : w
+    setWallsWithProducts(
+      wallsWithProducts.map(w =>
+        w.id === wallId
+          ? { ...w, products: w.products.filter(p => p.id !== productId) }
+          : w
+      )
     );
-    setWallsWithProducts(updatedWalls);
     toast.success("Product removed");
   };
 
-  // Delete wall
   const handleDeleteWall = (wallId: string) => {
     setWallsWithProducts(wallsWithProducts.filter(w => w.id !== wallId));
     toast.success("Wall deleted");
   };
 
-  // Handle image upload
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -510,32 +479,13 @@ export default function Stage1QuotingWorkspace() {
           return false;
         }
         if (
-          (product.productType === "cladding" ||
-            product.productType === "acoustic_panel") &&
+          panelTypes(product.productType) &&
           (!product.panelWidthMm ||
             product.panelWidthMm <= 0 ||
             !product.panelHeightMm ||
             product.panelHeightMm <= 0)
         ) {
-          toast.error(
-            `Panel dimensions are invalid for ${product.productName}`
-          );
-          return false;
-        }
-        if (
-          product.productType === "floating_cabinet" &&
-          (!product.cabinetWidthMm ||
-            !product.cabinetHeightMm ||
-            !product.cabinetDepthMm ||
-            product.cabinetWidthMm <= 0 ||
-            product.cabinetHeightMm <= 0 ||
-            product.cabinetDepthMm <= 0 ||
-            product.cabinetHeightFromFloorMm === undefined ||
-            product.cabinetHeightFromFloorMm < 0)
-        ) {
-          toast.error(
-            `Cabinet dimensions are invalid for ${product.productName}`
-          );
+          toast.error(`Panel dimensions are invalid for ${product.productName}`);
           return false;
         }
       }
@@ -544,9 +494,14 @@ export default function Stage1QuotingWorkspace() {
     return true;
   };
 
-  // Save draft
   const handleSaveDraft = async () => {
     if (!validateQuoteBeforeSave()) return;
+
+    const manualReviewCount = wallsWithProducts.reduce(
+      (count, wall) =>
+        count + wall.products.filter(product => product.manualReviewRequired).length,
+      0
+    );
 
     try {
       let jobId = resumeJobId;
@@ -623,26 +578,44 @@ export default function Stage1QuotingWorkspace() {
         }
       }
 
-      toast.success("Quote saved as draft");
+      if (manualReviewCount > 0) {
+        toast.warning(
+          `Quote saved. ${manualReviewCount} item(s) still require manual review.`
+        );
+      } else {
+        toast.success("Quote saved as draft");
+      }
     } catch (error) {
       toast.error("Failed to save draft");
       console.error(error);
     }
   };
 
-  // Calculate total cost
-  const calculateTotal = () => {
-    return wallsWithProducts.reduce((total, wall) => {
-      return (
+  const calculateTotal = () =>
+    wallsWithProducts.reduce(
+      (total, wall) =>
         total +
-        wall.products.reduce((wallTotal, product) => {
-          return wallTotal + product.quantity * product.unitPrice;
-        }, 0)
-      );
-    }, 0);
-  };
+        wall.products.reduce(
+          (wallTotal, product) => wallTotal + product.quantity * product.unitPrice,
+          0
+        ),
+      0
+    );
+
+  const manualReviewItems = useMemo(
+    () =>
+      wallsWithProducts.flatMap(wall =>
+        wall.products
+          .filter(product => product.manualReviewRequired)
+          .map(product => ({ wall, product }))
+      ),
+    [wallsWithProducts]
+  );
 
   const canSaveDraft = clientName.trim().length > 0;
+  const saveInProgress = createJobMutation.isPending || updateJobMutation.isPending;
+
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
@@ -657,29 +630,44 @@ export default function Stage1QuotingWorkspace() {
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <h1 className="text-3xl font-bold text-gray-900">Create Quote</h1>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Create Quote</h1>
+              <p className="text-sm text-gray-600">
+                Measurement-first cladding quote workflow
+              </p>
+            </div>
           </div>
         </div>
 
-        <Tabs
-          value={currentTab}
-          onValueChange={setCurrentTab}
-          className="w-full"
-        >
+        {manualReviewItems.length > 0 && (
+          <Card className="mb-6 border-amber-300 bg-amber-50 p-4">
+            <div className="flex gap-3">
+              <FileWarning className="mt-0.5 h-5 w-5 text-amber-700" />
+              <div>
+                <p className="font-semibold text-amber-900">
+                  Manual review required before relying on this quote
+                </p>
+                <p className="text-sm text-amber-800">
+                  Automatic quantity is a starting point only where joins,
+                  obstructions, or cut layout risk are present.
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3 mb-6">
             <TabsTrigger value="client">Client Details</TabsTrigger>
             <TabsTrigger value="walls">Walls & Products</TabsTrigger>
             <TabsTrigger value="summary">Summary</TabsTrigger>
           </TabsList>
 
-          {/* Client Details Tab */}
           <TabsContent value="client" className="space-y-4">
             <Card className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="clientName" className="text-sm font-medium">
-                    Client Name *
-                  </Label>
+                  <Label htmlFor="clientName">Client Name *</Label>
                   <Input
                     id="clientName"
                     value={clientName}
@@ -689,9 +677,7 @@ export default function Stage1QuotingWorkspace() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="clientEmail" className="text-sm font-medium">
-                    Email
-                  </Label>
+                  <Label htmlFor="clientEmail">Email</Label>
                   <Input
                     id="clientEmail"
                     type="email"
@@ -702,9 +688,7 @@ export default function Stage1QuotingWorkspace() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="clientPhone" className="text-sm font-medium">
-                    Phone
-                  </Label>
+                  <Label htmlFor="clientPhone">Phone</Label>
                   <Input
                     id="clientPhone"
                     value={clientPhone}
@@ -714,12 +698,7 @@ export default function Stage1QuotingWorkspace() {
                   />
                 </div>
                 <div>
-                  <Label
-                    htmlFor="clientAddress"
-                    className="text-sm font-medium"
-                  >
-                    Address
-                  </Label>
+                  <Label htmlFor="clientAddress">Address</Label>
                   <Input
                     id="clientAddress"
                     value={clientAddress}
@@ -729,9 +708,7 @@ export default function Stage1QuotingWorkspace() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="suburb" className="text-sm font-medium">
-                    Suburb
-                  </Label>
+                  <Label htmlFor="suburb">Suburb</Label>
                   <Select value={suburb} onValueChange={setSuburb}>
                     <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
                       <SelectValue placeholder="Select suburb" />
@@ -746,12 +723,7 @@ export default function Stage1QuotingWorkspace() {
                   </Select>
                 </div>
                 <div>
-                  <Label
-                    htmlFor="appointmentDate"
-                    className="text-sm font-medium"
-                  >
-                    Appointment Date
-                  </Label>
+                  <Label htmlFor="appointmentDate">Appointment Date</Label>
                   <Input
                     id="appointmentDate"
                     type="date"
@@ -761,16 +733,8 @@ export default function Stage1QuotingWorkspace() {
                   />
                 </div>
                 <div>
-                  <Label
-                    htmlFor="appointmentTime"
-                    className="text-sm font-medium"
-                  >
-                    Appointment Time
-                  </Label>
-                  <Select
-                    value={appointmentTime}
-                    onValueChange={setAppointmentTime}
-                  >
+                  <Label htmlFor="appointmentTime">Appointment Time</Label>
+                  <Select value={appointmentTime} onValueChange={setAppointmentTime}>
                     <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
                       <SelectValue placeholder="Select time" />
                     </SelectTrigger>
@@ -790,9 +754,8 @@ export default function Stage1QuotingWorkspace() {
                 </div>
               </div>
 
-              {/* Reference Image Upload */}
               <div className="border-t pt-4">
-                <Label className="text-sm font-medium">Reference Image</Label>
+                <Label>Reference Image</Label>
                 <Input
                   type="file"
                   accept="image/*"
@@ -801,7 +764,7 @@ export default function Stage1QuotingWorkspace() {
                   className="mt-1 h-12 text-base border-2 border-gray-200"
                 />
                 {referenceImagePreview && (
-                  <div className="mt-2 relative">
+                  <div className="mt-2 relative inline-block">
                     <img
                       src={referenceImagePreview}
                       alt="Reference"
@@ -820,31 +783,24 @@ export default function Stage1QuotingWorkspace() {
                 )}
               </div>
 
-              {/* Save Draft Button */}
               <Button
                 onClick={handleSaveDraft}
                 variant="outline"
                 className="w-full h-12 text-base"
-                disabled={createJobMutation.isPending || !canSaveDraft}
+                disabled={saveInProgress || !canSaveDraft}
               >
-                {createJobMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                ) : null}
+                {saveInProgress && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                 Save Draft
               </Button>
             </Card>
           </TabsContent>
 
-          {/* Walls & Products Tab */}
           <TabsContent value="walls" className="space-y-4">
-            {/* Add Wall Form */}
             <Card className="p-6 space-y-4 border-2 border-dashed">
               <h2 className="text-lg font-semibold">Add New Wall</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="wallType" className="text-sm font-medium">
-                    Wall Type *
-                  </Label>
+                  <Label htmlFor="wallType">Wall Type *</Label>
                   <Select value={tempWallType} onValueChange={setTempWallType}>
                     <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
                       <SelectValue />
@@ -857,9 +813,7 @@ export default function Stage1QuotingWorkspace() {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="wallName" className="text-sm font-medium">
-                    Wall Name *
-                  </Label>
+                  <Label htmlFor="wallName">Wall Name *</Label>
                   <Input
                     id="wallName"
                     value={tempWallName}
@@ -869,38 +823,26 @@ export default function Stage1QuotingWorkspace() {
                   />
                 </div>
                 <div>
-                  <Label
-                    htmlFor="wallWidth"
-                    className="text-sm font-medium flex items-center gap-2"
-                  >
-                    <span>Width (m) *</span>
-                    <span className="text-lg">↔️</span>
-                  </Label>
+                  <Label htmlFor="wallWidth">Width (m) *</Label>
                   <Input
                     id="wallWidth"
                     type="number"
-                    step="0.1"
+                    step="0.01"
                     value={tempWallWidth}
                     onChange={e => setTempWallWidth(e.target.value)}
-                    placeholder="e.g., 3.5"
+                    placeholder="e.g., 3.80"
                     className="mt-1 h-12 text-base border-2 border-gray-200"
                   />
                 </div>
                 <div>
-                  <Label
-                    htmlFor="wallHeight"
-                    className="text-sm font-medium flex items-center gap-2"
-                  >
-                    <span>Height (m) *</span>
-                    <span className="text-lg">📏</span>
-                  </Label>
+                  <Label htmlFor="wallHeight">Height (m) *</Label>
                   <Input
                     id="wallHeight"
                     type="number"
-                    step="0.1"
+                    step="0.01"
                     value={tempWallHeight}
                     onChange={e => setTempWallHeight(e.target.value)}
-                    placeholder="e.g., 2.4"
+                    placeholder="e.g., 2.60"
                     className="mt-1 h-12 text-base border-2 border-gray-200"
                   />
                 </div>
@@ -911,7 +853,6 @@ export default function Stage1QuotingWorkspace() {
               </Button>
             </Card>
 
-            {/* Walls List with Products */}
             <div className="space-y-4">
               {wallsWithProducts.map(wall => (
                 <Card key={wall.id} className="p-6 space-y-4">
@@ -919,8 +860,7 @@ export default function Stage1QuotingWorkspace() {
                     <div>
                       <h3 className="text-lg font-semibold">{wall.wallName}</h3>
                       <p className="text-sm text-gray-600">
-                        {wall.wallType} • {(wall.wallWidthMm / 1000).toFixed(1)}
-                        m × {(wall.wallHeightMm / 1000).toFixed(1)}m
+                        {wall.wallType} • {formatMetres(wall.wallWidthMm)} x {formatMetres(wall.wallHeightMm)}
                       </p>
                     </div>
                     <Button
@@ -933,18 +873,15 @@ export default function Stage1QuotingWorkspace() {
                     </Button>
                   </div>
 
-                  {/* Add Product to Wall */}
                   <div className="border-t pt-4 space-y-4">
                     <h4 className="font-medium">Add Product to this Wall</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <Label className="text-sm font-medium">
-                          Product Type *
-                        </Label>
+                        <Label>Product Type *</Label>
                         <Select
                           value={tempProductType || ""}
-                          onValueChange={val => {
-                            setTempProductType(val as any);
+                          onValueChange={value => {
+                            setTempProductType(value as ProductTypeSlug);
                             setTempProductId("");
                           }}
                         >
@@ -952,71 +889,61 @@ export default function Stage1QuotingWorkspace() {
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="cladding">Cladding</SelectItem>
-                            <SelectItem value="acoustic_panel">
-                              Acoustic Panel
-                            </SelectItem>
-                            <SelectItem value="floating_cabinet">
-                              Floating Cabinet
-                            </SelectItem>
-                            <SelectItem value="fireplace">Fireplace</SelectItem>
-                            <SelectItem value="mirror">Mirror</SelectItem>
-                            <SelectItem value="marble_sheet">
-                              Marble Sheet
-                            </SelectItem>
+                            {Object.entries(productTypeLabels).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>
+                                {label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
                       {tempProductType && (
                         <div>
-                          <Label className="text-sm font-medium">
-                            Product *
-                          </Label>
-                          <Select
-                            value={tempProductId}
-                            onValueChange={setTempProductId}
-                          >
+                          <Label>Product *</Label>
+                          <Select value={tempProductId} onValueChange={setTempProductId}>
                             <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
                               <SelectValue placeholder="Select product" />
                             </SelectTrigger>
                             <SelectContent>
-                              {productsByType?.map((product: any) => (
-                                <SelectItem
-                                  key={product.id}
-                                  value={product.id.toString()}
-                                >
-                                  {product.name} - $
-                                  {(product.pricePerUnit / 100).toFixed(2)}
-                                </SelectItem>
-                              ))}
+                              {productsByType?.map((product: any) => {
+                                const metadata = parseMaterialMetadata(product.description);
+                                return (
+                                  <SelectItem key={product.id} value={product.id.toString()}>
+                                    {product.name} - {formatMoney(product.pricePerUnit)}
+                                    {metadata.wastagePercent !== undefined
+                                      ? ` - ${metadata.wastagePercent}% wastage`
+                                      : ""}
+                                  </SelectItem>
+                                );
+                              })}
                             </SelectContent>
                           </Select>
                         </div>
                       )}
                     </div>
 
-                    {/* Acoustic Panel Dimensions */}
-                    {/* Acoustic panels auto-calculate - no manual entry needed */}
+                    {tempProductType && panelTypes(tempProductType) && (
+                      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                        Panel quantity uses sheet width, sheet height, orientation rule,
+                        joins, and wastage. Obstructions are still flagged for manual
+                        review instead of being guessed.
+                      </div>
+                    )}
 
-                    {/* Floating Cabinet Dimensions */}
                     {tempProductType === "floating_cabinet" && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-sm font-medium">
-                            Width (mm) *
-                          </Label>
+                          <Label>Width (mm) *</Label>
                           <Input
                             type="number"
                             value={tempCabinetWidth}
                             onChange={e => setTempCabinetWidth(e.target.value)}
-                            placeholder="e.g., 600"
+                            placeholder="e.g., 1800"
                             className="mt-1 h-12 text-base border-2 border-gray-200"
                           />
                         </div>
                         <div>
-                          <Label className="text-sm font-medium">
-                            Height (mm) *
-                          </Label>
+                          <Label>Height (mm) *</Label>
                           <Input
                             type="number"
                             value={tempCabinetHeight}
@@ -1026,9 +953,7 @@ export default function Stage1QuotingWorkspace() {
                           />
                         </div>
                         <div>
-                          <Label className="text-sm font-medium">
-                            Depth (mm) *
-                          </Label>
+                          <Label>Depth (mm) *</Label>
                           <Input
                             type="number"
                             value={tempCabinetDepth}
@@ -1038,15 +963,11 @@ export default function Stage1QuotingWorkspace() {
                           />
                         </div>
                         <div>
-                          <Label className="text-sm font-medium">
-                            Height from Floor (mm) *
-                          </Label>
+                          <Label>Height from Floor (mm) *</Label>
                           <Input
                             type="number"
                             value={tempCabinetHeightFromFloor}
-                            onChange={e =>
-                              setTempCabinetHeightFromFloor(e.target.value)
-                            }
+                            onChange={e => setTempCabinetHeightFromFloor(e.target.value)}
                             placeholder="e.g., 800"
                             className="mt-1 h-12 text-base border-2 border-gray-200"
                           />
@@ -1063,38 +984,48 @@ export default function Stage1QuotingWorkspace() {
                     </Button>
                   </div>
 
-                  {/* Products List */}
                   {wall.products.length > 0 && (
-                    <div className="border-t pt-4 space-y-2">
-                      <h4 className="font-medium">
-                        Products ({wall.products.length})
-                      </h4>
+                    <div className="border-t pt-4 space-y-3">
+                      <h4 className="font-medium">Products ({wall.products.length})</h4>
                       {wall.products.map(product => (
                         <div
                           key={product.id}
-                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                          className="rounded-lg bg-gray-50 p-4 space-y-2"
                         >
-                          <div>
-                            <p className="font-medium">{product.productName}</p>
-                            <p className="text-sm text-gray-600">
-                              Qty: {product.quantity} × $
-                              {(product.unitPrice / 100).toFixed(2)} = $
-                              {(
-                                (product.quantity * product.unitPrice) /
-                                100
-                              ).toFixed(2)}
-                            </p>
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="font-medium">{product.productName}</p>
+                              <p className="text-sm text-gray-600">
+                                Qty: {product.quantity} x {formatMoney(product.unitPrice)} = {formatMoney(product.quantity * product.unitPrice)}
+                              </p>
+                            </div>
+                            <Button
+                              onClick={() => handleRemoveProduct(wall.id, product.id)}
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </div>
-                          <Button
-                            onClick={() =>
-                              handleRemoveProduct(wall.id, product.id)
-                            }
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+
+                          {product.panelCalculation && (
+                            <div className="rounded border bg-white p-3 text-xs text-gray-700 space-y-1">
+                              <p>
+                                <strong>Calculation:</strong>{" "}
+                                {product.panelCalculation.panelsAcross} across x {product.panelCalculation.panelsHigh} high = {product.panelCalculation.baseQuantity} base, +{product.panelCalculation.wastageQuantity} wastage = {product.panelCalculation.finalQuantity} total.
+                              </p>
+                              <p>
+                                <strong>Orientation:</strong>{" "}
+                                {product.panelCalculation.orientationLabel}
+                              </p>
+                              {product.manualReviewRequired && (
+                                <p className="font-semibold text-amber-700">
+                                  Manual review required
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1104,72 +1035,100 @@ export default function Stage1QuotingWorkspace() {
             </div>
           </TabsContent>
 
-          {/* Summary Tab */}
           <TabsContent value="summary" className="space-y-4">
-            <Card className="p-6 space-y-4">
+            <Card className="p-6 space-y-5">
               <h2 className="text-lg font-semibold">Quote Summary</h2>
 
-              {/* Client Info */}
               <div className="border-b pb-4">
                 <h3 className="font-medium mb-2">Client Details</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    Name: <span className="font-medium">{clientName}</span>
-                  </div>
-                  <div>
-                    Phone: <span className="font-medium">{clientPhone}</span>
-                  </div>
-                  <div>
-                    Email: <span className="font-medium">{clientEmail}</span>
-                  </div>
-                  <div>
-                    Address:{" "}
-                    <span className="font-medium">{clientAddress}</span>
-                  </div>
-                  <div>
-                    Suburb: <span className="font-medium">{suburb}</span>
-                  </div>
-                  <div>
-                    Appointment:{" "}
-                    <span className="font-medium">
-                      {appointmentDate} {appointmentTime}
-                    </span>
-                  </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                  <div>Name: <span className="font-medium">{clientName}</span></div>
+                  <div>Phone: <span className="font-medium">{clientPhone}</span></div>
+                  <div>Email: <span className="font-medium">{clientEmail}</span></div>
+                  <div>Address: <span className="font-medium">{clientAddress}</span></div>
+                  <div>Suburb: <span className="font-medium">{suburb}</span></div>
+                  <div>Appointment: <span className="font-medium">{appointmentDate} {appointmentTime}</span></div>
                 </div>
               </div>
 
-              {/* Walls Summary */}
-              {wallsWithProducts.map(wall => (
-                <div key={wall.id} className="border-b pb-4">
-                  <h3 className="font-medium mb-2">
-                    {wall.wallName} ({(wall.wallWidthMm / 1000).toFixed(1)}m ×{" "}
-                    {(wall.wallHeightMm / 1000).toFixed(1)}m)
-                  </h3>
-                  {wall.products.map(product => (
-                    <div key={product.id} className="text-sm ml-4 mb-2">
-                      <p>{product.productName}</p>
-                      <p className="text-gray-600">
-                        Qty: {product.quantity} × $
-                        {(product.unitPrice / 100).toFixed(2)} ={" "}
-                        <span className="font-medium">
-                          $
-                          {(
-                            (product.quantity * product.unitPrice) /
-                            100
-                          ).toFixed(2)}
-                        </span>
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ))}
+              <div className="space-y-4">
+                <h3 className="font-medium">Customer-facing quote lines</h3>
+                {wallsWithProducts.map(wall => (
+                  <div key={wall.id} className="rounded-lg border p-4">
+                    <h4 className="font-semibold">
+                      {wall.wallName} ({formatMetres(wall.wallWidthMm)} x {formatMetres(wall.wallHeightMm)})
+                    </h4>
+                    {wall.products.length === 0 ? (
+                      <p className="text-sm text-gray-500 mt-2">No products added.</p>
+                    ) : (
+                      <div className="mt-3 space-y-3">
+                        {wall.products.map(product => (
+                          <div key={product.id} className="text-sm">
+                            <div className="flex justify-between gap-4">
+                              <div>
+                                <p className="font-medium">Supply and install {product.productName}</p>
+                                {product.customerNotes?.map(note => (
+                                  <p key={note} className="text-gray-600">{note}</p>
+                                ))}
+                              </div>
+                              <div className="text-right whitespace-nowrap">
+                                <p>{product.quantity} x {formatMoney(product.unitPrice)}</p>
+                                <p className="font-semibold">{formatMoney(product.quantity * product.unitPrice)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
 
-              {/* Total */}
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+                <h3 className="font-medium text-amber-900">Internal calculation notes</h3>
+                {manualReviewItems.length === 0 ? (
+                  <p className="mt-2 text-sm text-amber-800">
+                    No manual review flags currently shown.
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-3 text-sm text-amber-900">
+                    {manualReviewItems.map(({ wall, product }) => (
+                      <div key={`${wall.id}-${product.id}`} className="rounded bg-white/70 p-3">
+                        <p className="font-semibold">
+                          {wall.wallName} - {product.productName}: Manual review required
+                        </p>
+                        <ul className="list-disc pl-5 mt-1">
+                          {product.reviewReasons?.map(reason => (
+                            <li key={reason}>{reason}</li>
+                          ))}
+                        </ul>
+                        {product.internalNotes && product.internalNotes.length > 0 && (
+                          <ul className="list-disc pl-5 mt-2 text-amber-800">
+                            {product.internalNotes.map(note => (
+                              <li key={note}>{note}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="text-right">
                 <p className="text-2xl font-bold">
-                  Total: ${(calculateTotal() / 100).toFixed(2)}
+                  Total: {formatMoney(calculateTotal())}
                 </p>
               </div>
+
+              <Button
+                onClick={handleSaveDraft}
+                className="w-full h-12 text-base"
+                disabled={saveInProgress || !canSaveDraft}
+              >
+                {saveInProgress && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                Save Quote
+              </Button>
             </Card>
           </TabsContent>
         </Tabs>
