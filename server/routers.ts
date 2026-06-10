@@ -10,6 +10,7 @@ import {
 import { z } from "zod";
 import * as db from "./db";
 import { generateQuoteHTML } from "./pdf";
+import { formatQuoteNumber } from "../shared/quote";
 
 const supportedItemTypes = [
   "cladding",
@@ -124,8 +125,8 @@ export const appRouter = router({
           clientPhone: z.string().optional(),
           clientAddress: z.string().optional(),
           suburb: z.string().optional(),
-          appointmentDate: z.string().optional(), // YYYY-MM-DD format
-          appointmentTime: z.string().optional(), // HH:MM format
+          appointmentDate: z.string().optional(),
+          appointmentTime: z.string().optional(),
           referenceImageUrl: z.string().optional(),
           operatorName: z.string().optional(),
           totalEstimate: z.number().int().nonnegative().optional(),
@@ -213,6 +214,11 @@ export const appRouter = router({
           throw new Error("Unauthorized");
         }
         const items = await db.getJobItemsByJobId(input.jobId);
+        if (!items.length) {
+          throw new Error(
+            "Cannot generate PDF until the quote has at least one saved product."
+          );
+        }
         const variants = await db.getAllCladdingVariants();
         const products = await db.getAllProducts();
         const variantMap = new Map(variants.map(v => [v.id, v]));
@@ -220,7 +226,12 @@ export const appRouter = router({
           products.map(product => [product.id, product])
         );
         const html = generateQuoteHTML(job, items, variantMap, productMap);
-        return { html, jobId: job.id, clientName: job.clientName };
+        return {
+          html,
+          jobId: job.id,
+          clientName: job.clientName,
+          quoteNumber: formatQuoteNumber(job),
+        };
       }),
     create: protectedProcedure
       .input(
@@ -385,22 +396,15 @@ export const appRouter = router({
       )
       .mutation(async ({ input, ctx }) => {
         const { storagePut } = await import("./storage");
-
-        // Decode base64 to buffer
         const buffer = Buffer.from(input.base64Data, "base64");
-
-        // Validate size (5MB limit)
         if (buffer.length > 5 * 1024 * 1024) {
           throw new Error("Image exceeds 5MB limit");
         }
-
-        // Upload to storage
         const { url } = await storagePut(
           `reference-images/${ctx.user.id}/${Date.now()}-${input.fileName}`,
           buffer,
           input.mimeType
         );
-
         return { url };
       }),
   }),
