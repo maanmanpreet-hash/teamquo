@@ -72,6 +72,9 @@ export function generateQuoteHTML(
     fireplace: "Fireplace",
     mirror: "Mirror",
     marble_sheet: "Marble Sheet",
+    tv_backdrop: "TV Backdrop",
+    side_tower: "Side Tower",
+    shelving: "Shelving",
   };
 
   const formatWallDimensions = (item: JobItem, wall?: WallSummary) => {
@@ -91,13 +94,17 @@ export function generateQuoteHTML(
   };
 
   const formatProductDimensions = (item: JobItem, product?: Product) => {
-    if (item.itemType === "floating_cabinet") {
+    if (["floating_cabinet", "side_tower", "shelving"].includes(item.itemType)) {
       const dims = [
         item.cabinetWidthMm,
         item.cabinetHeightMm,
         item.cabinetDepthMm,
       ].filter(Boolean);
       return dims.length ? `${dims.join("mm x ")}mm` : "Custom size";
+    }
+
+    if (item.itemType === "tv_backdrop") {
+      return "TV size and backdrop allowance recorded for internal review";
     }
 
     if (product?.widthMm && product?.heightMm) {
@@ -112,8 +119,12 @@ export function generateQuoteHTML(
     const metadata = parseMaterialMetadata(product?.description);
     const decodedWallNotes = decodeWallNotes(wall?.notes);
 
-    if (["cladding", "acoustic_panel", "marble_sheet"].includes(item.itemType)) {
+    if (["cladding", "acoustic_panel", "marble_sheet", "tv_backdrop"].includes(item.itemType)) {
       notes.push("Final join layout and cut positions are subject to site measurement confirmation.");
+    }
+
+    if (["floating_cabinet", "side_tower", "shelving"].includes(item.itemType)) {
+      notes.push("Custom dimensions and final finish details are subject to site measurement confirmation.");
     }
 
     if (metadata.orientationRule) {
