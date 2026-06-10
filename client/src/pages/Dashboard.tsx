@@ -12,7 +12,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useLocation } from "wouter";
-import { Loader2, Plus, FileText, Edit, Calendar, MapPin } from "lucide-react";
+import { Loader2, Plus, FileText, Edit, Calendar, MapPin, Trash2 } from "lucide-react";
 import { downloadPDF } from "@/lib/pdf";
 import { toast } from "sonner";
 import { formatMoneyFromCents, formatQuoteNumber } from "@shared/quote";
@@ -41,6 +41,8 @@ export default function Dashboard() {
   const [selectedOperator, setSelectedOperator] = useState<string>("");
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [downloadingJobId, setDownloadingJobId] = useState<number | null>(null);
+  const [deletingJobId, setDeletingJobId] = useState<number | null>(null);
+  const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<JobStatus | "all">("all");
 
@@ -67,6 +69,18 @@ export default function Dashboard() {
     },
   });
 
+  const deleteJobMutation = trpc.jobs.delete.useMutation({
+    onSuccess: () => {
+      setDeletingJobId(null);
+      refetch();
+      toast.success("Quote deleted");
+    },
+    onError: error => {
+      setDeletingJobId(null);
+      toast.error(error.message || "Failed to delete quote");
+    },
+  });
+
   useEffect(() => {
     if (!operators || operators.length === 0) return;
     const saved = localStorage.getItem("selectedOperator");
@@ -75,6 +89,12 @@ export default function Dashboard() {
     setSelectedOperator(operatorId);
     localStorage.setItem("selectedOperator", operatorId);
   }, [operators]);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimer) window.clearTimeout(longPressTimer);
+    };
+  }, [longPressTimer]);
 
   const handleOperatorSelect = (operatorId: string) => {
     setSelectedOperator(operatorId);
@@ -91,6 +111,28 @@ export default function Dashboard() {
 
   const handleDownloadPDF = (jobId: number) => {
     setDownloadingJobId(jobId);
+  };
+
+  const confirmDeleteJob = (jobId: number) => {
+    if (deletingJobId !== null) return;
+    const confirmed = window.confirm("Delete this quote? This cannot be undone.");
+    if (!confirmed) return;
+    setDeletingJobId(jobId);
+    deleteJobMutation.mutate({ id: jobId });
+  };
+
+  const startLongPressDelete = (jobId: number) => {
+    if (longPressTimer) window.clearTimeout(longPressTimer);
+    const timer = window.setTimeout(() => {
+      setLongPressTimer(null);
+      confirmDeleteJob(jobId);
+    }, 900);
+    setLongPressTimer(timer);
+  };
+
+  const cancelLongPressDelete = () => {
+    if (longPressTimer) window.clearTimeout(longPressTimer);
+    setLongPressTimer(null);
   };
 
   useEffect(() => {
@@ -154,7 +196,14 @@ export default function Dashboard() {
   const statuses: JobStatus[] = ["quoted", "booked", "commenced", "completed"];
 
   const renderJobCard = (job: NonNullable<typeof jobs>[number], compact = false) => (
-    <Card key={job.id} className="p-4 bg-white shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+    <Card
+      key={job.id}
+      className="p-4 bg-white shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-blue-500"
+      onPointerDown={() => startLongPressDelete(job.id)}
+      onPointerUp={cancelLongPressDelete}
+      onPointerLeave={cancelLongPressDelete}
+      onPointerCancel={cancelLongPressDelete}
+    >
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -200,6 +249,7 @@ export default function Dashboard() {
           <Button
             size="sm"
             variant="outline"
+            onPointerDown={event => event.stopPropagation()}
             onClick={() => navigate(`/quote?resumeJobId=${job.id}`)}
             className="flex-1 h-9 text-xs"
           >
@@ -209,6 +259,7 @@ export default function Dashboard() {
           <Button
             size="sm"
             variant="outline"
+            onPointerDown={event => event.stopPropagation()}
             onClick={() => handleDownloadPDF(job.id)}
             disabled={downloadingJobId === job.id}
             className="flex-1 h-9 text-xs"
@@ -219,6 +270,20 @@ export default function Dashboard() {
               <FileText className="w-3 h-3 mr-1" />
             )}
             PDF
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onPointerDown={event => event.stopPropagation()}
+            onClick={() => confirmDeleteJob(job.id)}
+            disabled={deletingJobId === job.id}
+            className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+          >
+            {deletingJobId === job.id ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Trash2 className="w-3 h-3" />
+            )}
           </Button>
         </div>
       </div>
