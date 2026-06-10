@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useLocation } from "wouter";
-import { Loader2, Plus, FileText, Edit, Calendar, MapPin, Trash2 } from "lucide-react";
+import { Loader2, Plus, FileText, Edit, Calendar, MapPin, Trash2, Copy } from "lucide-react";
 import { downloadPDF } from "@/lib/pdf";
 import { toast } from "sonner";
 import { formatMoneyFromCents, formatQuoteNumber } from "@shared/quote";
@@ -67,11 +67,13 @@ function getStatusColor(status: string | null | undefined) {
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
   const [selectedOperator, setSelectedOperator] = useState("");
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [downloadingJobId, setDownloadingJobId] = useState<number | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<number | null>(null);
   const [updatingStatusJobId, setUpdatingStatusJobId] = useState<number | null>(null);
+  const [duplicatingJobId, setDuplicatingJobId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<JobStatus | "all">("all");
 
@@ -81,6 +83,10 @@ export default function Dashboard() {
     { jobId: downloadingJobId || 0 },
     { enabled: downloadingJobId !== null, retry: false }
   );
+
+  const createJobMutation = trpc.jobs.create.useMutation();
+  const createWallMutation = trpc.walls.create.useMutation();
+  const createJobItemMutation = trpc.jobItems.create.useMutation();
 
   const deleteJobMutation = trpc.jobs.delete.useMutation({
     onSuccess: () => {
@@ -166,6 +172,69 @@ export default function Dashboard() {
     updateStatusMutation.mutate({ id: jobId, status });
   };
 
+  const duplicateQuote = async (job: NonNullable<typeof jobs>[number]) => {
+    setDuplicatingJobId(job.id);
+
+    try {
+      const sourceWalls = await utils.walls.getByJobId.fetch({ jobId: job.id });
+      const duplicatedJob = await createJobMutation.mutateAsync({
+        clientName: job.clientName === "[Draft]" ? undefined : job.clientName,
+        clientEmail: job.clientEmail || undefined,
+        clientPhone: job.clientPhone || undefined,
+        clientAddress: job.clientAddress || undefined,
+        suburb: job.suburb || undefined,
+        referenceImageUrl: job.referenceImageUrl || undefined,
+        operatorName: job.operatorName || undefined,
+        totalEstimate: job.totalEstimate ?? 0,
+        notes: job.notes || undefined,
+      });
+
+      const newJobId = duplicatedJob?.id;
+      if (!newJobId) throw new Error("Duplicated quote could not be created");
+
+      for (const wall of sourceWalls || []) {
+        const createdWall = await createWallMutation.mutateAsync({
+          jobId: newJobId,
+          wallType: wall.wallType as "regular" | "garage" | "custom",
+          wallName: wall.wallName || undefined,
+          wallWidthMm: wall.wallWidthMm || undefined,
+          wallHeightMm: wall.wallHeightMm || undefined,
+          notes: wall.notes || undefined,
+        });
+
+        const newWallId = createdWall?.id;
+        if (!newWallId) throw new Error("Duplicated wall could not be created");
+
+        for (const item of wall.products || []) {
+          await createJobItemMutation.mutateAsync({
+            jobId: newJobId,
+            wallId: newWallId,
+            itemType: item.itemType,
+            productId: item.productId || undefined,
+            claddingVariantId: item.claddingVariantId || undefined,
+            wallWidthMm: item.wallWidthMm || wall.wallWidthMm || undefined,
+            wallHeightMm: item.wallHeightMm || wall.wallHeightMm || undefined,
+            cabinetWidthMm: item.cabinetWidthMm || undefined,
+            cabinetHeightMm: item.cabinetHeightMm || undefined,
+            cabinetDepthMm: item.cabinetDepthMm || undefined,
+            cabinetHeightFromFloorMm: item.cabinetHeightFromFloorMm ?? undefined,
+            quantityRequired: item.quantityRequired || undefined,
+            unitPrice: item.unitPrice ?? undefined,
+            totalPrice: item.totalPrice ?? undefined,
+            manualPriceOverride: item.manualPriceOverride ?? undefined,
+          });
+        }
+      }
+
+      await refetch();
+      toast.success("Quote duplicated as Draft");
+      window.location.href = `/quote?resumeJobId=${newJobId}`;
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to duplicate quote");
+      setDuplicatingJobId(null);
+    }
+  };
+
   const deleteQuote = (jobId: number) => {
     if (!window.confirm("Delete this quote? This cannot be undone.")) return;
     setDeletingJobId(jobId);
@@ -175,6 +244,7 @@ export default function Dashboard() {
   const jobCard = (job: NonNullable<typeof jobs>[number], compact = false) => {
     const currentStatus = (job.status || "quoted") as JobStatus;
     const isUpdatingStatus = updatingStatusJobId === job.id;
+    const isDuplicating = duplicatingJobId === job.id;
 
     return (
       <Card key={job.id} className="p-4 bg-white shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
@@ -198,7 +268,7 @@ export default function Dashboard() {
             <Select
               value={currentStatus}
               onValueChange={value => updateQuoteStatus(job.id, value as JobStatus)}
-              disabled={isUpdatingStatus}
+              disabled={isUpdatingStatus || isDuplicating}
             >
               <SelectTrigger className="h-9 flex-1 bg-white text-xs">
                 <SelectValue />
@@ -211,10 +281,11 @@ export default function Dashboard() {
             </Select>
             {isUpdatingStatus && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
           </div>
-          <div className="flex gap-2 pt-1">
-            <Button size="sm" variant="outline" onClick={() => { window.location.href = `/quote?resumeJobId=${job.id}`; }} className="flex-1 h-9 text-xs"><Edit className="w-3 h-3 mr-1" />{job.clientName === "[Draft]" ? "Resume" : "Edit"}</Button>
-            <Button size="sm" variant="outline" onClick={() => setDownloadingJobId(job.id)} disabled={downloadingJobId === job.id} className="flex-1 h-9 text-xs">{downloadingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Quote PDF</Button>
-            <Button size="sm" variant="outline" onClick={() => deleteQuote(job.id)} disabled={deletingJobId === job.id} className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50">{deletingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}</Button>
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <Button size="sm" variant="outline" onClick={() => { window.location.href = `/quote?resumeJobId=${job.id}`; }} className="h-9 text-xs"><Edit className="w-3 h-3 mr-1" />{job.clientName === "[Draft]" ? "Resume" : "Edit"}</Button>
+            <Button size="sm" variant="outline" onClick={() => duplicateQuote(job)} disabled={isDuplicating} className="h-9 text-xs">{isDuplicating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Copy className="w-3 h-3 mr-1" />}Duplicate</Button>
+            <Button size="sm" variant="outline" onClick={() => setDownloadingJobId(job.id)} disabled={downloadingJobId === job.id || isDuplicating} className="h-9 text-xs">{downloadingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Quote PDF</Button>
+            <Button size="sm" variant="outline" onClick={() => deleteQuote(job.id)} disabled={deletingJobId === job.id || isDuplicating} className="h-9 text-xs text-red-600 hover:text-red-700 hover:bg-red-50">{deletingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Trash2 className="w-3 h-3 mr-1" />}Delete</Button>
           </div>
         </div>
       </Card>
