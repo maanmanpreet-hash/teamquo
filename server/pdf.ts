@@ -62,16 +62,7 @@ export function generateQuoteHTML(
     marble_sheet: "Marble Sheet",
   };
 
-  const formatDimensions = (item: JobItem, product?: Product, wall?: WallSummary) => {
-    if (item.itemType === "floating_cabinet") {
-      const dims = [
-        item.cabinetWidthMm,
-        item.cabinetHeightMm,
-        item.cabinetDepthMm,
-      ].filter(Boolean);
-      return dims.length ? `${dims.join("mm x ")}mm` : "Custom size";
-    }
-
+  const formatWallDimensions = (item: JobItem, wall?: WallSummary) => {
     if (wall?.wallWidthMm && wall?.wallHeightMm) {
       return `${(wall.wallWidthMm / 1000).toFixed(2)}m W x ${(
         wall.wallHeightMm / 1000
@@ -84,11 +75,24 @@ export function generateQuoteHTML(
       ).toFixed(2)}m H`;
     }
 
-    if (product?.widthMm && product?.heightMm) {
-      return `${product.widthMm}mm x ${product.heightMm}mm`;
+    return "As measured on site";
+  };
+
+  const formatProductDimensions = (item: JobItem, product?: Product) => {
+    if (item.itemType === "floating_cabinet") {
+      const dims = [
+        item.cabinetWidthMm,
+        item.cabinetHeightMm,
+        item.cabinetDepthMm,
+      ].filter(Boolean);
+      return dims.length ? `${dims.join("mm x ")}mm` : "Custom size";
     }
 
-    return "As measured on site";
+    if (product?.widthMm && product?.heightMm) {
+      return `${product.widthMm}mm x ${product.heightMm}mm${product.depthMm ? ` x ${product.depthMm}mm` : ""}`;
+    }
+
+    return "Selected product";
   };
 
   const itemCustomerNotes = (item: JobItem, product?: Product, wall?: WallSummary) => {
@@ -97,7 +101,6 @@ export function generateQuoteHTML(
     const decodedWallNotes = decodeWallNotes(wall?.notes);
 
     if (["cladding", "acoustic_panel", "marble_sheet"].includes(item.itemType)) {
-      notes.push("Material quantity is based on selected product size and supplied wall dimensions.");
       notes.push("Final join layout and cut positions are subject to site measurement confirmation.");
     }
 
@@ -118,42 +121,76 @@ export function generateQuoteHTML(
     return Array.from(new Set(notes));
   };
 
-  const rows = jobItems
-    .map((item, index) => {
-      const product = item.productId ? products.get(item.productId) : undefined;
-      const variant = item.claddingVariantId
-        ? claddingVariants.get(item.claddingVariantId)
-        : undefined;
-      const wall = item.wallId ? walls.get(item.wallId) : undefined;
-      const productName =
-        product?.name || variant?.name || itemTypeLabels[item.itemType];
-      const productDesign = product?.design || variant?.design;
-      const quantity = item.quantityRequired || 1;
-      const unitPrice = item.unitPrice || 0;
-      const lineTotal = item.totalPrice ?? quantity * unitPrice;
-      const description = [
-        itemTypeLabels[item.itemType],
-        productName,
-        productDesign,
-      ]
-        .filter(Boolean)
-        .join(" - ");
-      const notes = itemCustomerNotes(item, product, wall);
+  const groupedItems = jobItems.reduce((groups, item) => {
+    const wallKey = item.wallId || 0;
+    const current = groups.get(wallKey) || [];
+    current.push(item);
+    groups.set(wallKey, current);
+    return groups;
+  }, new Map<number, JobItem[]>());
+
+  const wallSections = Array.from(groupedItems.entries())
+    .map(([wallId, items], wallIndex) => {
+      const wall = wallId ? walls.get(wallId) : undefined;
+      const wallName = wall?.wallName || `Wall ${wallIndex + 1}`;
+      const wallDimensions = formatWallDimensions(items[0], wall);
+      const decodedWallNotes = decodeWallNotes(wall?.notes);
+      const obstructionLine =
+        decodedWallNotes.obstructionStatus === "none"
+          ? "No known obstructions recorded at quoting stage."
+          : decodedWallNotes.obstructionStatus === "present"
+            ? `Recorded wall features: ${decodedWallNotes.obstructionNotes || "Obstructions present"}.`
+            : "Openings/obstructions to be confirmed before commencement.";
+
+      const productRows = items
+        .map((item, index) => {
+          const product = item.productId ? products.get(item.productId) : undefined;
+          const variant = item.claddingVariantId
+            ? claddingVariants.get(item.claddingVariantId)
+            : undefined;
+          const productName =
+            product?.name || variant?.name || itemTypeLabels[item.itemType];
+          const productDesign = product?.design || variant?.design;
+          const quantity = item.quantityRequired || 1;
+          const description = [
+            itemTypeLabels[item.itemType],
+            productName,
+            productDesign,
+          ]
+            .filter(Boolean)
+            .join(" - ");
+          const notes = itemCustomerNotes(item, product, wall);
+
+          return `
+            <tr>
+              <td>${index + 1}</td>
+              <td>
+                ${escapeHtml(description)}
+                ${notes.length ? `<ul class="line-notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join("")}</ul>` : ""}
+              </td>
+              <td>${escapeHtml(formatProductDimensions(item, product))}</td>
+              <td>${quantity}x</td>
+            </tr>
+          `;
+        })
+        .join("");
 
       return `
-        <tr>
-          <td>${index + 1}</td>
-          <td>
-            <strong>Supply and install</strong><br />
-            ${escapeHtml(description)}
-            ${wall?.wallName ? `<div class="line-note"><strong>Location:</strong> ${escapeHtml(wall.wallName)}</div>` : ""}
-            ${notes.length ? `<ul class="line-notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join("")}</ul>` : ""}
-          </td>
-          <td>${escapeHtml(formatDimensions(item, product, wall))}</td>
-          <td>${quantity}x</td>
-          <td>${formatMoneyFromCents(unitPrice)}</td>
-          <td>${formatMoneyFromCents(lineTotal)}</td>
-        </tr>
+        <section class="wall-section">
+          <div class="wall-heading">
+            <div>
+              <h2>${escapeHtml(wallName)}</h2>
+              <p><strong>Wall dimensions:</strong> ${escapeHtml(wallDimensions)}</p>
+              <p>${escapeHtml(obstructionLine)}</p>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr><th>#</th><th>Products included</th><th>Product size</th><th>Qty</th></tr>
+            </thead>
+            <tbody>${productRows}</tbody>
+          </table>
+        </section>
       `;
     })
     .join("");
@@ -190,14 +227,16 @@ export function generateQuoteHTML(
     h1 { font-size: 22px; margin: 0 0 8px; color: #14213d; }
     h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: #475569; margin: 0 0 10px; }
     p { margin: 4px 0; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .wall-section { margin-top: 20px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+    .wall-heading { background: #f8fafc; padding: 14px 16px; border-bottom: 1px solid #e2e8f0; }
+    .wall-heading h2 { color: #14213d; margin-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; }
     th { background: #14213d; color: #fff; text-align: left; padding: 10px; font-size: 12px; }
     td { border-bottom: 1px solid #e2e8f0; padding: 10px; font-size: 13px; vertical-align: top; }
+    tr:last-child td { border-bottom: 0; }
     th:nth-child(1), td:nth-child(1) { width: 38px; text-align: center; }
-    th:nth-child(3), td:nth-child(3) { width: 132px; }
-    th:nth-child(4), td:nth-child(4) { width: 62px; text-align: center; }
-    th:nth-child(5), td:nth-child(5), th:nth-child(6), td:nth-child(6) { width: 86px; text-align: right; }
-    .line-note { margin-top: 6px; color: #475569; font-size: 12px; }
+    th:nth-child(3), td:nth-child(3) { width: 170px; }
+    th:nth-child(4), td:nth-child(4) { width: 70px; text-align: center; }
     .line-notes { margin: 6px 0 0; padding-left: 18px; color: #475569; font-size: 11px; line-height: 1.4; }
     .total { display: flex; justify-content: flex-end; margin-top: 22px; }
     .total-card { min-width: 280px; border: 2px solid #14213d; border-radius: 10px; padding: 16px; text-align: right; }
@@ -240,24 +279,19 @@ export function generateQuoteHTML(
       </div>
       <div class="panel">
         <h2>Quote Summary</h2>
-        <p>Supply and install quote for selected SKYWALL works.</p>
+        <p>Supply and install quote for the listed walls and selected SKYWALL works.</p>
         <p>Final measurements, join layout, and site conditions to be confirmed before commencement.</p>
       </div>
     </section>
 
     <section>
-      <h1>Supply and Install</h1>
-      <table>
-        <thead>
-          <tr><th>#</th><th>Description</th><th>Dimensions</th><th>Qty</th><th>Unit</th><th>Amount</th></tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
+      <h1>Supply and Install Scope</h1>
+      ${wallSections}
     </section>
 
     <section class="total">
       <div class="total-card">
-        <div class="total-label">Total Estimate</div>
+        <div class="total-label">Supply and Install Total Estimate</div>
         <div class="total-amount">${formatMoneyFromCents(job.totalEstimate)}</div>
       </div>
     </section>
