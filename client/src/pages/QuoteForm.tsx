@@ -22,6 +22,7 @@ import { trpc } from "@/lib/trpc";
 import {
   calculatePanelRequirement,
   parseMaterialMetadata,
+  type ObstructionStatus,
   type PanelCalculationResult,
 } from "@shared/quoteCalculations";
 
@@ -39,6 +40,8 @@ interface WallWithProducts {
   wallName: string;
   wallWidthMm: number;
   wallHeightMm: number;
+  obstructionStatus: ObstructionStatus;
+  obstructionNotes: string;
   products: WallProduct[];
 }
 
@@ -96,6 +99,36 @@ function panelTypes(productType: ProductTypeSlug) {
   return ["cladding", "acoustic_panel", "marble_sheet"].includes(productType);
 }
 
+function encodeWallNotes(status: ObstructionStatus, notes: string) {
+  return JSON.stringify({ obstructionStatus: status, obstructionNotes: notes });
+}
+
+function decodeWallNotes(notes: unknown): {
+  obstructionStatus: ObstructionStatus;
+  obstructionNotes: string;
+} {
+  if (typeof notes !== "string" || !notes.trim()) {
+    return { obstructionStatus: "unknown", obstructionNotes: "" };
+  }
+
+  try {
+    const parsed = JSON.parse(notes);
+    if (
+      parsed &&
+      ["unknown", "none", "present"].includes(parsed.obstructionStatus)
+    ) {
+      return {
+        obstructionStatus: parsed.obstructionStatus,
+        obstructionNotes: String(parsed.obstructionNotes || ""),
+      };
+    }
+  } catch {
+    return { obstructionStatus: "unknown", obstructionNotes: notes };
+  }
+
+  return { obstructionStatus: "unknown", obstructionNotes: notes };
+}
+
 export default function QuoteForm() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
@@ -123,6 +156,9 @@ export default function QuoteForm() {
   const [tempWallName, setTempWallName] = useState("");
   const [tempWallWidth, setTempWallWidth] = useState("");
   const [tempWallHeight, setTempWallHeight] = useState("");
+  const [tempObstructionStatus, setTempObstructionStatus] =
+    useState<ObstructionStatus>("unknown");
+  const [tempObstructionNotes, setTempObstructionNotes] = useState("");
 
   const [tempProductType, setTempProductType] = useState<ProductTypeSlug | null>(
     null
@@ -194,45 +230,53 @@ export default function QuoteForm() {
 
   useEffect(() => {
     if (savedWalls && savedWalls.length > 0) {
-      const wallsData = savedWalls.map((wall: any) => ({
-        id: wall.id.toString(),
-        wallType: wall.wallType,
-        wallName: wall.wallName || "Wall",
-        wallWidthMm: wall.wallWidthMm || 0,
-        wallHeightMm: wall.wallHeightMm || 0,
-        products: (wall.products || []).map((item: any) => {
-          const productType = item.itemType as ProductTypeSlug;
-          const panelCalculation = panelTypes(productType)
-            ? calculatePanelRequirement({
-                wallWidthMm: wall.wallWidthMm || 0,
-                wallHeightMm: wall.wallHeightMm || 0,
-                panelWidthMm: item.productWidthMm || 0,
-                panelHeightMm: item.productHeightMm || 0,
-                productName: item.productName || item.productDesign || item.itemType,
-              })
-            : undefined;
+      const wallsData = savedWalls.map((wall: any) => {
+        const decodedNotes = decodeWallNotes(wall.notes);
 
-          return {
-            id: item.id.toString(),
-            productType,
-            productId: String(item.productId || item.claddingVariantId || ""),
-            productName: item.productName || item.productDesign || item.itemType,
-            quantity: item.quantityRequired || panelCalculation?.finalQuantity || 1,
-            unitPrice: item.unitPrice || 0,
-            panelWidthMm: item.productWidthMm,
-            panelHeightMm: item.productHeightMm,
-            panelCalculation,
-            manualReviewRequired: panelCalculation?.manualReviewRequired,
-            reviewReasons: panelCalculation?.reviewReasons,
-            internalNotes: panelCalculation?.internalNotes,
-            customerNotes: panelCalculation?.customerNotes,
-            cabinetWidthMm: item.cabinetWidthMm,
-            cabinetHeightMm: item.cabinetHeightMm,
-            cabinetDepthMm: item.cabinetDepthMm,
-            cabinetHeightFromFloorMm: item.cabinetHeightFromFloorMm,
-          };
-        }),
-      }));
+        return {
+          id: wall.id.toString(),
+          wallType: wall.wallType,
+          wallName: wall.wallName || "Wall",
+          wallWidthMm: wall.wallWidthMm || 0,
+          wallHeightMm: wall.wallHeightMm || 0,
+          obstructionStatus: decodedNotes.obstructionStatus,
+          obstructionNotes: decodedNotes.obstructionNotes,
+          products: (wall.products || []).map((item: any) => {
+            const productType = item.itemType as ProductTypeSlug;
+            const panelCalculation = panelTypes(productType)
+              ? calculatePanelRequirement({
+                  wallWidthMm: wall.wallWidthMm || 0,
+                  wallHeightMm: wall.wallHeightMm || 0,
+                  panelWidthMm: item.productWidthMm || 0,
+                  panelHeightMm: item.productHeightMm || 0,
+                  productName: item.productName || item.productDesign || item.itemType,
+                  obstructionStatus: decodedNotes.obstructionStatus,
+                  obstructionNotes: decodedNotes.obstructionNotes,
+                })
+              : undefined;
+
+            return {
+              id: item.id.toString(),
+              productType,
+              productId: String(item.productId || item.claddingVariantId || ""),
+              productName: item.productName || item.productDesign || item.itemType,
+              quantity: item.quantityRequired || panelCalculation?.finalQuantity || 1,
+              unitPrice: item.unitPrice || 0,
+              panelWidthMm: item.productWidthMm,
+              panelHeightMm: item.productHeightMm,
+              panelCalculation,
+              manualReviewRequired: panelCalculation?.manualReviewRequired,
+              reviewReasons: panelCalculation?.reviewReasons,
+              internalNotes: panelCalculation?.internalNotes,
+              customerNotes: panelCalculation?.customerNotes,
+              cabinetWidthMm: item.cabinetWidthMm,
+              cabinetHeightMm: item.cabinetHeightMm,
+              cabinetDepthMm: item.cabinetDepthMm,
+              cabinetHeightFromFloorMm: item.cabinetHeightFromFloorMm,
+            };
+          }),
+        };
+      });
       setWallsWithProducts(wallsData);
     }
   }, [savedWalls]);
@@ -249,6 +293,11 @@ export default function QuoteForm() {
   const handleAddWall = () => {
     if (!tempWallType || !tempWallName || !tempWallWidth || !tempWallHeight) {
       toast.error("Please fill all wall details");
+      return;
+    }
+
+    if (tempObstructionStatus === "present" && !tempObstructionNotes.trim()) {
+      toast.error("Enter obstruction notes or select Unknown/No known obstructions");
       return;
     }
 
@@ -272,6 +321,8 @@ export default function QuoteForm() {
         wallName: tempWallName,
         wallWidthMm,
         wallHeightMm,
+        obstructionStatus: tempObstructionStatus,
+        obstructionNotes: tempObstructionNotes.trim(),
         products: [],
       },
     ]);
@@ -279,6 +330,8 @@ export default function QuoteForm() {
     setTempWallName("");
     setTempWallWidth("");
     setTempWallHeight("");
+    setTempObstructionStatus("unknown");
+    setTempObstructionNotes("");
     toast.success("Wall added");
   };
 
@@ -316,6 +369,8 @@ export default function QuoteForm() {
         panelHeightMm: foundProduct.heightMm || 0,
         productName: foundProduct.name,
         productDescription: foundProduct.description,
+        obstructionStatus: wall.obstructionStatus,
+        obstructionNotes: wall.obstructionNotes,
       });
 
       if (panelCalculation.finalQuantity <= 0) {
@@ -553,6 +608,7 @@ export default function QuoteForm() {
           wallName: wall.wallName,
           wallWidthMm: wall.wallWidthMm,
           wallHeightMm: wall.wallHeightMm,
+          notes: encodeWallNotes(wall.obstructionStatus, wall.obstructionNotes),
         });
 
         const wallId = (createdWall as any)?.id;
@@ -846,6 +902,34 @@ export default function QuoteForm() {
                     className="mt-1 h-12 text-base border-2 border-gray-200"
                   />
                 </div>
+                <div>
+                  <Label>Openings / Obstructions *</Label>
+                  <Select
+                    value={tempObstructionStatus}
+                    onValueChange={value =>
+                      setTempObstructionStatus(value as ObstructionStatus)
+                    }
+                  >
+                    <SelectTrigger className="mt-1 h-12 text-base border-2 border-gray-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unknown">Unknown / not checked</SelectItem>
+                      <SelectItem value="none">No known obstructions</SelectItem>
+                      <SelectItem value="present">Obstructions present</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="obstructionNotes">Obstruction / cut notes</Label>
+                  <Input
+                    id="obstructionNotes"
+                    value={tempObstructionNotes}
+                    onChange={e => setTempObstructionNotes(e.target.value)}
+                    placeholder="e.g., TV recess, 2 power points, fireplace return"
+                    className="mt-1 h-12 text-base border-2 border-gray-200"
+                  />
+                </div>
               </div>
               <Button onClick={handleAddWall} className="w-full h-12 text-base">
                 <Plus className="w-4 h-4 mr-2" />
@@ -861,6 +945,9 @@ export default function QuoteForm() {
                       <h3 className="text-lg font-semibold">{wall.wallName}</h3>
                       <p className="text-sm text-gray-600">
                         {wall.wallType} • {formatMetres(wall.wallWidthMm)} x {formatMetres(wall.wallHeightMm)}
+                      </p>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Obstructions: {wall.obstructionStatus === "none" ? "No known obstructions" : wall.obstructionStatus === "present" ? wall.obstructionNotes || "Present" : "Unknown / not checked"}
                       </p>
                     </div>
                     <Button
@@ -925,8 +1012,8 @@ export default function QuoteForm() {
                     {tempProductType && panelTypes(tempProductType) && (
                       <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
                         Panel quantity uses sheet width, sheet height, orientation rule,
-                        joins, and wastage. Obstructions are still flagged for manual
-                        review instead of being guessed.
+                        joins, obstruction status, and wastage. Unknown or present
+                        obstructions are flagged instead of guessed.
                       </div>
                     )}
 
