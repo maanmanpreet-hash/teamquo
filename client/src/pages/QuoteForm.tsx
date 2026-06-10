@@ -77,9 +77,9 @@ interface WallProduct {
 }
 
 const workflowSteps: Array<{ id: WorkflowStep; title: string; icon: typeof ClipboardList }> = [
-  { id: "client", title: "Client details", icon: ClipboardList },
-  { id: "walls", title: "Walls & products", icon: Ruler },
-  { id: "review", title: "Review & save", icon: Save },
+  { id: "client", title: "Client", icon: ClipboardList },
+  { id: "walls", title: "Walls", icon: Ruler },
+  { id: "review", title: "Review", icon: Save },
 ];
 
 const productTypeSlugAliases: Record<ProductTypeSlug, string[]> = {
@@ -121,7 +121,7 @@ function decodeWallNotes(notes: unknown): {
   obstructionNotes: string;
 } {
   if (typeof notes !== "string" || !notes.trim()) {
-    return { obstructionStatus: "unknown", obstructionNotes: "" };
+    return { obstructionStatus: "none", obstructionNotes: "" };
   }
 
   try {
@@ -167,13 +167,10 @@ export default function QuoteForm() {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const [wallsWithProducts, setWallsWithProducts] = useState<WallWithProducts[]>([]);
-  const [tempWallType, setTempWallType] = useState<"regular" | "garage" | "custom">("regular");
+  const [tempWallType, setTempWallType] = useState<"regular" | "garage" | "custom">("custom");
   const [tempWallName, setTempWallName] = useState("");
   const [tempWallWidth, setTempWallWidth] = useState("");
   const [tempWallHeight, setTempWallHeight] = useState("");
-  const [tempObstructionStatus, setTempObstructionStatus] =
-    useState<ObstructionStatus>("unknown");
-  const [tempObstructionNotes, setTempObstructionNotes] = useState("");
 
   const [tempProductType, setTempProductType] = useState<ProductTypeSlug | null>(null);
   const [tempProductId, setTempProductId] = useState("");
@@ -305,9 +302,7 @@ export default function QuoteForm() {
   const manualReviewItems = useMemo(
     () =>
       wallsWithProducts.flatMap(wall =>
-        wall.products
-          .filter(product => product.manualReviewRequired)
-          .map(product => ({ wall, product }))
+        wall.products.filter(product => product.manualReviewRequired).map(product => ({ wall, product }))
       ),
     [wallsWithProducts]
   );
@@ -319,23 +314,14 @@ export default function QuoteForm() {
   const workflowReady = hasClientDetails && hasWalls && hasProducts && wallsWithoutProducts.length === 0;
   const saveInProgress = createJobMutation.isPending || updateJobMutation.isPending;
 
-  const workflowIssues = [
-    !hasClientDetails ? "Client name is required before the quote can move forward." : null,
-    !hasWalls ? "At least one wall with dimensions is required." : null,
-    hasWalls && !hasProducts ? "At least one product must be added under a wall." : null,
-    wallsWithoutProducts.length > 0
-      ? `${wallsWithoutProducts.length} wall(s) still have no products attached.`
-      : null,
-  ].filter(Boolean) as string[];
-
   const goToStep = (step: WorkflowStep) => {
     if (step === "walls" && !hasClientDetails) {
-      toast.error("Enter the client name before adding walls/products");
+      toast.error("Enter the client name before adding walls");
       setCurrentStep("client");
       return;
     }
     if (step === "review" && !workflowReady) {
-      toast.error("Complete client details, walls, and products before review/save");
+      toast.error("Add client, wall dimensions, and products before review");
       setCurrentStep(!hasClientDetails ? "client" : "walls");
       return;
     }
@@ -353,7 +339,6 @@ export default function QuoteForm() {
       toast.error("Image must be 5MB or smaller");
       return;
     }
-
     setIsUploadingImage(true);
     try {
       const base64Data = await fileToBase64(file);
@@ -373,12 +358,8 @@ export default function QuoteForm() {
   };
 
   const handleAddWall = () => {
-    if (!tempWallType || !tempWallName || !tempWallWidth || !tempWallHeight) {
-      toast.error("Please fill all wall details");
-      return;
-    }
-    if (tempObstructionStatus === "present" && !tempObstructionNotes.trim()) {
-      toast.error("Enter obstruction notes or select Unknown/No known obstructions");
+    if (!tempWallName || !tempWallWidth || !tempWallHeight) {
+      toast.error("Wall name, width, and height are required");
       return;
     }
 
@@ -397,17 +378,15 @@ export default function QuoteForm() {
         wallName: tempWallName,
         wallWidthMm,
         wallHeightMm,
-        obstructionStatus: tempObstructionStatus,
-        obstructionNotes: tempObstructionNotes.trim(),
+        obstructionStatus: "none",
+        obstructionNotes: "",
         products: [],
       },
     ]);
-    setTempWallType("regular");
+    setTempWallType("custom");
     setTempWallName("");
     setTempWallWidth("");
     setTempWallHeight("");
-    setTempObstructionStatus("unknown");
-    setTempObstructionNotes("");
     toast.success("Wall added");
   };
 
@@ -482,9 +461,7 @@ export default function QuoteForm() {
 
     setWallsWithProducts(
       wallsWithProducts.map(currentWall =>
-        currentWall.id === wallId
-          ? { ...currentWall, products: [...currentWall.products, newProduct] }
-          : currentWall
+        currentWall.id === wallId ? { ...currentWall, products: [...currentWall.products, newProduct] } : currentWall
       )
     );
     setTempProductType(null);
@@ -493,7 +470,7 @@ export default function QuoteForm() {
     setTempCabinetHeight("");
     setTempCabinetDepth("");
     setTempCabinetHeightFromFloor("");
-    toast.success("Product added to wall");
+    toast.success("Product added");
   };
 
   const handleDeleteWall = (wallId: string) => {
@@ -503,9 +480,7 @@ export default function QuoteForm() {
   const handleRemoveProduct = (wallId: string, productId: string) => {
     setWallsWithProducts(
       wallsWithProducts.map(wall =>
-        wall.id === wallId
-          ? { ...wall, products: wall.products.filter(product => product.id !== productId) }
-          : wall
+        wall.id === wallId ? { ...wall, products: wall.products.filter(product => product.id !== productId) } : wall
       )
     );
   };
@@ -517,8 +492,8 @@ export default function QuoteForm() {
       return;
     }
     if (requireComplete && !workflowReady) {
-      toast.error("Complete all workflow items before saving the quote");
-      setCurrentStep(!hasClientDetails ? "client" : "walls");
+      toast.error("Complete wall dimensions and products before saving the quote");
+      setCurrentStep("walls");
       return;
     }
 
@@ -586,42 +561,41 @@ export default function QuoteForm() {
   if (!user) return null;
 
   return (
-    <div className="p-4 md:p-8">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button onClick={() => navigate("/jobs")} variant="ghost" size="icon" className="h-10 w-10">
+    <div className="min-h-screen bg-gray-50 p-3 md:p-6">
+      <div className="mx-auto max-w-5xl space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Button onClick={() => navigate("/jobs")} variant="ghost" size="icon" className="h-9 w-9">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Create Quote</h1>
-              <p className="text-sm text-gray-600">Guided Team QUO workflow</p>
+              <h1 className="text-2xl font-bold text-gray-900">Quote</h1>
+              <p className="text-xs text-gray-600">Client → Walls → Review</p>
             </div>
           </div>
-          <Button onClick={() => handleSaveDraft(false)} variant="outline" disabled={saveInProgress || !hasClientDetails}>
+          <Button onClick={() => handleSaveDraft(false)} variant="outline" disabled={saveInProgress || !hasClientDetails} className="h-9">
             {saveInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Save Draft
           </Button>
         </div>
 
-        <Card className="mb-6 p-4">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <Card className="p-2">
+          <div className="grid grid-cols-3 gap-2">
             {workflowSteps.map((step, index) => {
               const Icon = step.icon;
               const active = currentStep === step.id;
-              const complete =
-                step.id === "client" ? hasClientDetails : step.id === "walls" ? hasWalls && hasProducts : workflowReady;
+              const complete = step.id === "client" ? hasClientDetails : step.id === "walls" ? hasWalls && hasProducts : workflowReady;
               return (
                 <button
                   key={step.id}
                   type="button"
                   onClick={() => goToStep(step.id)}
-                  className={`rounded-lg border p-4 text-left transition ${
+                  className={`rounded-md border px-2 py-2 text-left text-sm transition ${
                     active ? "border-blue-500 bg-blue-50" : complete ? "border-green-300 bg-green-50" : "border-gray-200 bg-white"
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    {complete ? <CheckCircle2 className="h-5 w-5 text-green-700" /> : <Icon className="h-5 w-5 text-blue-700" />}
+                    {complete ? <CheckCircle2 className="h-4 w-4 text-green-700" /> : <Icon className="h-4 w-4 text-blue-700" />}
                     <span className="font-semibold">{index + 1}. {step.title}</span>
                   </div>
                 </button>
@@ -630,55 +604,34 @@ export default function QuoteForm() {
           </div>
         </Card>
 
-        {workflowIssues.length > 0 && currentStep === "review" && (
-          <Card className="mb-6 border-amber-300 bg-amber-50 p-4">
-            <div className="flex gap-3">
-              <FileWarning className="mt-0.5 h-5 w-5 text-amber-700" />
-              <div>
-                <p className="font-semibold text-amber-900">Workflow incomplete</p>
-                <ul className="mt-2 list-disc pl-5 text-sm text-amber-800">
-                  {workflowIssues.map(issue => <li key={issue}>{issue}</li>)}
-                </ul>
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {manualReviewItems.length > 0 && (
-          <Card className="mb-6 border-amber-300 bg-amber-50 p-4">
-            <div className="flex gap-3">
-              <FileWarning className="mt-0.5 h-5 w-5 text-amber-700" />
-              <div>
-                <p className="font-semibold text-amber-900">Manual review required before relying on this quote</p>
-                <p className="text-sm text-amber-800">Automatic quantity is a starting point only where joins, obstructions, or cut layout risk are present.</p>
-              </div>
+        {manualReviewItems.length > 0 && currentStep === "review" && (
+          <Card className="border-amber-300 bg-amber-50 p-3">
+            <div className="flex gap-2 text-sm text-amber-900">
+              <FileWarning className="mt-0.5 h-4 w-4 text-amber-700" />
+              <p><strong>Manual review required.</strong> Check flagged quantities before relying on the quote.</p>
             </div>
           </Card>
         )}
 
         {currentStep === "client" && (
-          <Card className="space-y-4 p-6">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Card className="space-y-4 p-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <Label htmlFor="clientName">Client Name *</Label>
-                <Input id="clientName" value={clientName} onChange={e => setClientName(e.target.value)} placeholder="John Smith" className="mt-1 h-12 text-base" />
-              </div>
-              <div>
-                <Label htmlFor="clientEmail">Email</Label>
-                <Input id="clientEmail" type="email" value={clientEmail} onChange={e => setClientEmail(e.target.value)} placeholder="john@example.com" className="mt-1 h-12 text-base" />
+                <Input id="clientName" value={clientName} onChange={e => setClientName(e.target.value)} placeholder="John Smith" className="mt-1 h-10" />
               </div>
               <div>
                 <Label htmlFor="clientPhone">Phone</Label>
-                <Input id="clientPhone" value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="0412 345 678" className="mt-1 h-12 text-base" />
+                <Input id="clientPhone" value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="0412 345 678" className="mt-1 h-10" />
               </div>
               <div>
                 <Label htmlFor="clientAddress">Address</Label>
-                <Input id="clientAddress" value={clientAddress} onChange={e => setClientAddress(e.target.value)} placeholder="123 Main St" className="mt-1 h-12 text-base" />
+                <Input id="clientAddress" value={clientAddress} onChange={e => setClientAddress(e.target.value)} placeholder="123 Main St" className="mt-1 h-10" />
               </div>
               <div>
                 <Label htmlFor="suburb">Suburb</Label>
                 <Select value={suburb} onValueChange={setSuburb}>
-                  <SelectTrigger className="mt-1 h-12 text-base"><SelectValue placeholder="Select suburb" /></SelectTrigger>
+                  <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Select suburb" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Kalkallo">Kalkallo</SelectItem>
                     <SelectItem value="Donnybrook">Donnybrook</SelectItem>
@@ -689,38 +642,44 @@ export default function QuoteForm() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="appointmentDate">Appointment Date</Label>
-                <Input id="appointmentDate" type="date" value={appointmentDate} onChange={e => setAppointmentDate(e.target.value)} className="mt-1 h-12 text-base" />
+                <Label htmlFor="clientEmail">Email</Label>
+                <Input id="clientEmail" type="email" value={clientEmail} onChange={e => setClientEmail(e.target.value)} placeholder="john@example.com" className="mt-1 h-10" />
               </div>
-              <div>
-                <Label htmlFor="appointmentTime">Appointment Time</Label>
-                <Select value={appointmentTime} onValueChange={setAppointmentTime}>
-                  <SelectTrigger className="mt-1 h-12 text-base"><SelectValue placeholder="Select time" /></SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 48 }).map((_, i) => {
-                      const hour = Math.floor(i / 2);
-                      const minute = (i % 2) * 30;
-                      const time = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
-                      return <SelectItem key={time} value={time}>{time}</SelectItem>;
-                    })}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label htmlFor="appointmentDate">Date</Label>
+                  <Input id="appointmentDate" type="date" value={appointmentDate} onChange={e => setAppointmentDate(e.target.value)} className="mt-1 h-10" />
+                </div>
+                <div>
+                  <Label htmlFor="appointmentTime">Time</Label>
+                  <Select value={appointmentTime} onValueChange={setAppointmentTime}>
+                    <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Time" /></SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 48 }).map((_, i) => {
+                        const hour = Math.floor(i / 2);
+                        const minute = (i % 2) * 30;
+                        const time = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
+                        return <SelectItem key={time} value={time}>{time}</SelectItem>;
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
-            <div className="border-t pt-4">
+            <div className="border-t pt-3">
               <Label>Reference Image</Label>
-              <Input type="file" accept="image/*" onChange={handleImageUpload} disabled={isUploadingImage} className="mt-1 h-12 text-base" />
+              <Input type="file" accept="image/*" onChange={handleImageUpload} disabled={isUploadingImage} className="mt-1 h-10" />
               {referenceImagePreview && (
                 <div className="relative mt-2 inline-block">
-                  <img src={referenceImagePreview} alt="Reference" className="max-h-48 rounded border-2 border-gray-200" />
+                  <img src={referenceImagePreview} alt="Reference" className="max-h-32 rounded border-2 border-gray-200" />
                   <button
                     type="button"
                     onClick={() => {
                       setReferenceImageUrl("");
                       setReferenceImagePreview(null);
                     }}
-                    className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600"
+                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600"
                   >
                     x
                   </button>
@@ -728,141 +687,108 @@ export default function QuoteForm() {
               )}
             </div>
 
-            <Button onClick={() => goToStep("walls")} disabled={!hasClientDetails} className="h-12 w-full text-base">
-              Continue to Walls & Products
+            <Button onClick={() => goToStep("walls")} disabled={!hasClientDetails} className="h-10 w-full">
+              Continue
             </Button>
           </Card>
         )}
 
         {currentStep === "walls" && (
           <div className="space-y-4">
-            <Card className="space-y-4 border-2 border-dashed p-6">
-              <h2 className="text-lg font-semibold">Add New Wall</h2>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Card className="space-y-3 p-4">
+              <h2 className="text-base font-semibold">Add Wall</h2>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
                 <div>
-                  <Label>Wall Type *</Label>
+                  <Label>Type</Label>
                   <Select value={tempWallType} onValueChange={value => setTempWallType(value as "regular" | "garage" | "custom")}>
-                    <SelectTrigger className="mt-1 h-12 text-base"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="mt-1 h-10"><SelectValue /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="custom">TV Wall</SelectItem>
                       <SelectItem value="regular">Hallway Wall</SelectItem>
                       <SelectItem value="garage">Garage Wall</SelectItem>
-                      <SelectItem value="custom">TV Wall</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
+                <div className="md:col-span-2">
                   <Label htmlFor="wallName">Wall Name *</Label>
-                  <Input id="wallName" value={tempWallName} onChange={e => setTempWallName(e.target.value)} placeholder="e.g., Living Room" className="mt-1 h-12 text-base" />
+                  <Input id="wallName" value={tempWallName} onChange={e => setTempWallName(e.target.value)} placeholder="Living Room" className="mt-1 h-10" />
                 </div>
                 <div>
-                  <Label htmlFor="wallWidth">Width (m) *</Label>
-                  <Input id="wallWidth" type="number" step="0.01" value={tempWallWidth} onChange={e => setTempWallWidth(e.target.value)} placeholder="e.g., 3.80" className="mt-1 h-12 text-base" />
+                  <Label htmlFor="wallWidth">Width m *</Label>
+                  <Input id="wallWidth" type="number" step="0.01" value={tempWallWidth} onChange={e => setTempWallWidth(e.target.value)} placeholder="3.80" className="mt-1 h-10" />
                 </div>
                 <div>
-                  <Label htmlFor="wallHeight">Height (m) *</Label>
-                  <Input id="wallHeight" type="number" step="0.01" value={tempWallHeight} onChange={e => setTempWallHeight(e.target.value)} placeholder="e.g., 2.60" className="mt-1 h-12 text-base" />
-                </div>
-                <div>
-                  <Label>Openings / Obstructions *</Label>
-                  <Select value={tempObstructionStatus} onValueChange={value => setTempObstructionStatus(value as ObstructionStatus)}>
-                    <SelectTrigger className="mt-1 h-12 text-base"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unknown">Unknown / not checked</SelectItem>
-                      <SelectItem value="none">No known obstructions</SelectItem>
-                      <SelectItem value="present">Obstructions present</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="obstructionNotes">Obstruction / cut notes</Label>
-                  <Input id="obstructionNotes" value={tempObstructionNotes} onChange={e => setTempObstructionNotes(e.target.value)} placeholder="e.g., TV recess, 2 power points" className="mt-1 h-12 text-base" />
+                  <Label htmlFor="wallHeight">Height m *</Label>
+                  <Input id="wallHeight" type="number" step="0.01" value={tempWallHeight} onChange={e => setTempWallHeight(e.target.value)} placeholder="2.60" className="mt-1 h-10" />
                 </div>
               </div>
-              <Button onClick={handleAddWall} className="h-12 w-full text-base"><Plus className="mr-2 h-4 w-4" />Add Wall</Button>
+              <Button onClick={handleAddWall} className="h-10 w-full md:w-auto"><Plus className="mr-2 h-4 w-4" />Add Wall</Button>
             </Card>
 
             {wallsWithProducts.map(wall => (
-              <Card key={wall.id} className="space-y-4 p-6">
+              <Card key={wall.id} className="space-y-3 p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h3 className="text-lg font-semibold">{wall.wallName}</h3>
-                    <p className="text-sm text-gray-600">{wall.wallType} - {formatMetres(wall.wallWidthMm)} x {formatMetres(wall.wallHeightMm)}</p>
-                    <p className="mt-1 text-xs text-gray-600">
-                      Obstructions: {wall.obstructionStatus === "none" ? "No known obstructions" : wall.obstructionStatus === "present" ? wall.obstructionNotes || "Present" : "Unknown / not checked"}
-                    </p>
+                    <h3 className="font-semibold">{wall.wallName}</h3>
+                    <p className="text-sm text-gray-600">{formatMetres(wall.wallWidthMm)} x {formatMetres(wall.wallHeightMm)}</p>
                   </div>
                   <Button onClick={() => handleDeleteWall(wall.id)} variant="ghost" size="sm" className="text-red-600 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
                 </div>
 
-                <div className="space-y-4 border-t pt-4">
-                  <h4 className="font-medium">Add Product to this Wall</h4>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 border-t pt-3 md:grid-cols-3">
+                  <div>
+                    <Label>Product Type *</Label>
+                    <Select value={tempProductType || ""} onValueChange={value => { setTempProductType(value as ProductTypeSlug); setTempProductId(""); }}>
+                      <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Select type" /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(productTypeLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {tempProductType && (
                     <div>
-                      <Label>Product Type *</Label>
-                      <Select value={tempProductType || ""} onValueChange={value => { setTempProductType(value as ProductTypeSlug); setTempProductId(""); }}>
-                        <SelectTrigger className="mt-1 h-12 text-base"><SelectValue placeholder="Select type" /></SelectTrigger>
+                      <Label>Product *</Label>
+                      <Select value={tempProductId} onValueChange={setTempProductId}>
+                        <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Select product" /></SelectTrigger>
                         <SelectContent>
-                          {Object.entries(productTypeLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                          {productsByType?.map((product: any) => {
+                            const metadata = parseMaterialMetadata(product.description);
+                            return (
+                              <SelectItem key={product.id} value={product.id.toString()}>
+                                {product.name} - {formatMoney(product.pricePerUnit)}{metadata.wastagePercent !== undefined ? ` - ${metadata.wastagePercent}% wastage` : ""}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                     </div>
-                    {tempProductType && (
-                      <div>
-                        <Label>Product *</Label>
-                        <Select value={tempProductId} onValueChange={setTempProductId}>
-                          <SelectTrigger className="mt-1 h-12 text-base"><SelectValue placeholder="Select product" /></SelectTrigger>
-                          <SelectContent>
-                            {productsByType?.map((product: any) => {
-                              const metadata = parseMaterialMetadata(product.description);
-                              return (
-                                <SelectItem key={product.id} value={product.id.toString()}>
-                                  {product.name} - {formatMoney(product.pricePerUnit)}{metadata.wastagePercent !== undefined ? ` - ${metadata.wastagePercent}% wastage` : ""}
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
+                  )}
+                  <div className="flex items-end">
+                    <Button onClick={() => handleAddProductToWall(wall.id)} className="h-10 w-full"><Plus className="mr-2 h-4 w-4" />Add Product</Button>
                   </div>
-
-                  {tempProductType && panelTypes(tempProductType) && (
-                    <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-                      Panel quantity uses sheet width, sheet height, orientation rule, joins, obstruction status, and wastage. Unknown or present obstructions are flagged instead of guessed.
-                    </div>
-                  )}
-
-                  {tempProductType === "floating_cabinet" && (
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <Input type="number" value={tempCabinetWidth} onChange={e => setTempCabinetWidth(e.target.value)} placeholder="Cabinet width mm" className="h-12 text-base" />
-                      <Input type="number" value={tempCabinetHeight} onChange={e => setTempCabinetHeight(e.target.value)} placeholder="Cabinet height mm" className="h-12 text-base" />
-                      <Input type="number" value={tempCabinetDepth} onChange={e => setTempCabinetDepth(e.target.value)} placeholder="Cabinet depth mm" className="h-12 text-base" />
-                      <Input type="number" value={tempCabinetHeightFromFloor} onChange={e => setTempCabinetHeightFromFloor(e.target.value)} placeholder="Height from floor mm" className="h-12 text-base" />
-                    </div>
-                  )}
-
-                  <Button onClick={() => handleAddProductToWall(wall.id)} className="h-12 w-full text-base"><Plus className="mr-2 h-4 w-4" />Add Product</Button>
                 </div>
 
+                {tempProductType === "floating_cabinet" && (
+                  <div className="grid grid-cols-2 gap-2 rounded-lg border bg-gray-50 p-3 md:grid-cols-4">
+                    <Input type="number" value={tempCabinetWidth} onChange={e => setTempCabinetWidth(e.target.value)} placeholder="Width mm" className="h-10" />
+                    <Input type="number" value={tempCabinetHeight} onChange={e => setTempCabinetHeight(e.target.value)} placeholder="Height mm" className="h-10" />
+                    <Input type="number" value={tempCabinetDepth} onChange={e => setTempCabinetDepth(e.target.value)} placeholder="Depth mm" className="h-10" />
+                    <Input type="number" value={tempCabinetHeightFromFloor} onChange={e => setTempCabinetHeightFromFloor(e.target.value)} placeholder="From floor mm" className="h-10" />
+                  </div>
+                )}
+
                 {wall.products.length > 0 && (
-                  <div className="space-y-3 border-t pt-4">
-                    <h4 className="font-medium">Products ({wall.products.length})</h4>
+                  <div className="space-y-2 border-t pt-3">
                     {wall.products.map(product => (
-                      <div key={product.id} className="space-y-2 rounded-lg bg-gray-50 p-4">
-                        <div className="flex items-start justify-between gap-4">
+                      <div key={product.id} className="rounded-lg bg-gray-50 p-3">
+                        <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="font-medium">{product.productName}</p>
-                            <p className="text-sm text-gray-600">Qty: {product.quantity} x {formatMoney(product.unitPrice)} = {formatMoney(product.quantity * product.unitPrice)}</p>
+                            <p className="text-sm text-gray-600">Qty {product.quantity} x {formatMoney(product.unitPrice)} = {formatMoney(product.quantity * product.unitPrice)}</p>
+                            {product.manualReviewRequired && <p className="text-xs font-semibold text-amber-700">Manual review required</p>}
                           </div>
                           <Button onClick={() => handleRemoveProduct(wall.id, product.id)} variant="ghost" size="sm" className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
                         </div>
-                        {product.panelCalculation && (
-                          <div className="space-y-1 rounded border bg-white p-3 text-xs text-gray-700">
-                            <p><strong>Calculation:</strong> {product.panelCalculation.panelsAcross} across x {product.panelCalculation.panelsHigh} high = {product.panelCalculation.baseQuantity} base, +{product.panelCalculation.wastageQuantity} wastage = {product.panelCalculation.finalQuantity} total.</p>
-                            <p><strong>Orientation:</strong> {product.panelCalculation.orientationLabel}</p>
-                            {product.manualReviewRequired && <p className="font-semibold text-amber-700">Manual review required</p>}
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -870,41 +796,29 @@ export default function QuoteForm() {
               </Card>
             ))}
 
-            <Button onClick={() => goToStep("review")} disabled={!workflowReady} className="h-12 w-full text-base">Review Quote</Button>
+            <Button onClick={() => goToStep("review")} disabled={!workflowReady} className="h-10 w-full">Review Quote</Button>
           </div>
         )}
 
         {currentStep === "review" && (
-          <Card className="space-y-5 p-6">
-            <h2 className="text-lg font-semibold">Quote Summary</h2>
-            <div className="border-b pb-4">
-              <h3 className="mb-2 font-medium">Client Details</h3>
-              <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
-                <div>Name: <span className="font-medium">{clientName}</span></div>
-                <div>Phone: <span className="font-medium">{clientPhone}</span></div>
-                <div>Email: <span className="font-medium">{clientEmail}</span></div>
-                <div>Address: <span className="font-medium">{clientAddress}</span></div>
-                <div>Suburb: <span className="font-medium">{suburb}</span></div>
-                <div>Appointment: <span className="font-medium">{appointmentDate} {appointmentTime}</span></div>
-              </div>
+          <Card className="space-y-4 p-4">
+            <h2 className="text-lg font-semibold">Review Quote</h2>
+            <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
+              <div>Client: <span className="font-medium">{clientName}</span></div>
+              <div>Phone: <span className="font-medium">{clientPhone}</span></div>
+              <div>Address: <span className="font-medium">{clientAddress}</span></div>
+              <div>Suburb: <span className="font-medium">{suburb}</span></div>
             </div>
 
-            <div className="space-y-4">
-              <h3 className="font-medium">Customer-facing quote lines</h3>
+            <div className="space-y-3">
               {wallsWithProducts.map(wall => (
-                <div key={wall.id} className="rounded-lg border p-4">
+                <div key={wall.id} className="rounded-lg border p-3">
                   <h4 className="font-semibold">{wall.wallName} ({formatMetres(wall.wallWidthMm)} x {formatMetres(wall.wallHeightMm)})</h4>
-                  <div className="mt-3 space-y-3">
+                  <div className="mt-2 space-y-2">
                     {wall.products.map(product => (
-                      <div key={product.id} className="flex justify-between gap-4 text-sm">
-                        <div>
-                          <p className="font-medium">Supply and install {product.productName}</p>
-                          {product.customerNotes?.map(note => <p key={note} className="text-gray-600">{note}</p>)}
-                        </div>
-                        <div className="text-right whitespace-nowrap">
-                          <p>{product.quantity} x {formatMoney(product.unitPrice)}</p>
-                          <p className="font-semibold">{formatMoney(product.quantity * product.unitPrice)}</p>
-                        </div>
+                      <div key={product.id} className="flex justify-between gap-3 text-sm">
+                        <span>Supply and install {product.productName}</span>
+                        <span className="font-medium whitespace-nowrap">{product.quantity} x {formatMoney(product.unitPrice)}</span>
                       </div>
                     ))}
                   </div>
@@ -912,32 +826,17 @@ export default function QuoteForm() {
               ))}
             </div>
 
-            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
-              <h3 className="font-medium text-amber-900">Internal calculation notes</h3>
-              {manualReviewItems.length === 0 ? (
-                <p className="mt-2 text-sm text-amber-800">No manual review flags currently shown.</p>
-              ) : (
-                <div className="mt-3 space-y-3 text-sm text-amber-900">
-                  {manualReviewItems.map(({ wall, product }) => (
-                    <div key={`${wall.id}-${product.id}`} className="rounded bg-white/70 p-3">
-                      <p className="font-semibold">{wall.wallName} - {product.productName}: Manual review required</p>
-                      <ul className="mt-1 list-disc pl-5">
-                        {product.reviewReasons?.map(reason => <li key={reason}>{reason}</li>)}
-                      </ul>
-                      {product.internalNotes && product.internalNotes.length > 0 && (
-                        <ul className="mt-2 list-disc pl-5 text-amber-800">
-                          {product.internalNotes.map(note => <li key={note}>{note}</li>)}
-                        </ul>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {manualReviewItems.length > 0 && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-medium">Manual review flags</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {manualReviewItems.map(({ wall, product }) => <li key={`${wall.id}-${product.id}`}>{wall.wallName} - {product.productName}</li>)}
+                </ul>
+              </div>
+            )}
 
             <div className="text-right"><p className="text-2xl font-bold">Total: {formatMoney(calculateTotal())}</p></div>
-
-            <Button onClick={() => handleSaveDraft(true)} className="h-12 w-full text-base" disabled={saveInProgress || !workflowReady}>
+            <Button onClick={() => handleSaveDraft(true)} className="h-10 w-full" disabled={saveInProgress || !workflowReady}>
               {saveInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save Quote
             </Button>
