@@ -176,6 +176,7 @@ export const jobItems = mysqlTable("job_items", {
   unitPrice: int("unit_price"), // Price per unit in cents
   totalPrice: int("total_price"), // Total price for this item in cents
   manualPriceOverride: int("manual_price_override"), // Manual override price in cents (if user entered custom price)
+  itemDetails: text("item_details"), // Internal JSON details such as TV size and fixing method. Not shown to customer.
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
