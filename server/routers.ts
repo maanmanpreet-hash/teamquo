@@ -21,6 +21,9 @@ const supportedItemTypes = [
   "fireplace",
   "mirror",
   "marble_sheet",
+  "tv_backdrop",
+  "side_tower",
+  "shelving",
 ] as const;
 
 const now = () => new Date();
@@ -33,6 +36,9 @@ const previewProductTypes: any[] = [
   { id: 4, name: "Mirrors", slug: "mirrors", description: "Designer LED mirrors", isActive: 1, createdAt: now(), updatedAt: now() },
   { id: 5, name: "Fireplace", slug: "fireplace", description: "Designer fireplaces", isActive: 1, createdAt: now(), updatedAt: now() },
   { id: 6, name: "Floating Cabinets", slug: "floating-cabinets", description: "Custom floating cabinets", isActive: 1, createdAt: now(), updatedAt: now() },
+  { id: 7, name: "TV Backdrop", slug: "tv-backdrop", description: "PVC/MDF TV backdrop allowance", isActive: 1, createdAt: now(), updatedAt: now() },
+  { id: 8, name: "Side Towers", slug: "side-towers", description: "Custom side towers", isActive: 1, createdAt: now(), updatedAt: now() },
+  { id: 9, name: "Shelving", slug: "shelving", description: "Custom shelving", isActive: 1, createdAt: now(), updatedAt: now() },
 ];
 
 const previewProducts: any[] = [
@@ -44,6 +50,9 @@ const previewProducts: any[] = [
   { id: 401, productTypeId: 4, name: "Full Moon LED Mirror 1200mm", design: "Round", widthMm: 1200, heightMm: 1200, depthMm: null, pricePerUnit: 35000, description: "Frameless 3 colour LED mirror", isActive: 1, createdAt: now(), updatedAt: now() },
   { id: 501, productTypeId: 5, name: "Fireplace 60 inch", design: "Premium", widthMm: null, heightMm: null, depthMm: null, pricePerUnit: 70000, description: "Premium designer fireplace", isActive: 1, createdAt: now(), updatedAt: now() },
   { id: 601, productTypeId: 6, name: "Floating Cabinet - Custom", design: "Melamine", widthMm: null, heightMm: null, depthMm: null, pricePerUnit: 120000, description: "Custom floating cabinet allowance", isActive: 1, createdAt: now(), updatedAt: now() },
+  { id: 701, productTypeId: 7, name: "TV Backdrop - Custom", design: "PVC/MDF", widthMm: 1220, heightMm: 2900, depthMm: null, pricePerUnit: 0, description: "TV backdrop dimensions captured for internal material summary. Operator prices manually.", isActive: 1, createdAt: now(), updatedAt: now() },
+  { id: 801, productTypeId: 8, name: "Side Tower - Custom", design: "Melamine", widthMm: null, heightMm: null, depthMm: null, pricePerUnit: 0, description: "Custom side tower dimensions only. Operator prices manually.", isActive: 1, createdAt: now(), updatedAt: now() },
+  { id: 901, productTypeId: 9, name: "Shelving - Custom", design: "Melamine", widthMm: null, heightMm: null, depthMm: null, pricePerUnit: 0, description: "Custom shelving dimensions only. Operator prices manually.", isActive: 1, createdAt: now(), updatedAt: now() },
 ];
 
 const previewCladdingVariants = previewProducts
