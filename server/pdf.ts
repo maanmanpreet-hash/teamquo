@@ -104,7 +104,7 @@ export function generateQuoteHTML(
     }
 
     if (item.itemType === "tv_backdrop") {
-      return "TV size and backdrop allowance recorded for internal review";
+      return "TV size and backdrop allowance recorded for final site check";
     }
 
     if (product?.widthMm && product?.heightMm) {
@@ -174,7 +174,6 @@ export function generateQuoteHTML(
           const productName =
             product?.name || variant?.name || itemTypeLabels[item.itemType];
           const productDesign = product?.design || variant?.design;
-          const quantity = item.quantityRequired || 1;
           const description = [
             itemTypeLabels[item.itemType],
             productName,
@@ -192,7 +191,7 @@ export function generateQuoteHTML(
                 ${notes.length ? `<ul class="line-notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join("")}</ul>` : ""}
               </td>
               <td>${escapeHtml(formatProductDimensions(item, product))}</td>
-              <td>${quantity}x</td>
+              <td>Included</td>
             </tr>
           `;
         })
@@ -209,7 +208,7 @@ export function generateQuoteHTML(
           </div>
           <table>
             <thead>
-              <tr><th>#</th><th>Products included</th><th>Product size</th><th>Qty</th></tr>
+              <tr><th>#</th><th>Products included</th><th>Product size</th><th>Status</th></tr>
             </thead>
             <tbody>${productRows}</tbody>
           </table>
@@ -260,7 +259,7 @@ export function generateQuoteHTML(
     tr:last-child td { border-bottom: 0; }
     th:nth-child(1), td:nth-child(1) { width: 38px; text-align: center; }
     th:nth-child(3), td:nth-child(3) { width: 170px; }
-    th:nth-child(4), td:nth-child(4) { width: 70px; text-align: center; }
+    th:nth-child(4), td:nth-child(4) { width: 82px; text-align: center; }
     .line-notes { margin: 6px 0 0; padding-left: 18px; color: #475569; font-size: 11px; line-height: 1.4; }
     .total { display: flex; justify-content: flex-end; margin-top: 22px; }
     .total-card { min-width: 280px; border: 2px solid #14213d; border-radius: 10px; padding: 16px; text-align: right; }
