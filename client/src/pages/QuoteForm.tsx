@@ -85,6 +85,7 @@ interface WallProduct {
   cabinetHeightFromFloorMm?: number;
   acousticFixingMethod?: AcousticFixingMethod;
   tvSizeInches?: number;
+  includeTvBracket?: boolean;
   itemDetails?: string;
 }
 
@@ -209,6 +210,7 @@ function buildItemDetails(product: WallProduct) {
 
   if (product.productType === "tv_backdrop" && product.tvSizeInches) {
     Object.assign(details, calculateTvBackdrop(product.tvSizeInches));
+    details.includeTvBracket = Boolean(product.includeTvBracket);
   }
 
   if (["floating_cabinet", "side_tower", "shelving"].includes(product.productType)) {
@@ -231,6 +233,7 @@ function applyItemDetailsToProduct(product: WallProduct, itemDetails: unknown): 
 
   if (product.productType === "tv_backdrop") {
     nextProduct.tvSizeInches = safeNumber(details.tvSizeInches);
+    nextProduct.includeTvBracket = Boolean(details.includeTvBracket);
   }
 
   if (["floating_cabinet", "side_tower", "shelving"].includes(product.productType)) {
@@ -284,6 +287,7 @@ export default function QuoteForm() {
   const [tempCabinetDepth, setTempCabinetDepth] = useState("");
   const [tempCabinetHeightFromFloor, setTempCabinetHeightFromFloor] = useState("");
   const [tempTvSizeInches, setTempTvSizeInches] = useState("");
+  const [tempIncludeTvBracket, setTempIncludeTvBracket] = useState(false);
   const [tempAcousticFixingMethod, setTempAcousticFixingMethod] = useState<AcousticFixingMethod>("none");
 
   const { data: productTypes } = trpc.products.listTypes.useQuery();
@@ -433,6 +437,7 @@ export default function QuoteForm() {
     setTempCabinetDepth("");
     setTempCabinetHeightFromFloor("");
     setTempTvSizeInches("");
+    setTempIncludeTvBracket(false);
     setTempAcousticFixingMethod("none");
   };
 
@@ -583,7 +588,7 @@ export default function QuoteForm() {
         toast.error("Enter TV size in inches before adding TV Backdrop");
         return;
       }
-      newProduct = { ...newProduct, tvSizeInches };
+      newProduct = { ...newProduct, tvSizeInches, includeTvBracket: tempIncludeTvBracket };
     }
 
     if (["floating_cabinet", "side_tower", "shelving"].includes(tempProductType)) {
@@ -900,6 +905,7 @@ export default function QuoteForm() {
                               <p className="font-medium">{product.productName}</p>
                               <p className="text-sm text-gray-600">Qty {product.quantity} x {formatMoney(product.unitPrice)} = {formatMoney(product.quantity * product.unitPrice)}</p>
                               {product.tvSizeInches && <p className="text-xs text-gray-600">TV size: {product.tvSizeInches}&quot;</p>}
+                              {product.includeTvBracket && <p className="text-xs text-gray-600">TV bracket: included internally</p>}
                               {product.acousticFixingMethod && product.acousticFixingMethod !== "none" && <p className="text-xs text-gray-600">Fixing: {product.acousticFixingMethod.replace(/_/g, " ")}</p>}
                               {product.manualReviewRequired && <p className="text-xs font-semibold text-amber-700">Manual review required</p>}
                             </div>
@@ -962,9 +968,20 @@ export default function QuoteForm() {
                       )}
 
                       {tempProductType === "tv_backdrop" && (
-                        <div className="rounded-lg border bg-white p-3">
-                          <Label>TV Size inches *</Label>
-                          <Input type="number" value={tempTvSizeInches} onChange={e => setTempTvSizeInches(e.target.value)} placeholder="75" className="mt-1 h-10" />
+                        <div className="space-y-3 rounded-lg border bg-white p-3">
+                          <div>
+                            <Label>TV Size inches *</Label>
+                            <Input type="number" value={tempTvSizeInches} onChange={e => setTempTvSizeInches(e.target.value)} placeholder="75" className="mt-1 h-10" />
+                          </div>
+                          <label className="flex items-center gap-2 text-sm text-gray-700">
+                            <input
+                              type="checkbox"
+                              checked={tempIncludeTvBracket}
+                              onChange={event => setTempIncludeTvBracket(event.target.checked)}
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                            Supply TV Bracket - internal $50 reference only
+                          </label>
                         </div>
                       )}
 
