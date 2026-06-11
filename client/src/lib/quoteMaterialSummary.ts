@@ -17,6 +17,7 @@ export interface QuoteFormWallForMaterials {
     unitPrice?: number;
     acousticFixingMethod?: string;
     tvSizeInches?: number;
+    includeTvBracket?: boolean;
   }>;
 }
 
@@ -64,6 +65,7 @@ export function mapQuoteWallsForMaterialSummary(walls: QuoteFormWallForMaterials
       unitCostCents: product.unitPrice,
       acousticFixingMethod: toAcousticFixingMethod(product.acousticFixingMethod),
       tvSizeInches: product.tvSizeInches,
+      includeTvBracket: product.includeTvBracket,
     })),
   }));
 }
