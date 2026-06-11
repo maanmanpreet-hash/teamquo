@@ -134,6 +134,7 @@ const previewJobItems: any[] = [
     unitPrice: 7500,
     totalPrice: 52500,
     manualPriceOverride: null,
+    itemDetails: JSON.stringify({ fixingMethod: "none" }),
     createdAt: now(),
     updatedAt: now(),
   },
@@ -223,6 +224,33 @@ const jobInputSchema = z.object({
 
 const jobUpdateSchema = jobInputSchema.extend({ id: z.number() });
 
+const jobItemCreateSchema = z.object({
+  jobId: z.number(),
+  itemType: z.enum(supportedItemTypes),
+  productId: z.number().optional(),
+  claddingVariantId: z.number().optional(),
+  wallWidthMm: z.number().int().positive().optional(),
+  wallHeightMm: z.number().int().positive().optional(),
+  cabinetWidthMm: z.number().int().positive().optional(),
+  cabinetHeightMm: z.number().int().positive().optional(),
+  cabinetDepthMm: z.number().int().positive().optional(),
+  cabinetHeightFromFloorMm: z.number().int().nonnegative().optional(),
+  wallId: z.number().optional(),
+  quantityRequired: z.number().int().positive().optional(),
+  unitPrice: z.number().int().nonnegative().optional(),
+  totalPrice: z.number().int().nonnegative().optional(),
+  manualPriceOverride: z.number().int().nonnegative().optional(),
+  itemDetails: z.string().optional(),
+});
+
+const jobItemUpdateSchema = z.object({
+  id: z.number(),
+  quantityRequired: z.number().int().positive().optional(),
+  totalPrice: z.number().int().nonnegative().optional(),
+  manualPriceOverride: z.number().int().nonnegative().optional(),
+  itemDetails: z.string().optional(),
+});
+
 function buildJobInput(input: z.infer<typeof jobInputSchema>, userId: number) {
   return {
     userId,
@@ -258,19 +286,15 @@ export const appRouter = router({
       if (await isPreviewMode()) return previewCladdingVariants.find(variant => variant.id === input.id);
       return db.getCladdingVariantById(input.id);
     }),
-    create: protectedProcedure
-      .input(z.object({ name: z.string().min(1), design: z.string().min(1), widthMm: z.number().int().positive(), heightMm: z.number().int().positive(), pricePerUnit: z.number().int().nonnegative(), description: z.string().optional() }))
-      .mutation(async ({ input }) => {
-        if (await isPreviewMode()) return undefined;
-        return db.createCladdingVariant({ ...input, isActive: 1 });
-      }),
-    update: protectedProcedure
-      .input(z.object({ id: z.number(), name: z.string().optional(), design: z.string().optional(), widthMm: z.number().int().positive().optional(), heightMm: z.number().int().positive().optional(), pricePerUnit: z.number().int().nonnegative().optional(), description: z.string().optional() }))
-      .mutation(async ({ input }) => {
-        if (await isPreviewMode()) return undefined;
-        const { id, ...updates } = input;
-        return db.updateCladdingVariant(id, updates);
-      }),
+    create: protectedProcedure.input(z.object({ name: z.string().min(1), design: z.string().min(1), widthMm: z.number().int().positive(), heightMm: z.number().int().positive(), pricePerUnit: z.number().int().nonnegative(), description: z.string().optional() })).mutation(async ({ input }) => {
+      if (await isPreviewMode()) return undefined;
+      return db.createCladdingVariant({ ...input, isActive: 1 });
+    }),
+    update: protectedProcedure.input(z.object({ id: z.number(), name: z.string().optional(), design: z.string().optional(), widthMm: z.number().int().positive().optional(), heightMm: z.number().int().positive().optional(), pricePerUnit: z.number().int().nonnegative().optional(), description: z.string().optional() })).mutation(async ({ input }) => {
+      if (await isPreviewMode()) return undefined;
+      const { id, ...updates } = input;
+      return db.updateCladdingVariant(id, updates);
+    }),
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
       if (await isPreviewMode()) return true;
       return db.deleteCladdingVariant(input.id);
@@ -356,23 +380,21 @@ export const appRouter = router({
       const html = generateQuoteHTML(job as any, items as any, variantMap as any, productMap as any, undefined, undefined, wallMap as any);
       return { html, jobId: job.id, clientName: job.clientName, quoteNumber: formatQuoteNumber(job as any) };
     }),
-    create: protectedProcedure
-      .input(z.object({ jobId: z.number(), itemType: z.enum(supportedItemTypes), productId: z.number().optional(), claddingVariantId: z.number().optional(), wallWidthMm: z.number().int().positive().optional(), wallHeightMm: z.number().int().positive().optional(), cabinetWidthMm: z.number().int().positive().optional(), cabinetHeightMm: z.number().int().positive().optional(), cabinetDepthMm: z.number().int().positive().optional(), cabinetHeightFromFloorMm: z.number().int().nonnegative().optional(), wallId: z.number().optional(), quantityRequired: z.number().int().positive().optional(), unitPrice: z.number().int().nonnegative().optional(), totalPrice: z.number().int().nonnegative().optional(), manualPriceOverride: z.number().int().nonnegative().optional() }))
-      .mutation(async ({ input, ctx }) => {
-        await assertOwnsJob(input.jobId, ctx.user.id);
-        if (input.wallId) {
-          const wall = await assertOwnsWall(input.wallId, ctx.user.id);
-          if (wall.jobId !== input.jobId) throw new Error("Wall does not belong to this quote");
-        }
-        const { jobId, ...itemData } = input;
-        if (await isPreviewMode()) {
-          const item = { id: nextItemId++, jobId, ...itemData, createdAt: now(), updatedAt: now() };
-          previewJobItems.push(item);
-          return item;
-        }
-        return db.createJobItem({ jobId, ...itemData });
-      }),
-    update: protectedProcedure.input(z.object({ id: z.number(), quantityRequired: z.number().int().positive().optional(), totalPrice: z.number().int().nonnegative().optional(), manualPriceOverride: z.number().int().nonnegative().optional() })).mutation(async ({ input, ctx }) => {
+    create: protectedProcedure.input(jobItemCreateSchema).mutation(async ({ input, ctx }) => {
+      await assertOwnsJob(input.jobId, ctx.user.id);
+      if (input.wallId) {
+        const wall = await assertOwnsWall(input.wallId, ctx.user.id);
+        if (wall.jobId !== input.jobId) throw new Error("Wall does not belong to this quote");
+      }
+      const { jobId, ...itemData } = input;
+      if (await isPreviewMode()) {
+        const item = { id: nextItemId++, jobId, ...itemData, createdAt: now(), updatedAt: now() };
+        previewJobItems.push(item);
+        return item;
+      }
+      return db.createJobItem({ jobId, ...itemData });
+    }),
+    update: protectedProcedure.input(jobItemUpdateSchema).mutation(async ({ input, ctx }) => {
       const item = await assertOwnsJobItem(input.id, ctx.user.id);
       const { id, ...updates } = input;
       if (await isPreviewMode()) {
