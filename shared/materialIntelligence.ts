@@ -186,6 +186,30 @@ function hasSupplyTvBracket(products: ProductSelectionForMaterials[]) {
   return products.some(product => /supply.*tv.*bracket|tv.*bracket/i.test(product.productName));
 }
 
+function hasMarbleSheetProduct(products: ProductSelectionForMaterials[]) {
+  return products.some(product => product.productType === "marble_sheet");
+}
+
+function addPvcBackdropLines(lines: MaterialLine[], sheetQty: number, notes: string[]) {
+  addOrMergeLine(lines, {
+    key: "pvc-marble-sheet",
+    name: MATERIAL_BASELINES.pvcMarbleSheet.name,
+    quantity: sheetQty,
+    unitCostCents: MATERIAL_BASELINES.pvcMarbleSheet.unitCostCents,
+    source: "automatic",
+    notes,
+  });
+
+  addOrMergeLine(lines, {
+    key: "high-tack-glue",
+    name: MATERIAL_BASELINES.highTackGlue.name,
+    quantity: sheetQty,
+    unitCostCents: MATERIAL_BASELINES.highTackGlue.unitCostCents,
+    source: "automatic",
+    notes: ["Locked rule: 1 glue per PVC marble sheet."],
+  });
+}
+
 export function estimateWallMaterials(wall: WallForMaterials): MaterialEstimate {
   const lines: MaterialLine[] = [];
   const notes: string[] = [];
@@ -193,6 +217,7 @@ export function estimateWallMaterials(wall: WallForMaterials): MaterialEstimate 
   const tvBackdropDimensions = tvBackdropProduct?.tvSizeInches
     ? calculateTvBackdropDimensions(tvBackdropProduct.tvSizeInches)
     : undefined;
+  const marbleSheetSelected = hasMarbleSheetProduct(wall.products);
 
   for (const product of wall.products) {
     if (product.productType === "marble_sheet") {
@@ -267,7 +292,7 @@ export function estimateWallMaterials(wall: WallForMaterials): MaterialEstimate 
       }
     }
 
-    if (product.productType === "floating_cabinet" || product.productType === "side_tower") {
+    if (["floating_cabinet", "side_tower", "shelving"].includes(product.productType)) {
       notes.push(`${product.productName} is custom joinery. Dimensions are captured for quote/execution, but automatic material costing is deliberately excluded.`);
     }
   }
@@ -276,12 +301,25 @@ export function estimateWallMaterials(wall: WallForMaterials): MaterialEstimate 
     if (!tvBackdropDimensions) {
       notes.push("TV Backdrop selected but TV size is missing. MDF/PVC backdrop material quantities should be reviewed once TV size is entered.");
     } else {
+      const pvcQty = calculateSheetQuantity(
+        tvBackdropDimensions.backdropWidthMm,
+        tvBackdropDimensions.backdropHeightMm,
+        MATERIAL_BASELINES.pvcMarbleSheet.widthMm,
+        MATERIAL_BASELINES.pvcMarbleSheet.heightMm
+      );
       const mdfQty = calculateSheetQuantity(
         tvBackdropDimensions.backdropWidthMm,
         tvBackdropDimensions.backdropHeightMm,
         MATERIAL_BASELINES.mdfBacking.widthMm,
         MATERIAL_BASELINES.mdfBacking.heightMm
       );
+
+      if (!marbleSheetSelected) {
+        addPvcBackdropLines(lines, pvcQty, [
+          "Locked rule: TV Backdrop requires PVC marble sheet coverage.",
+          `Calculated from TV backdrop size ${tvBackdropDimensions.backdropWidthMm}x${tvBackdropDimensions.backdropHeightMm}mm.`,
+        ]);
+      }
 
       addOrMergeLine(lines, {
         key: "mdf-backing-6mm",
