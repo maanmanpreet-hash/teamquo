@@ -31,6 +31,7 @@ import {
 import { hasCustomerIdentifier, getCustomerIdentifierError } from "@/lib/customerIdentity";
 import { buildQuoteFormMaterialSummary } from "@/lib/quoteMaterialSummary";
 import { trpc } from "@/lib/trpc";
+import { calculateSheetQuantity } from "@shared/materialIntelligence";
 import {
   calculatePanelRequirement,
   parseMaterialMetadata,
@@ -178,12 +179,8 @@ function calculateTvBackdrop(tvSizeInches: number) {
   const tvHeightMm = Math.round((diagonalMm * 9) / ratioDiagonal);
   const backdropWidthMm = tvWidthMm + 200;
   const backdropHeightMm = tvHeightMm + 200;
-
-  const sheetCount = (width: number, height: number, sheetWidth: number, sheetHeight: number) => {
-    const normal = Math.ceil(width / sheetWidth) * Math.ceil(height / sheetHeight);
-    const rotated = Math.ceil(width / sheetHeight) * Math.ceil(height / sheetWidth);
-    return Math.max(1, Math.min(normal, rotated));
-  };
+  const pvcSheets = calculateSheetQuantity(backdropWidthMm, backdropHeightMm, 1220, 2900);
+  const mdfSheets = calculateSheetQuantity(backdropWidthMm, backdropHeightMm, 1220, 2440);
 
   return {
     tvSizeInches,
@@ -191,9 +188,9 @@ function calculateTvBackdrop(tvSizeInches: number) {
     tvHeightMm,
     backdropWidthMm,
     backdropHeightMm,
-    pvcSheets: sheetCount(backdropWidthMm, backdropHeightMm, 1220, 2900),
-    mdfSheets: sheetCount(backdropWidthMm, backdropHeightMm, 1220, 2440),
-    pvcGlueTubes: sheetCount(backdropWidthMm, backdropHeightMm, 1220, 2900),
+    pvcSheets,
+    mdfSheets,
+    pvcGlueTubes: pvcSheets,
     minimumOverhangEachSideMm: 100,
   };
 }
