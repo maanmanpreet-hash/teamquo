@@ -168,7 +168,9 @@ export function QuotePageDraftSafety() {
     document.addEventListener("input", onInput, true);
     document.addEventListener("change", onInput, true);
     document.addEventListener("click", onClickCapture, true);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    }
 
     return () => {
       window.clearTimeout(restoreTimer);
