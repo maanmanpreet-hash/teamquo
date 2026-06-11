@@ -169,6 +169,17 @@ function previewGetWallsWithItemsByJobId(jobId: number) {
     }));
 }
 
+function mergeItemDetailsIntoWallProducts(wallRows: any[], items: any[]) {
+  const itemDetailsById = new Map(items.map(item => [item.id, item.itemDetails]));
+  return wallRows.map(wall => ({
+    ...wall,
+    products: (wall.products || []).map((product: any) => ({
+      ...product,
+      itemDetails: product.itemDetails ?? itemDetailsById.get(product.id) ?? null,
+    })),
+  }));
+}
+
 async function assertOwnsJob(jobId: number, userId: number) {
   if (await isPreviewMode()) {
     const job = previewJobs.find(job => job.id === jobId);
@@ -530,7 +541,9 @@ export const appRouter = router({
     getByJobId: protectedProcedure.input(z.object({ jobId: z.number() })).query(async ({ input, ctx }) => {
       await assertOwnsJob(input.jobId, ctx.user.id);
       if (await isPreviewMode()) return previewGetWallsWithItemsByJobId(input.jobId);
-      return db.getWallsWithItemsByJobId(input.jobId);
+      const wallRows = await db.getWallsWithItemsByJobId(input.jobId);
+      const items = await db.getJobItemsByJobId(input.jobId);
+      return mergeItemDetailsIntoWallProducts(wallRows, items);
     }),
     deleteByJobId: protectedProcedure.input(z.object({ jobId: z.number() })).mutation(async ({ input, ctx }) => {
       await assertOwnsJob(input.jobId, ctx.user.id);
