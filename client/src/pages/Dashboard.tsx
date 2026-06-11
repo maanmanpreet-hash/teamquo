@@ -227,6 +227,7 @@ export default function Dashboard() {
             unitPrice: item.unitPrice ?? undefined,
             totalPrice: item.totalPrice ?? undefined,
             manualPriceOverride: item.manualPriceOverride ?? undefined,
+            itemDetails: item.itemDetails || undefined,
           });
         }
       }
@@ -241,7 +242,7 @@ export default function Dashboard() {
   };
 
   const deleteQuote = (jobId: number) => {
-    if (!window.confirm("Delete this quote? This cannot be undone.")) return;
+    if (!window.confirm("Remove this quote?")) return;
     setDeletingJobId(jobId);
     deleteJobMutation.mutate({ id: jobId });
   };
@@ -315,7 +316,7 @@ export default function Dashboard() {
           </Select>
         </div>
         <div className="flex gap-2 mb-6"><Button variant={viewMode === "kanban" ? "default" : "outline"} onClick={() => setViewMode("kanban")} className="h-10">Kanban View</Button><Button variant={viewMode === "list" ? "default" : "outline"} onClick={() => setViewMode("list")} className="h-10">List View</Button></div>
-        {viewMode === "kanban" && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">{quoteStatusOrder.map(status => <div key={status} className="flex flex-col"><div className={`${statusColors[status]} rounded-t-lg p-4 border-b-2 border-current`}><h3 className="font-semibold text-lg">{statusLabels[status]}</h3><p className="text-sm opacity-75">{jobsByStatus[status]?.length || 0} quotes</p></div><div className="flex-1 bg-gray-100 rounded-b-lg p-4 space-y-3 min-h-96">{jobsLoading ? <div className="flex items-center justify-center h-32"><Loader2 className="animate-spin w-6 h-6 text-gray-400" /></div> : jobsByStatus[status]?.length === 0 ? <div className="text-center text-gray-400 py-8">No quotes</div> : jobsByStatus[status]?.map(job => jobCard(job, true))}</div></div>)}</div>}
+        {viewMode === "kanban" && <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">{quoteStatusOrder.map(status => <div key={status} className="flex flex-col"><div className={`${statusColors[status]} rounded-t-lg p-4 border-b-2 border-current`}><h3 className="font-semibold text-lg">{statusLabels[status]}</h3><p className="text-sm opacity-75">{jobsByStatus[status]?.length || 0} quotes</p></div><div className="flex-1 bg-gray-100 rounded-b-lg p-4 space-y-3 min-h-96">{jobsLoading ? <div className="flex items-center justify-center h-32"><Loader2 className="animate-spin w-6 h-6 text-gray-400" /></div> : jobsByStatus[status]?.length === 0 ? <div className="text-center text-gray-400 py-8">No quotes</div> : jobsByStatus[status]?.map(job => jobCard(job, true))}</div></div>)}</div>}
         {viewMode === "list" && <div className="space-y-4">{jobsLoading ? <div className="flex items-center justify-center h-32"><Loader2 className="animate-spin w-8 h-8" /></div> : filteredJobs.length > 0 ? filteredJobs.map(job => jobCard(job)) : <div className="text-center py-12"><p className="text-gray-600">No quotes yet. Start by creating a new quote.</p></div>}</div>}
         {user.role === "admin" && <div className="mt-12 pt-8 border-t"><Button onClick={() => navigate("/admin")} variant="outline" className="h-10">Admin Panel</Button></div>}
       </div>
