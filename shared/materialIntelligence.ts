@@ -18,6 +18,7 @@ export interface ProductSelectionForMaterials {
   unitCostCents?: number;
   acousticFixingMethod?: AcousticFixingMethod;
   tvSizeInches?: number;
+  includeTvBracket?: boolean;
 }
 
 export interface WallForMaterials {
@@ -183,7 +184,7 @@ function getTvBackdropProduct(products: ProductSelectionForMaterials[]) {
 }
 
 function hasSupplyTvBracket(products: ProductSelectionForMaterials[]) {
-  return products.some(product => /supply.*tv.*bracket|tv.*bracket/i.test(product.productName));
+  return products.some(product => product.includeTvBracket || /supply.*tv.*bracket|tv.*bracket/i.test(product.productName));
 }
 
 function hasMarbleSheetProduct(products: ProductSelectionForMaterials[]) {
@@ -341,8 +342,8 @@ export function estimateWallMaterials(wall: WallForMaterials): MaterialEstimate 
       name: MATERIAL_BASELINES.tvBracket.name,
       quantity: 1,
       unitCostCents: MATERIAL_BASELINES.tvBracket.unitCostCents,
-      source: "automatic",
-      notes: ["Included because Supply & Install TV Bracket was selected."],
+      source: "operator_selected",
+      notes: ["Included because TV Bracket was selected."],
     });
   }
 
