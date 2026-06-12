@@ -163,6 +163,24 @@ function safeNumber(value: unknown) {
   return Number.isFinite(numberValue) ? numberValue : undefined;
 }
 
+function getResumeJobIdFromLocation(location: string) {
+  const [pathname, queryString = ""] = location.split("?");
+  const fallbackQuery = typeof window !== "undefined" ? window.location.search.replace(/^\?/, "") : "";
+  const queryId = new URLSearchParams(queryString || fallbackQuery).get("resumeJobId");
+  const pathId = pathname.match(/^\/quote\/(\d+)$/)?.[1];
+  const parsed = Number(queryId || pathId);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function formatDateInput(value: unknown) {
+  if (!value) return "";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+  const date = value instanceof Date ? value : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
 function parseItemDetails(value: unknown): Record<string, any> {
   if (!value || typeof value !== "string") return {};
   try {
@@ -257,10 +275,10 @@ function fileToBase64(file: File) {
 
 export default function QuoteForm() {
   const { user } = useAuth();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+  const utils = trpc.useUtils();
   const [currentStep, setCurrentStep] = useState<WorkflowStep>("client");
   const [resumeJobId, setResumeJobId] = useState<number | null>(null);
-  const [isLoadingDraft, setIsLoadingDraft] = useState(false);
 
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
@@ -316,37 +334,50 @@ export default function QuoteForm() {
   const deleteJobItemsByJobIdMutation = trpc.jobItems.deleteByJobId.useMutation();
   const deleteWallsByJobIdMutation = trpc.walls.deleteByJobId.useMutation();
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const jobId = params.get("resumeJobId");
-    if (jobId) {
-      setResumeJobId(parseInt(jobId, 10));
-      setIsLoadingDraft(true);
-    }
-  }, []);
+  const resetQuoteForm = () => {
+    setClientName("");
+    setClientEmail("");
+    setClientPhone("");
+    setClientAddress("");
+    setSuburb("");
+    setAppointmentDate("");
+    setAppointmentTime("");
+    setReferenceImageUrl("");
+    setReferenceImagePreview(null);
+    setWallsWithProducts([]);
+    setCurrentStep("client");
+    closeProductPicker();
+  };
 
   useEffect(() => {
-    if (draftJob && isLoadingDraft) {
-      setClientName(draftJob.clientName === "[Draft]" ? "" : draftJob.clientName);
-      setClientEmail(draftJob.clientEmail || "");
-      setClientPhone(draftJob.clientPhone || "");
-      setClientAddress(draftJob.clientAddress || "");
-      setSuburb(draftJob.suburb || "");
-      if (draftJob.appointmentDate) {
-        const date = new Date(draftJob.appointmentDate);
-        setAppointmentDate(date.toISOString().split("T")[0]);
-      }
-      setAppointmentTime(draftJob.appointmentTime || "");
-      if (draftJob.referenceImageUrl) {
-        setReferenceImageUrl(draftJob.referenceImageUrl);
-        setReferenceImagePreview(draftJob.referenceImageUrl);
-      }
-      setIsLoadingDraft(false);
-    }
-  }, [draftJob, isLoadingDraft]);
+    const nextResumeJobId = getResumeJobIdFromLocation(location);
+    setResumeJobId(nextResumeJobId);
+    if (!nextResumeJobId) resetQuoteForm();
+  }, [location]);
 
   useEffect(() => {
-    if (savedWalls && savedWalls.length > 0) {
+    if (!draftJob || !resumeJobId) return;
+
+    setClientName(draftJob.clientName === "[Draft]" ? "" : draftJob.clientName);
+    setClientEmail(draftJob.clientEmail || "");
+    setClientPhone(draftJob.clientPhone || "");
+    setClientAddress(draftJob.clientAddress || "");
+    setSuburb(draftJob.suburb || "");
+    setAppointmentDate(formatDateInput(draftJob.appointmentDate));
+    setAppointmentTime(draftJob.appointmentTime || "");
+    setReferenceImageUrl(draftJob.referenceImageUrl || "");
+    setReferenceImagePreview(draftJob.referenceImageUrl || null);
+
+    if (draftJob.operatorName && operators) {
+      const matchingOperator = operators.find((operator: any) => operator.name === draftJob.operatorName);
+      localStorage.setItem("selectedOperator", matchingOperator ? String(matchingOperator.id) : draftJob.operatorName);
+    }
+  }, [draftJob, operators, resumeJobId]);
+
+  useEffect(() => {
+    if (!resumeJobId || savedWalls === undefined) return;
+
+    {
       const wallsData = savedWalls.map((wall: any) => {
         const decodedNotes = decodeWallNotes(wall.notes);
         return {
@@ -397,7 +428,7 @@ export default function QuoteForm() {
       });
       setWallsWithProducts(wallsData);
     }
-  }, [savedWalls]);
+  }, [resumeJobId, savedWalls]);
 
   const getSelectedOperatorName = () => {
     const selectedOperator = localStorage.getItem("selectedOperator");
@@ -648,14 +679,14 @@ export default function QuoteForm() {
     try {
       const jobInput = {
         clientName: clientName.trim() || clientPhone.trim() || clientEmail.trim() || clientAddress.trim() || "[Draft]",
-        clientEmail: clientEmail.trim() || undefined,
-        clientPhone: clientPhone.trim() || undefined,
-        clientAddress: clientAddress.trim() || undefined,
-        suburb: suburb || undefined,
-        appointmentDate: appointmentDate || undefined,
-        appointmentTime: appointmentTime || undefined,
-        referenceImageUrl: referenceImageUrl || undefined,
-        operatorName: getSelectedOperatorName(),
+        clientEmail: clientEmail.trim() || null,
+        clientPhone: clientPhone.trim() || null,
+        clientAddress: clientAddress.trim() || null,
+        suburb: suburb || null,
+        appointmentDate: appointmentDate || null,
+        appointmentTime: appointmentTime || null,
+        referenceImageUrl: referenceImageUrl || null,
+        operatorName: getSelectedOperatorName() || null,
         totalEstimate: calculateTotal(),
       };
 
@@ -702,8 +733,17 @@ export default function QuoteForm() {
       }
 
       setResumeJobId(jobId);
+      await Promise.all([
+        utils.jobs.list.invalidate(),
+        utils.jobs.getById.invalidate({ id: jobId }),
+        utils.walls.getByJobId.invalidate({ jobId }),
+      ]);
       toast.success(requireComplete ? "Quote saved" : "Draft saved");
-      if (requireComplete) navigate("/jobs");
+      if (requireComplete) {
+        navigate("/jobs");
+      } else if (!resumeJobId) {
+        navigate(`/quote/${jobId}`);
+      }
     } catch (error: any) {
       toast.error(error?.message || "Failed to save quote");
     }
@@ -721,7 +761,7 @@ export default function QuoteForm() {
             </Button>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Quote</h1>
-              <p className="text-xs text-gray-600">Client → Walls → Review</p>
+              <p className="text-xs text-gray-600">Client &gt; Walls &gt; Review</p>
             </div>
           </div>
           <Button onClick={() => handleSaveDraft(false)} variant="outline" disabled={saveInProgress || !hasClientDetails} className="h-9">

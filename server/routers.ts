@@ -221,16 +221,16 @@ async function assertOwnsJobItem(itemId: number, userId: number) {
 
 const jobInputSchema = z.object({
   clientName: z.string().min(1).optional(),
-  clientEmail: z.string().email().optional(),
-  clientPhone: z.string().optional(),
-  clientAddress: z.string().optional(),
-  suburb: z.string().optional(),
-  appointmentDate: z.string().optional(),
-  appointmentTime: z.string().optional(),
-  referenceImageUrl: z.string().optional(),
-  operatorName: z.string().optional(),
+  clientEmail: z.string().email().nullish(),
+  clientPhone: z.string().nullish(),
+  clientAddress: z.string().nullish(),
+  suburb: z.string().nullish(),
+  appointmentDate: z.string().nullish(),
+  appointmentTime: z.string().nullish(),
+  referenceImageUrl: z.string().nullish(),
+  operatorName: z.string().nullish(),
   totalEstimate: z.number().int().nonnegative().optional(),
-  notes: z.string().optional(),
+  notes: z.string().nullish(),
 });
 
 const jobUpdateSchema = jobInputSchema.extend({ id: z.number() });
@@ -266,16 +266,16 @@ function buildJobInput(input: z.infer<typeof jobInputSchema>, userId: number) {
   return {
     userId,
     clientName: input.clientName || "[Draft]",
-    clientEmail: input.clientEmail,
-    clientPhone: input.clientPhone,
-    clientAddress: input.clientAddress,
-    suburb: input.suburb,
+    clientEmail: input.clientEmail || null,
+    clientPhone: input.clientPhone || null,
+    clientAddress: input.clientAddress || null,
+    suburb: input.suburb || null,
     appointmentDate: input.appointmentDate ? new Date(input.appointmentDate) : null,
-    appointmentTime: input.appointmentTime,
-    referenceImageUrl: input.referenceImageUrl,
-    operatorName: input.operatorName,
+    appointmentTime: input.appointmentTime || null,
+    referenceImageUrl: input.referenceImageUrl || null,
+    operatorName: input.operatorName || null,
     totalEstimate: input.totalEstimate,
-    notes: input.notes,
+    notes: input.notes || null,
     status: "quoted" as const,
   };
 }
@@ -346,7 +346,12 @@ export const appRouter = router({
     update: protectedProcedure.input(jobUpdateSchema).mutation(async ({ input, ctx }) => {
       const job = await assertOwnsJob(input.id, ctx.user.id);
       const { id, appointmentDate, ...updates } = input;
-      const updateData = { ...updates, appointmentDate: appointmentDate ? new Date(appointmentDate) : undefined };
+      const updateData = Object.fromEntries(
+        Object.entries({
+          ...updates,
+          appointmentDate: appointmentDate === undefined ? undefined : appointmentDate ? new Date(appointmentDate) : null,
+        }).filter(([, value]) => value !== undefined)
+      );
       if (await isPreviewMode()) {
         Object.assign(job, updateData, { updatedAt: now() });
         return job;

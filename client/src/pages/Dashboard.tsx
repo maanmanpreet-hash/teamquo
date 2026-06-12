@@ -234,7 +234,7 @@ export default function Dashboard() {
 
       await refetch();
       toast.success("Quote duplicated as Draft");
-      navigate(`/quote?resumeJobId=${newJobId}`);
+      navigate(`/quote/${newJobId}`);
     } catch (error: any) {
       toast.error(error?.message || "Failed to duplicate quote");
       setDuplicatingJobId(null);
@@ -278,7 +278,7 @@ export default function Dashboard() {
             {isUpdatingStatus && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
           </div>
           <div className="grid grid-cols-2 gap-2 pt-1">
-            <Button size="sm" variant="outline" onClick={() => navigate(`/quote?resumeJobId=${job.id}`)} className="h-9 text-xs"><Edit className="w-3 h-3 mr-1" />{job.clientName === "[Draft]" ? "Resume" : "Edit"}</Button>
+            <Button size="sm" variant="outline" onClick={() => navigate(`/quote/${job.id}`)} className="h-9 text-xs"><Edit className="w-3 h-3 mr-1" />{job.clientName === "[Draft]" ? "Resume" : "Edit"}</Button>
             <Button size="sm" variant="outline" onClick={() => duplicateQuote(job)} disabled={isDuplicating} className="h-9 text-xs">{isDuplicating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Copy className="w-3 h-3 mr-1" />}Duplicate</Button>
             <Button size="sm" variant="outline" onClick={() => setDownloadingJobId(job.id)} disabled={downloadingJobId === job.id || isDuplicating} className="h-9 text-xs">{downloadingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Quote PDF</Button>
             <Button size="sm" variant="outline" onClick={() => deleteQuote(job.id)} disabled={deletingJobId === job.id || isDuplicating} className="h-9 text-xs text-red-600 hover:text-red-700 hover:bg-red-50">{deletingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Trash2 className="w-3 h-3 mr-1" />}Delete</Button>
