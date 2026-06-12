@@ -2,7 +2,7 @@ import { Job, JobItem, CladdingVariant, Product, Wall } from "../drizzle/schema"
 import {
   CUSTOMER_FACING_COMPANY_NAME,
   QUOTE_TERMS,
-  SKYWALL_CONTACT_DETAILS,
+  COMPANY_CONTACT_DETAILS,
   formatMoneyFromCents,
   formatQuoteNumber,
 } from "../shared/quote";
@@ -275,14 +275,14 @@ export function generateQuoteHTML(
     <header class="header">
       <div>
         <div class="brand-block">
-          <img src="${safeLogoUrl}" alt="SKYWALL" class="brand-logo" />
+          <img src="${safeLogoUrl}" alt="Skywall Cabinets" class="brand-logo" />
         </div>
         <div class="brand-name">${escapeHtml(companyName)}</div>
         <div class="company-details">
-          ABN: ${escapeHtml(SKYWALL_CONTACT_DETAILS.abn)}<br />
-          ${escapeHtml(SKYWALL_CONTACT_DETAILS.address)}<br />
-          ${escapeHtml(SKYWALL_CONTACT_DETAILS.phone)} | ${escapeHtml(SKYWALL_CONTACT_DETAILS.email)}<br />
-          ${escapeHtml(SKYWALL_CONTACT_DETAILS.website)}
+          ABN: ${escapeHtml(COMPANY_CONTACT_DETAILS.abn)}<br />
+          ${escapeHtml(COMPANY_CONTACT_DETAILS.address)}<br />
+          ${escapeHtml(COMPANY_CONTACT_DETAILS.phone)} | ${escapeHtml(COMPANY_CONTACT_DETAILS.email)}<br />
+          ${escapeHtml(COMPANY_CONTACT_DETAILS.website)}
         </div>
       </div>
       <div class="quote-box">
@@ -302,7 +302,7 @@ export function generateQuoteHTML(
       </div>
       <div class="panel">
         <h2>Quote Summary</h2>
-        <p>Supply and install quote for the listed walls and selected SKYWALL works.</p>
+        <p>Supply and install quote for the listed walls and selected Skywall Cabinets works.</p>
         <p>Final measurements, join layout, and site conditions to be confirmed before commencement.</p>
       </div>
     </section>
@@ -321,7 +321,7 @@ export function generateQuoteHTML(
 
     <section class="terms"><h2>Quote Terms</h2><ul>${terms}</ul></section>
     ${safeNotes}
-    <footer class="footer">Thank you for considering SKYWALL Cabinets & Interior Cladding.</footer>
+    <footer class="footer">Thank you for considering Skywall Cabinets.</footer>
   </div>
 </body>
 </html>`;

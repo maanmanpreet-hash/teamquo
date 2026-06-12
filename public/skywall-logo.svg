@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 220" role="img" aria-labelledby="title desc">
-  <title id="title">SKYWALL Cabinets &amp; Interior Cladding</title>
-  <desc id="desc">Stable SKYWALL wordmark for quote PDFs and app previews.</desc>
+  <title id="title">Skywall Cabinets</title>
+  <desc id="desc">Stable Skywall Cabinets wordmark for quote PDFs and app previews.</desc>
   <rect width="760" height="220" rx="18" fill="#ffffff"/>
   <g transform="translate(36 34)">
     <path d="M0 72 L74 0 L148 72 L124 72 L74 25 L24 72 Z" fill="#10243f"/>
@@ -8,6 +8,6 @@
     <path d="M42 98 H106 V132 H42 Z" fill="#ffffff" opacity="0.92"/>
     <path d="M50 106 H98 V124 H50 Z" fill="#10243f" opacity="0.78"/>
   </g>
-  <text x="210" y="102" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="800" letter-spacing="3" fill="#10243f">SKYWALL</text>
-  <text x="214" y="146" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="600" letter-spacing="1.1" fill="#2f4057">CABINETS &amp; INTERIOR CLADDING</text>
+  <text x="210" y="102" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="800" letter-spacing="1.4" fill="#10243f">Skywall</text>
+  <text x="214" y="146" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="600" letter-spacing="1.1" fill="#2f4057">CABINETS</text>
 </svg>

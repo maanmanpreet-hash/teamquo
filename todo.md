@@ -1,4 +1,4 @@
-# TeamQuo - Collaborative Quote Management Platform
+# Skywall Cabinets - Quote Management Platform
 
 ## 🚨 URGENT BUGS - FIX NOW
 - [x] Restore fireplace and mirror products to dropdown (currently missing)

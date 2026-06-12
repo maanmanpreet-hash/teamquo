@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
-const QUOTE_DIRTY_KEY = "teamquo.quote.unsavedChanges";
-const QUOTE_RECOVERY_KEY = "teamquo.quote.recoverySnapshot";
+const QUOTE_DIRTY_KEY = "skywall-cabinets.quote.unsavedChanges";
+const QUOTE_RECOVERY_KEY = "skywall-cabinets.quote.recoverySnapshot";
 const SAVE_SUCCESS_MESSAGES = ["Draft saved", "Quote saved"];
 const LEAVE_WARNING =
   "You have unsaved quote changes. Save Draft before leaving, otherwise information entered on this page may be lost.";

@@ -129,7 +129,7 @@ export default function Jobs() {
           <div>
             <h1 className="text-3xl font-bold">Jobs Dashboard</h1>
             <p className="text-muted-foreground mt-2">
-              Track SKYWALL quote jobs, drafts, and follow-up work
+              Track Skywall Cabinets quote jobs, drafts, and follow-up work
             </p>
           </div>
           <Link href="/quote">

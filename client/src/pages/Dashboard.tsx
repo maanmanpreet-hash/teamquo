@@ -35,7 +35,7 @@ function fallbackPdfHtml(job: any) {
   return `
     <main style="font-family:Arial,sans-serif;padding:32px;color:#111827">
       <header style="display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #111827;padding-bottom:16px;margin-bottom:24px">
-        <img src="/skywall-logo.png" alt="SKYWALL" style="height:72px;width:auto" />
+        <img src="/skywall-logo.png" alt="Skywall Cabinets" style="height:72px;width:auto" />
         <div style="text-align:right"><h1 style="margin:0">Supply and Install Quote</h1><p>${formatQuoteNumber(job)}</p></div>
       </header>
       <h2>${job?.clientName || "Preview Client"}</h2>
@@ -294,8 +294,8 @@ export default function Dashboard() {
         <div className="mb-8">
           <div className="flex items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-4">
-              <img src="/skywall-logo.png" alt="SKYWALL Cabinets & Interior Cladding" className="h-16 md:h-20 w-auto object-contain" />
-              <p className="hidden sm:block text-gray-600">Internal quoting for SKYWALL Cabinets & Interior Cladding</p>
+              <img src="/skywall-logo.png" alt="Skywall Cabinets" className="h-16 md:h-20 w-auto object-contain" />
+              <p className="hidden sm:block text-gray-600">Internal quoting for Skywall Cabinets</p>
             </div>
             <Button onClick={startNewQuote} disabled={operatorsLoading} className="bg-blue-600 hover:bg-blue-700 text-white h-12 px-6"><Plus className="w-4 h-4 mr-2" />New Quote</Button>
           </div>

@@ -17,9 +17,9 @@ export function formatMoneyFromCents(cents: number | null | undefined): string {
 }
 
 export const CUSTOMER_FACING_COMPANY_NAME =
-  "SKYWALL Cabinets & Interior Cladding";
+  "Skywall Cabinets";
 
-export const SKYWALL_CONTACT_DETAILS = {
+export const COMPANY_CONTACT_DETAILS = {
   abn: "52 935 732 589",
   address: "38 Tuxworth Drive, Kalkallo 3064 VIC",
   phone: "0431 889 004",

@@ -1,4 +1,4 @@
-# SKYWALL TeamQuo recovery passes
+# Skywall Cabinets recovery passes
 
 Date: 2026-06-10
 
@@ -46,9 +46,9 @@ Implemented direction:
 
 Implemented direction:
 
-- Customer-facing quote branding uses SKYWALL, not TeamQuo.
+- Customer-facing quote branding uses Skywall Cabinets.
 - PDF avoids relying on a remote logo URL, preventing broken image placeholders.
-- PDF uses a text SKYWALL wordmark and full company details.
+- PDF uses a Skywall Cabinets wordmark and full company details.
 - PDF uses Supply and Install wording.
 - PDF shows products and quantities without per-line price breakdown.
 - PDF shows a single Total Estimate.
@@ -103,6 +103,6 @@ Manual test sequence:
 6. Return to Jobs/Dashboard.
 7. Resume quote and verify measurements/products are still present.
 8. Generate PDF.
-9. Confirm PDF says SKYWALL and uses Supply and Install wording.
+9. Confirm PDF says Skywall Cabinets and uses Supply and Install wording.
 10. Confirm PDF shows product quantities and one total estimate only.
 11. Confirm an empty quote cannot generate PDF.

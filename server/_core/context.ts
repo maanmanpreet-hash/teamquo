@@ -13,7 +13,7 @@ const localDevUser = {
   id: 1,
   openId: "local-dev-user",
   name: "Local Preview",
-  email: "local@skywall.test",
+  email: "local@skywallcabinets.test",
   loginMethod: "local",
   role: "admin",
   lastSignedIn: new Date(),
