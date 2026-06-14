@@ -35,12 +35,23 @@ const statusLabels: Record<JobStatus, string> = {
   cancelled: "Cancelled",
 };
 
+function formatAppointmentDate(value: string | Date | null | undefined) {
+  if (!value) return "";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString();
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString();
+}
+
 export default function Jobs() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [selectedStatus, setSelectedStatus] = useState<JobStatus | "all">("all");
   const [selectedSuburb, setSelectedSuburb] = useState<string | "all">("all");
   const [downloadingJobId, setDownloadingJobId] = useState<number | null>(null);
+  const [updatingStatusJobId, setUpdatingStatusJobId] = useState<number | null>(null);
 
   const SUBURBS = [
     "Kalkallo",
@@ -51,11 +62,17 @@ export default function Jobs() {
   ];
 
   const { data: jobs, isLoading, refetch } = trpc.jobs.list.useQuery();
+  const { data: operators } = trpc.operators.list.useQuery();
 
   const updateStatusMutation = trpc.jobs.updateStatus.useMutation({
     onSuccess: () => {
+      setUpdatingStatusJobId(null);
       refetch();
       toast.success("Status updated");
+    },
+    onError: error => {
+      setUpdatingStatusJobId(null);
+      toast.error(error.message || "Failed to update status");
     },
   });
 
@@ -69,6 +86,16 @@ export default function Jobs() {
 
   const handleDownloadPDF = (jobId: number) => {
     setDownloadingJobId(jobId);
+  };
+
+  const startNewQuote = () => {
+    const operatorId = operators?.[0]?.id?.toString();
+    if (operatorId) {
+      localStorage.setItem("selectedOperator", operatorId);
+    } else {
+      localStorage.removeItem("selectedOperator");
+    }
+    navigate("/quote");
   };
 
   useEffect(() => {
@@ -132,12 +159,10 @@ export default function Jobs() {
               Track Skywall Cabinets quote jobs, drafts, and follow-up work
             </p>
           </div>
-          <Link href="/quote">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              New Quote
-            </Button>
-          </Link>
+          <Button onClick={startNewQuote}>
+            <Plus className="w-4 h-4 mr-2" />
+            New Quote
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
@@ -231,7 +256,7 @@ export default function Jobs() {
                         {job.suburb && <div><span className="font-medium">Suburb:</span> {job.suburb}</div>}
                         {job.appointmentDate && (
                           <div>
-                            <span className="font-medium">Quote:</span> {new Date(job.appointmentDate).toLocaleDateString()} {job.appointmentTime && `@ ${job.appointmentTime}`}
+                            <span className="font-medium">Quote:</span> {formatAppointmentDate(job.appointmentDate)} {job.appointmentTime && `@ ${job.appointmentTime}`}
                           </div>
                         )}
                         {job.operatorName && <div><span className="font-medium">Operator:</span> {job.operatorName}</div>}
@@ -254,9 +279,11 @@ export default function Jobs() {
                   <div className="mt-4 flex gap-2 flex-wrap">
                     <Button
                       size="sm"
+                      disabled={downloadingJobId === job.id || updatingStatusJobId === job.id}
                       onClick={() => {
                         if (job.operatorName) {
-                          localStorage.setItem("selectedOperator", job.operatorName);
+                          const matchingOperator = operators?.find(operator => operator.name === job.operatorName);
+                          localStorage.setItem("selectedOperator", matchingOperator ? String(matchingOperator.id) : job.operatorName);
                         }
                         navigate(`/quote?resumeJobId=${job.id}`);
                       }}
@@ -270,7 +297,7 @@ export default function Jobs() {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDownloadPDF(job.id)}
-                      disabled={downloadingJobId === job.id}
+                      disabled={downloadingJobId === job.id || updatingStatusJobId === job.id}
                     >
                       {downloadingJobId === job.id ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -286,8 +313,11 @@ export default function Jobs() {
                           key={status}
                           variant="outline"
                           size="sm"
-                          onClick={() => updateStatusMutation.mutate({ id: job.id, status })}
-                          disabled={updateStatusMutation.isPending}
+                          onClick={() => {
+                            setUpdatingStatusJobId(job.id);
+                            updateStatusMutation.mutate({ id: job.id, status });
+                          }}
+                          disabled={downloadingJobId === job.id || updatingStatusJobId === job.id}
                         >
                           Mark {statusLabels[status]}
                         </Button>
@@ -302,12 +332,10 @@ export default function Jobs() {
           <Card>
             <CardContent className="pt-12 pb-12 text-center">
               <p className="text-muted-foreground mb-4">No jobs found</p>
-              <Link href="/quote">
-                <Button>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Your First Quote
-                </Button>
-              </Link>
+              <Button onClick={startNewQuote}>
+                <Plus className="w-4 h-4 mr-2" />
+                Create Your First Quote
+              </Button>
             </CardContent>
           </Card>
         )}

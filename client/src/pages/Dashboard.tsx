@@ -64,6 +64,25 @@ function getStatusColor(status: string | null | undefined) {
   return statusColors[(status || "quoted") as JobStatus] || statusColors.quoted;
 }
 
+function formatAppointmentDate(value: string | Date | null | undefined) {
+  if (!value) return "";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString();
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString();
+}
+
+function persistSelectedOperatorFromName(
+  operatorName: string | null | undefined,
+  operators: Array<{ id: number; name: string }> | undefined
+) {
+  if (!operatorName) return;
+  const matchingOperator = operators?.find(operator => operator.name === operatorName);
+  localStorage.setItem("selectedOperator", matchingOperator ? String(matchingOperator.id) : operatorName);
+}
+
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
@@ -84,9 +103,7 @@ export default function Dashboard() {
     { enabled: downloadingJobId !== null, retry: false }
   );
 
-  const createJobMutation = trpc.jobs.create.useMutation();
-  const createWallMutation = trpc.walls.create.useMutation();
-  const createJobItemMutation = trpc.jobItems.create.useMutation();
+  const saveQuoteMutation = trpc.jobs.saveQuote.useMutation();
 
   const deleteJobMutation = trpc.jobs.delete.useMutation({
     onSuccess: () => {
@@ -167,8 +184,12 @@ export default function Dashboard() {
   };
 
   const startNewQuote = () => {
-    const operatorId = selectedOperator || operators?.[0]?.id?.toString() || "1";
-    localStorage.setItem("selectedOperator", operatorId);
+    const operatorId = selectedOperator || operators?.[0]?.id?.toString();
+    if (operatorId) {
+      localStorage.setItem("selectedOperator", operatorId);
+    } else {
+      localStorage.removeItem("selectedOperator");
+    }
     navigate("/quote");
   };
 
@@ -182,38 +203,25 @@ export default function Dashboard() {
 
     try {
       const sourceWalls = await utils.walls.getByJobId.fetch({ jobId: job.id });
-      const duplicatedJob = await createJobMutation.mutateAsync({
+      const duplicatedJob = await saveQuoteMutation.mutateAsync({
         clientName: job.clientName === "[Draft]" ? undefined : job.clientName,
         clientEmail: job.clientEmail || undefined,
         clientPhone: job.clientPhone || undefined,
         clientAddress: job.clientAddress || undefined,
         suburb: job.suburb || undefined,
+        appointmentDate: job.appointmentDate ? new Date(job.appointmentDate).toISOString().slice(0, 10) : undefined,
+        appointmentTime: job.appointmentTime || undefined,
         referenceImageUrl: job.referenceImageUrl || undefined,
         operatorName: job.operatorName || undefined,
         totalEstimate: job.totalEstimate ?? 0,
         notes: job.notes || undefined,
-      });
-
-      const newJobId = duplicatedJob?.id;
-      if (!newJobId) throw new Error("Duplicated quote could not be created");
-
-      for (const wall of sourceWalls || []) {
-        const createdWall = await createWallMutation.mutateAsync({
-          jobId: newJobId,
+        walls: (sourceWalls || []).map((wall: any) => ({
           wallType: wall.wallType as "regular" | "garage" | "custom",
           wallName: wall.wallName || undefined,
           wallWidthMm: wall.wallWidthMm || undefined,
           wallHeightMm: wall.wallHeightMm || undefined,
           notes: wall.notes || undefined,
-        });
-
-        const newWallId = createdWall?.id;
-        if (!newWallId) throw new Error("Duplicated wall could not be created");
-
-        for (const item of wall.products || []) {
-          await createJobItemMutation.mutateAsync({
-            jobId: newJobId,
-            wallId: newWallId,
+          products: (wall.products || []).map((item: any) => ({
             itemType: item.itemType,
             productId: item.productId || undefined,
             claddingVariantId: item.claddingVariantId || undefined,
@@ -228,11 +236,16 @@ export default function Dashboard() {
             totalPrice: item.totalPrice ?? undefined,
             manualPriceOverride: item.manualPriceOverride ?? undefined,
             itemDetails: item.itemDetails || undefined,
-          });
-        }
-      }
+          })),
+        })),
+      });
+
+      const newJobId = duplicatedJob?.id;
+      if (!newJobId) throw new Error("Duplicated quote could not be created");
 
       await refetch();
+      setDuplicatingJobId(null);
+      persistSelectedOperatorFromName(job.operatorName, operators);
       toast.success("Quote duplicated as Draft");
       navigate(`/quote/${newJobId}`);
     } catch (error: any) {
@@ -251,6 +264,9 @@ export default function Dashboard() {
     const currentStatus = (job.status || "quoted") as JobStatus;
     const isUpdatingStatus = updatingStatusJobId === job.id;
     const isDuplicating = duplicatingJobId === job.id;
+    const isDeleting = deletingJobId === job.id;
+    const isDownloading = downloadingJobId === job.id;
+    const actionBusy = isUpdatingStatus || isDuplicating || isDeleting || isDownloading;
 
     return (
       <Card key={job.id} className="p-4 bg-white shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
@@ -265,23 +281,35 @@ export default function Dashboard() {
           </div>
           <div className="grid grid-cols-1 gap-2 text-sm text-gray-600">
             {job.suburb && <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /><span>{job.suburb}</span></div>}
-            {job.appointmentDate && <div className="flex items-center gap-2"><Calendar className="w-4 h-4" /><span>{new Date(job.appointmentDate).toLocaleDateString()}</span></div>}
+            {job.appointmentDate && <div className="flex items-center gap-2"><Calendar className="w-4 h-4" /><span>{formatAppointmentDate(job.appointmentDate)}</span></div>}
             {!compact && job.operatorName && <div><span className="font-medium">Operator:</span> {job.operatorName}</div>}
             {!compact && <div className="font-semibold text-gray-900">Supply & Install Total: {formatMoneyFromCents(job.totalEstimate ?? 0)}</div>}
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-gray-500">Status</span>
-            <Select value={currentStatus} onValueChange={value => updateQuoteStatus(job.id, value as JobStatus)} disabled={isUpdatingStatus || isDuplicating}>
+            <Select value={currentStatus} onValueChange={value => updateQuoteStatus(job.id, value as JobStatus)} disabled={actionBusy}>
               <SelectTrigger className="h-9 flex-1 bg-white text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>{quoteStatusOrder.map(status => <SelectItem key={status} value={status}>{statusLabels[status]}</SelectItem>)}</SelectContent>
             </Select>
             {isUpdatingStatus && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
           </div>
           <div className="grid grid-cols-2 gap-2 pt-1">
-            <Button size="sm" variant="outline" onClick={() => navigate(`/quote/${job.id}`)} className="h-9 text-xs"><Edit className="w-3 h-3 mr-1" />{job.clientName === "[Draft]" ? "Resume" : "Edit"}</Button>
-            <Button size="sm" variant="outline" onClick={() => duplicateQuote(job)} disabled={isDuplicating} className="h-9 text-xs">{isDuplicating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Copy className="w-3 h-3 mr-1" />}Duplicate</Button>
-            <Button size="sm" variant="outline" onClick={() => setDownloadingJobId(job.id)} disabled={downloadingJobId === job.id || isDuplicating} className="h-9 text-xs">{downloadingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Quote PDF</Button>
-            <Button size="sm" variant="outline" onClick={() => deleteQuote(job.id)} disabled={deletingJobId === job.id || isDuplicating} className="h-9 text-xs text-red-600 hover:text-red-700 hover:bg-red-50">{deletingJobId === job.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Trash2 className="w-3 h-3 mr-1" />}Delete</Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                persistSelectedOperatorFromName(job.operatorName, operators);
+                navigate(`/quote/${job.id}`);
+              }}
+              disabled={actionBusy}
+              className="h-9 text-xs"
+            >
+              <Edit className="w-3 h-3 mr-1" />
+              {job.clientName === "[Draft]" ? "Resume" : "Edit"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => duplicateQuote(job)} disabled={actionBusy} className="h-9 text-xs">{isDuplicating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Copy className="w-3 h-3 mr-1" />}Duplicate</Button>
+            <Button size="sm" variant="outline" onClick={() => setDownloadingJobId(job.id)} disabled={actionBusy} className="h-9 text-xs">{isDownloading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Quote PDF</Button>
+            <Button size="sm" variant="outline" onClick={() => deleteQuote(job.id)} disabled={actionBusy} className="h-9 text-xs text-red-600 hover:text-red-700 hover:bg-red-50">{isDeleting ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Trash2 className="w-3 h-3 mr-1" />}Delete</Button>
           </div>
         </div>
       </Card>
