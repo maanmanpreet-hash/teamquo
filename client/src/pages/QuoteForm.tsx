@@ -163,7 +163,7 @@ function safeNumber(value: unknown) {
   return Number.isFinite(numberValue) ? numberValue : undefined;
 }
 
-function getResumeJobIdFromLocation(location: string) {
+export function getResumeJobIdFromLocation(location: string) {
   const [pathname, queryString = ""] = location.split("?");
   const fallbackQuery = typeof window !== "undefined" ? window.location.search.replace(/^\?/, "") : "";
   const queryId = new URLSearchParams(queryString || fallbackQuery).get("resumeJobId");
@@ -214,7 +214,7 @@ function calculateTvBackdrop(tvSizeInches: number) {
   };
 }
 
-function buildItemDetails(product: WallProduct) {
+export function buildItemDetails(product: WallProduct) {
   const details: Record<string, any> = {
     productType: product.productType,
   };
@@ -241,7 +241,7 @@ function buildItemDetails(product: WallProduct) {
   return JSON.stringify(details);
 }
 
-function applyItemDetailsToProduct(product: WallProduct, itemDetails: unknown): WallProduct {
+export function applyItemDetailsToProduct(product: WallProduct, itemDetails: unknown): WallProduct {
   const details = parseItemDetails(itemDetails);
   const nextProduct: WallProduct = { ...product, itemDetails: typeof itemDetails === "string" ? itemDetails : undefined };
 
@@ -317,22 +317,17 @@ export default function QuoteForm() {
     { enabled: selectedProductTypeId > 0 }
   );
   const { data: operators } = trpc.operators.list.useQuery();
-  const { data: draftJob } = trpc.jobs.getById.useQuery(
+  const { data: draftJob, isLoading: draftJobLoading } = trpc.jobs.getById.useQuery(
     { id: resumeJobId || 0 },
     { enabled: resumeJobId !== null }
   );
-  const { data: savedWalls } = trpc.walls.getByJobId.useQuery(
+  const { data: savedWalls, isLoading: savedWallsLoading } = trpc.walls.getByJobId.useQuery(
     { jobId: resumeJobId || 0 },
     { enabled: resumeJobId !== null }
   );
 
-  const createJobMutation = trpc.jobs.create.useMutation();
-  const updateJobMutation = trpc.jobs.update.useMutation();
-  const createJobItemMutation = trpc.jobItems.create.useMutation();
+  const saveQuoteMutation = trpc.jobs.saveQuote.useMutation();
   const uploadImageMutation = trpc.storage.uploadImage.useMutation();
-  const createWallMutation = trpc.walls.create.useMutation();
-  const deleteJobItemsByJobIdMutation = trpc.jobItems.deleteByJobId.useMutation();
-  const deleteWallsByJobIdMutation = trpc.walls.deleteByJobId.useMutation();
 
   const resetQuoteForm = () => {
     setClientName("");
@@ -345,14 +340,20 @@ export default function QuoteForm() {
     setReferenceImageUrl("");
     setReferenceImagePreview(null);
     setWallsWithProducts([]);
+    setTempWallType("custom");
+    setTempWallName("");
+    setTempWallWidth("");
+    setTempWallHeight("");
     setCurrentStep("client");
     closeProductPicker();
   };
 
   useEffect(() => {
     const nextResumeJobId = getResumeJobIdFromLocation(location);
+    if (nextResumeJobId !== resumeJobId) {
+      resetQuoteForm();
+    }
     setResumeJobId(nextResumeJobId);
-    if (!nextResumeJobId) resetQuoteForm();
   }, [location]);
 
   useEffect(() => {
@@ -371,6 +372,8 @@ export default function QuoteForm() {
     if (draftJob.operatorName && operators) {
       const matchingOperator = operators.find((operator: any) => operator.name === draftJob.operatorName);
       localStorage.setItem("selectedOperator", matchingOperator ? String(matchingOperator.id) : draftJob.operatorName);
+    } else if (resumeJobId) {
+      localStorage.removeItem("selectedOperator");
     }
   }, [draftJob, operators, resumeJobId]);
 
@@ -458,7 +461,12 @@ export default function QuoteForm() {
   const hasProducts = wallsWithProducts.some(wall => wall.products.length > 0);
   const wallsWithoutProducts = wallsWithProducts.filter(wall => wall.products.length === 0);
   const workflowReady = hasClientDetails && hasWalls && hasProducts && wallsWithoutProducts.length === 0;
-  const saveInProgress = createJobMutation.isPending || updateJobMutation.isPending;
+  const isResumeLoading = resumeJobId !== null && (draftJobLoading || savedWallsLoading);
+  const saveInProgress =
+    saveQuoteMutation.isPending ||
+    uploadImageMutation.isPending ||
+    isUploadingImage;
+  const formBusy = saveInProgress || isResumeLoading;
 
   const resetProductDraft = () => {
     setTempProductType(null);
@@ -538,8 +546,8 @@ export default function QuoteForm() {
       return;
     }
 
-    setWallsWithProducts([
-      ...wallsWithProducts,
+    setWallsWithProducts(currentWalls => [
+      ...currentWalls,
       {
         id: Date.now().toString(),
         wallType: tempWallType,
@@ -642,8 +650,8 @@ export default function QuoteForm() {
 
     newProduct = { ...newProduct, itemDetails: buildItemDetails(newProduct) };
 
-    setWallsWithProducts(
-      wallsWithProducts.map(currentWall =>
+    setWallsWithProducts(currentWalls =>
+      currentWalls.map(currentWall =>
         currentWall.id === wallId ? { ...currentWall, products: [...currentWall.products, newProduct] } : currentWall
       )
     );
@@ -653,18 +661,23 @@ export default function QuoteForm() {
 
   const handleDeleteWall = (wallId: string) => {
     if (activeProductWallId === wallId) closeProductPicker();
-    setWallsWithProducts(wallsWithProducts.filter(wall => wall.id !== wallId));
+    setWallsWithProducts(currentWalls => currentWalls.filter(wall => wall.id !== wallId));
   };
 
   const handleRemoveProduct = (wallId: string, productId: string) => {
-    setWallsWithProducts(
-      wallsWithProducts.map(wall =>
+    setWallsWithProducts(currentWalls =>
+      currentWalls.map(wall =>
         wall.id === wallId ? { ...wall, products: wall.products.filter(product => product.id !== productId) } : wall
       )
     );
   };
 
   const handleSaveDraft = async (requireComplete = false) => {
+    if (isUploadingImage || uploadImageMutation.isPending) {
+      toast.error("Please wait for the reference image upload to finish before saving");
+      return;
+    }
+
     if (!hasClientDetails) {
       toast.error(getCustomerIdentifierError({ clientName, clientEmail, clientPhone, clientAddress }));
       setCurrentStep("client");
@@ -690,47 +703,34 @@ export default function QuoteForm() {
         totalEstimate: calculateTotal(),
       };
 
-      const savedJob = resumeJobId
-        ? await updateJobMutation.mutateAsync({ id: resumeJobId, ...jobInput })
-        : await createJobMutation.mutateAsync(jobInput);
-
-      const jobId = savedJob?.id || resumeJobId;
-      if (!jobId) throw new Error("Quote could not be saved");
-
-      await deleteJobItemsByJobIdMutation.mutateAsync({ jobId });
-      await deleteWallsByJobIdMutation.mutateAsync({ jobId });
-
-      for (const wall of wallsWithProducts) {
-        const savedWall = await createWallMutation.mutateAsync({
-          jobId,
+      const savedJob = await saveQuoteMutation.mutateAsync({
+        ...(resumeJobId ? { id: resumeJobId } : {}),
+        ...jobInput,
+        walls: wallsWithProducts.map(wall => ({
           wallType: wall.wallType,
           wallName: wall.wallName,
           wallWidthMm: wall.wallWidthMm,
           wallHeightMm: wall.wallHeightMm,
           notes: encodeWallNotes(wall.obstructionStatus, wall.obstructionNotes),
-        });
-
-        if (!savedWall?.id) throw new Error("Wall could not be saved");
-
-        for (const product of wall.products) {
-          await createJobItemMutation.mutateAsync({
-            jobId,
-            wallId: savedWall.id,
+          products: wall.products.map(product => ({
             itemType: product.productType,
             productId: product.productId ? Number(product.productId) : undefined,
             wallWidthMm: wall.wallWidthMm,
             wallHeightMm: wall.wallHeightMm,
-            cabinetWidthMm: product.cabinetWidthMm,
-            cabinetHeightMm: product.cabinetHeightMm,
-            cabinetDepthMm: product.cabinetDepthMm,
-            cabinetHeightFromFloorMm: product.cabinetHeightFromFloorMm,
+            ...(product.cabinetWidthMm != null ? { cabinetWidthMm: product.cabinetWidthMm } : {}),
+            ...(product.cabinetHeightMm != null ? { cabinetHeightMm: product.cabinetHeightMm } : {}),
+            ...(product.cabinetDepthMm != null ? { cabinetDepthMm: product.cabinetDepthMm } : {}),
+            ...(product.cabinetHeightFromFloorMm != null ? { cabinetHeightFromFloorMm: product.cabinetHeightFromFloorMm } : {}),
             quantityRequired: product.quantity,
             unitPrice: product.unitPrice,
             totalPrice: product.quantity * product.unitPrice,
             itemDetails: buildItemDetails(product),
-          });
-        }
-      }
+          })),
+        })),
+      });
+
+      const jobId = savedJob?.id || resumeJobId;
+      if (!jobId) throw new Error("Quote could not be saved");
 
       setResumeJobId(jobId);
       await Promise.all([
@@ -756,7 +756,7 @@ export default function QuoteForm() {
       <div className="mx-auto max-w-5xl space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Button onClick={() => navigate("/jobs")} variant="ghost" size="icon" className="h-9 w-9">
+            <Button onClick={() => navigate("/jobs")} disabled={formBusy} variant="ghost" size="icon" className="h-9 w-9">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
@@ -764,7 +764,7 @@ export default function QuoteForm() {
               <p className="text-xs text-gray-600">Client &gt; Walls &gt; Review</p>
             </div>
           </div>
-          <Button onClick={() => handleSaveDraft(false)} variant="outline" disabled={saveInProgress || !hasClientDetails} className="h-9">
+          <Button onClick={() => handleSaveDraft(false)} variant="outline" disabled={formBusy || !hasClientDetails} className="h-9">
             {saveInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Save Draft
           </Button>
@@ -780,10 +780,11 @@ export default function QuoteForm() {
                 <button
                   key={step.id}
                   type="button"
+                  disabled={formBusy}
                   onClick={() => goToStep(step.id)}
                   className={`rounded-md border px-2 py-2 text-left text-sm transition ${
                     active ? "border-blue-500 bg-blue-50" : complete ? "border-green-300 bg-green-50" : "border-gray-200 bg-white"
-                  }`}
+                  } ${formBusy ? "cursor-not-allowed opacity-60" : ""}`}
                 >
                   <div className="flex items-center gap-2">
                     {complete ? <CheckCircle2 className="h-4 w-4 text-green-700" /> : <Icon className="h-4 w-4 text-blue-700" />}
@@ -800,6 +801,15 @@ export default function QuoteForm() {
             <div className="flex gap-2 text-sm text-amber-900">
               <FileWarning className="mt-0.5 h-4 w-4 text-amber-700" />
               <p><strong>Manual review required.</strong> Check flagged quantities before relying on the quote.</p>
+            </div>
+          </Card>
+        )}
+
+        {isResumeLoading && (
+          <Card className="border-blue-200 bg-blue-50 p-4">
+            <div className="flex items-center gap-3 text-sm text-blue-900">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <p>Loading saved quote details...</p>
             </div>
           </Card>
         )}
@@ -866,11 +876,12 @@ export default function QuoteForm() {
                   <img src={referenceImagePreview} alt="Reference" className="max-h-32 rounded border-2 border-gray-200" />
                   <button
                     type="button"
+                    disabled={formBusy}
                     onClick={() => {
                       setReferenceImageUrl("");
                       setReferenceImagePreview(null);
                     }}
-                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600"
+                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     x
                   </button>
@@ -878,7 +889,7 @@ export default function QuoteForm() {
               )}
             </div>
 
-            <Button onClick={() => goToStep("walls")} disabled={!hasClientDetails} className="h-10 w-full">
+              <Button onClick={() => goToStep("walls")} disabled={!hasClientDetails || formBusy} className="h-10 w-full">
               Continue
             </Button>
           </Card>
@@ -913,7 +924,7 @@ export default function QuoteForm() {
                   <Input id="wallHeight" type="number" step="0.01" value={tempWallHeight} onChange={e => setTempWallHeight(e.target.value)} placeholder="2.60" className="mt-1 h-10" />
                 </div>
               </div>
-              <Button onClick={handleAddWall} className="h-10 w-full md:w-auto"><Plus className="mr-2 h-4 w-4" />Add Wall</Button>
+              <Button onClick={handleAddWall} disabled={formBusy} className="h-10 w-full md:w-auto"><Plus className="mr-2 h-4 w-4" />Add Wall</Button>
             </Card>
 
             {wallsWithProducts.map(wall => {
@@ -928,11 +939,11 @@ export default function QuoteForm() {
                     </div>
                     <div className="flex items-center gap-2">
                       {!isProductPickerOpen && (
-                        <Button onClick={() => openProductPicker(wall.id)} variant="outline" size="sm" className="h-8">
+                        <Button onClick={() => openProductPicker(wall.id)} disabled={formBusy} variant="outline" size="sm" className="h-8">
                           <Plus className="mr-1 h-3 w-3" />Product
                         </Button>
                       )}
-                      <Button onClick={() => handleDeleteWall(wall.id)} variant="ghost" size="sm" className="text-red-600 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
+                      <Button onClick={() => handleDeleteWall(wall.id)} disabled={formBusy} variant="ghost" size="sm" className="text-red-600 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </div>
 
@@ -949,7 +960,7 @@ export default function QuoteForm() {
                               {product.acousticFixingMethod && product.acousticFixingMethod !== "none" && <p className="text-xs text-gray-600">Fixing: {product.acousticFixingMethod.replace(/_/g, " ")}</p>}
                               {product.manualReviewRequired && <p className="text-xs font-semibold text-amber-700">Manual review required</p>}
                             </div>
-                            <Button onClick={() => handleRemoveProduct(wall.id, product.id)} variant="ghost" size="sm" className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
+                            <Button onClick={() => handleRemoveProduct(wall.id, product.id)} disabled={formBusy} variant="ghost" size="sm" className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
                           </div>
                         </div>
                       ))}
@@ -993,8 +1004,8 @@ export default function QuoteForm() {
                           </div>
                         )}
                         <div className="flex items-end gap-2">
-                          <Button onClick={() => handleAddProductToWall(wall.id)} className="h-10 flex-1"><Plus className="mr-2 h-4 w-4" />Add</Button>
-                          <Button onClick={closeProductPicker} type="button" variant="outline" className="h-10">Cancel</Button>
+                          <Button onClick={() => handleAddProductToWall(wall.id)} disabled={formBusy} className="h-10 flex-1"><Plus className="mr-2 h-4 w-4" />Add</Button>
+                          <Button onClick={closeProductPicker} disabled={formBusy} type="button" variant="outline" className="h-10">Cancel</Button>
                         </div>
                       </div>
 
@@ -1045,7 +1056,7 @@ export default function QuoteForm() {
               );
             })}
 
-            <Button onClick={() => goToStep("review")} disabled={!workflowReady} className="h-10 w-full">Review Quote</Button>
+            <Button onClick={() => goToStep("review")} disabled={!workflowReady || formBusy} className="h-10 w-full">Review Quote</Button>
           </div>
         )}
 

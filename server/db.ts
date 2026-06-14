@@ -321,6 +321,101 @@ export async function updateJob(id: number, updates: Partial<InsertJob>) {
   }
 }
 
+type SaveQuoteWallInput = {
+  wallType: InsertWall["wallType"];
+  wallName?: InsertWall["wallName"];
+  wallWidthMm?: InsertWall["wallWidthMm"];
+  wallHeightMm?: InsertWall["wallHeightMm"];
+  notes?: InsertWall["notes"];
+  products: Array<Omit<InsertJobItem, "jobId" | "wallId">>;
+};
+
+type SaveQuoteInput = {
+  jobId?: number;
+  job: InsertJob;
+  walls: SaveQuoteWallInput[];
+};
+
+export async function saveQuoteWithContents(input: SaveQuoteInput) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot save quote: database not available");
+    return undefined;
+  }
+
+  try {
+    const savedJobId = await db.transaction(async tx => {
+      let nextJobId = input.jobId;
+
+      if (nextJobId) {
+        await tx.update(jobs).set(input.job).where(eq(jobs.id, nextJobId));
+      } else {
+        const result = await tx.insert(jobs).values(input.job);
+        nextJobId = (result as any).insertId;
+      }
+
+      if (!nextJobId) {
+        throw new Error("Quote could not be saved");
+      }
+
+      await tx.delete(jobItems).where(eq(jobItems.jobId, nextJobId));
+      await tx.delete(walls).where(eq(walls.jobId, nextJobId));
+
+      for (const wall of input.walls) {
+        const wallResult = await tx.insert(walls).values({
+          jobId: nextJobId,
+          wallType: wall.wallType,
+          wallName: wall.wallName,
+          wallWidthMm: wall.wallWidthMm,
+          wallHeightMm: wall.wallHeightMm,
+          notes: wall.notes,
+        });
+
+        const wallId = (wallResult as any).insertId;
+        if (!wallId) {
+          throw new Error("Wall could not be saved");
+        }
+
+        for (const product of wall.products) {
+          await tx.insert(jobItems).values({
+            jobId: nextJobId,
+            wallId,
+            ...product,
+          });
+        }
+      }
+
+      return nextJobId;
+    });
+
+    return await getJobById(savedJobId);
+  } catch (error) {
+    console.error("[Database] Failed to save quote with contents:", error);
+    throw error;
+  }
+}
+
+export async function deleteJobWithContents(jobId: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot delete quote: database not available");
+    return false;
+  }
+
+  try {
+    await db.transaction(async tx => {
+      await tx.delete(jobItems).where(eq(jobItems.jobId, jobId));
+      await tx.delete(walls).where(eq(walls.jobId, jobId));
+      await tx.delete(jobs).where(eq(jobs.id, jobId));
+    });
+
+    return true;
+  } catch (error) {
+    console.error("[Database] Failed to delete quote with contents:", error);
+    throw error;
+  }
+}
+
 // ============================================================================
 // JOB ITEMS QUERIES
 // ============================================================================
@@ -790,6 +885,7 @@ export async function getWallsWithItemsByJobId(jobId: number) {
         unitPrice: jobItems.unitPrice,
         totalPrice: jobItems.totalPrice,
         manualPriceOverride: jobItems.manualPriceOverride,
+        itemDetails: jobItems.itemDetails,
         productName: products.name,
         productDesign: products.design,
         productWidthMm: products.widthMm,

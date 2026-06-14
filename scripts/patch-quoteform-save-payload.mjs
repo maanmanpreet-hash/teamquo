@@ -40,15 +40,28 @@ const newBlock = `          await createJobItemMutation.mutateAsync({
           });`;
 
 const source = readFileSync(quoteFormPath, "utf8");
+const newline = source.includes("\r\n") ? "\r\n" : "\n";
+const normalize = (text) => text.replace(/\r\n/g, "\n");
+const normalizedSource = normalize(source);
+const normalizedOldBlock = normalize(oldBlock);
+const normalizedNewBlock = normalize(newBlock);
+const normalizedServerSaveMarker = normalize("const saveQuoteMutation = trpc.jobs.saveQuote.useMutation();");
 
-if (source.includes(newBlock)) {
+if (normalizedSource.includes(normalizedNewBlock)) {
   console.log("QuoteForm save payload already patched.");
   process.exit(0);
 }
 
-if (!source.includes(oldBlock)) {
+if (normalizedSource.includes(normalizedServerSaveMarker)) {
+  console.log("QuoteForm now uses server-side saveQuote mutation. Legacy payload patch skipped.");
+  process.exit(0);
+}
+
+if (!normalizedSource.includes(normalizedOldBlock)) {
   throw new Error("QuoteForm save payload block not found. Manual review required.");
 }
 
-writeFileSync(quoteFormPath, source.replace(oldBlock, newBlock));
+const target = oldBlock.split("\n").join(newline);
+const replacement = newBlock.split("\n").join(newline);
+writeFileSync(quoteFormPath, source.replace(target, replacement), "utf8");
 console.log("Patched QuoteForm save payload to omit null cabinet fields.");

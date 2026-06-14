@@ -7,7 +7,8 @@ const LEAVE_WARNING =
   "You have unsaved quote changes. Save Draft before leaving, otherwise information entered on this page may be lost.";
 
 function isQuotePath() {
-  return window.location.pathname === "/quote" || window.location.pathname === "/stage1";
+  const { pathname } = window.location;
+  return pathname === "/quote" || pathname.startsWith("/quote/") || pathname === "/stage1";
 }
 
 function markQuoteDirty() {

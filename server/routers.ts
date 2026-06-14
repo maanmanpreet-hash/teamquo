@@ -8,11 +8,9 @@ import {
   router,
 } from "./_core/trpc";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
 import * as db from "./db";
 import { generateQuoteHTML } from "./pdf";
 import { formatQuoteNumber } from "../shared/quote";
-import { jobs as jobsTable } from "../drizzle/schema";
 
 const supportedItemTypes = [
   "cladding",
@@ -234,6 +232,36 @@ const jobInputSchema = z.object({
 });
 
 const jobUpdateSchema = jobInputSchema.extend({ id: z.number() });
+const quoteSaveWallProductSchema = z.object({
+  itemType: z.enum(supportedItemTypes),
+  productId: z.number().optional(),
+  claddingVariantId: z.number().optional(),
+  wallWidthMm: z.number().int().positive().optional(),
+  wallHeightMm: z.number().int().positive().optional(),
+  cabinetWidthMm: z.number().int().positive().optional(),
+  cabinetHeightMm: z.number().int().positive().optional(),
+  cabinetDepthMm: z.number().int().positive().optional(),
+  cabinetHeightFromFloorMm: z.number().int().nonnegative().optional(),
+  quantityRequired: z.number().int().positive().optional(),
+  unitPrice: z.number().int().nonnegative().optional(),
+  totalPrice: z.number().int().nonnegative().optional(),
+  manualPriceOverride: z.number().int().nonnegative().optional(),
+  itemDetails: z.string().optional(),
+});
+
+const quoteSaveWallSchema = z.object({
+  wallType: z.enum(["regular", "garage", "custom"]).default("regular"),
+  wallName: z.string().optional(),
+  wallWidthMm: z.number().int().positive().optional(),
+  wallHeightMm: z.number().int().positive().optional(),
+  notes: z.string().optional(),
+  products: z.array(quoteSaveWallProductSchema),
+});
+
+const saveQuoteSchema = jobInputSchema.extend({
+  id: z.number().optional(),
+  walls: z.array(quoteSaveWallSchema),
+});
 
 const jobItemCreateSchema = z.object({
   jobId: z.number(),
@@ -358,6 +386,63 @@ export const appRouter = router({
       }
       return db.updateJob(id, updateData);
     }),
+    saveQuote: protectedProcedure.input(saveQuoteSchema).mutation(async ({ input, ctx }) => {
+      if (input.id) {
+        await assertOwnsJob(input.id, ctx.user.id);
+      }
+
+      const previewMode = await isPreviewMode();
+      const jobInput = buildJobInput(input, ctx.user.id);
+
+      if (previewMode) {
+        const existingJob = input.id ? previewJobs.find(job => job.id === input.id) : undefined;
+        const jobId = existingJob?.id ?? nextJobId++;
+        const savedJob = existingJob
+          ? Object.assign(existingJob, { ...jobInput, updatedAt: now() })
+          : { id: jobId, ...jobInput, stage: "quoting", stageStatus: "in_progress", createdAt: now(), updatedAt: now() };
+
+        if (!existingJob) {
+          previewJobs.unshift(savedJob);
+        }
+
+        for (let i = previewJobItems.length - 1; i >= 0; i--) if (previewJobItems[i].jobId === jobId) previewJobItems.splice(i, 1);
+        for (let i = previewWalls.length - 1; i >= 0; i--) if (previewWalls[i].jobId === jobId) previewWalls.splice(i, 1);
+
+        for (const wall of input.walls) {
+          const savedWall = {
+            id: nextWallId++,
+            jobId,
+            wallType: wall.wallType,
+            wallName: wall.wallName,
+            wallWidthMm: wall.wallWidthMm,
+            wallHeightMm: wall.wallHeightMm,
+            notes: wall.notes,
+            createdAt: now(),
+            updatedAt: now(),
+          };
+          previewWalls.push(savedWall);
+
+          for (const product of wall.products) {
+            previewJobItems.push({
+              id: nextItemId++,
+              jobId,
+              wallId: savedWall.id,
+              ...product,
+              createdAt: now(),
+              updatedAt: now(),
+            });
+          }
+        }
+
+        return savedJob;
+      }
+
+      return db.saveQuoteWithContents({
+        jobId: input.id,
+        job: jobInput,
+        walls: input.walls,
+      });
+    }),
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
       await assertOwnsJob(input.id, ctx.user.id);
       if (await isPreviewMode()) {
@@ -367,12 +452,7 @@ export const appRouter = router({
         if (index >= 0) previewJobs.splice(index, 1);
         return true;
       }
-      const database = await db.getDb();
-      if (!database) throw new Error("Database not available");
-      await db.deleteJobItemsByJobId(input.id);
-      await db.deleteWallsByJobId(input.id);
-      await database.delete(jobsTable).where(eq(jobsTable.id, input.id));
-      return true;
+      return db.deleteJobWithContents(input.id);
     }),
   }),
 

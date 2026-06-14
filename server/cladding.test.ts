@@ -131,6 +131,145 @@ describe("Jobs Procedures", () => {
       expect(error.message).toContain("invalid_value");
     }
   });
+
+  it("should save a quote with walls and products in preview mode", async () => {
+    const ctx = createAuthContext(77);
+    const caller = appRouter.createCaller(ctx);
+
+    const saved = await caller.jobs.saveQuote({
+      clientName: "Preview Client",
+      clientPhone: "0400000000",
+      operatorName: "Manpreet",
+      totalEstimate: 150000,
+      walls: [
+        {
+          wallType: "custom",
+          wallName: "TV Wall",
+          wallWidthMm: 3800,
+          wallHeightMm: 2600,
+          notes: JSON.stringify({ obstructionStatus: "none", obstructionNotes: "" }),
+          products: [
+            {
+              itemType: "tv_backdrop",
+              productId: 701,
+              wallWidthMm: 3800,
+              wallHeightMm: 2600,
+              quantityRequired: 1,
+              unitPrice: 0,
+              totalPrice: 0,
+              itemDetails: JSON.stringify({ tvSizeInches: 75, includeTvBracket: true }),
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(saved?.id).toBeTruthy();
+
+    const loadedWalls = await caller.walls.getByJobId({ jobId: saved!.id });
+    expect(loadedWalls).toHaveLength(1);
+    expect(loadedWalls[0].products).toHaveLength(1);
+    expect(loadedWalls[0].products[0]).toEqual(
+      expect.objectContaining({
+        itemType: "tv_backdrop",
+        itemDetails: JSON.stringify({ tvSizeInches: 75, includeTvBracket: true }),
+      })
+    );
+  });
+
+  it("should replace existing walls and products when saving an existing quote", async () => {
+    const ctx = createAuthContext(88);
+    const caller = appRouter.createCaller(ctx);
+
+    const initial = await caller.jobs.saveQuote({
+      clientName: "Original Client",
+      totalEstimate: 10000,
+      walls: [
+        {
+          wallType: "custom",
+          wallName: "Old Wall",
+          wallWidthMm: 3000,
+          wallHeightMm: 2400,
+          notes: "old",
+          products: [
+            {
+              itemType: "mirror",
+              productId: 401,
+              quantityRequired: 1,
+              unitPrice: 35000,
+              totalPrice: 35000,
+            },
+          ],
+        },
+      ],
+    });
+
+    const updated = await caller.jobs.saveQuote({
+      id: initial!.id,
+      clientName: "Updated Client",
+      totalEstimate: 20000,
+      walls: [
+        {
+          wallType: "garage",
+          wallName: "New Wall",
+          wallWidthMm: 4200,
+          wallHeightMm: 2600,
+          notes: "new",
+          products: [
+            {
+              itemType: "fireplace",
+              productId: 501,
+              quantityRequired: 1,
+              unitPrice: 70000,
+              totalPrice: 70000,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(updated?.id).toBe(initial?.id);
+    expect(updated?.clientName).toBe("Updated Client");
+
+    const loadedWalls = await caller.walls.getByJobId({ jobId: initial!.id });
+    expect(loadedWalls).toHaveLength(1);
+    expect(loadedWalls[0].wallName).toBe("New Wall");
+    expect(loadedWalls[0].products).toHaveLength(1);
+    expect(loadedWalls[0].products[0].itemType).toBe("fireplace");
+  });
+
+  it("should delete a quote together with its saved walls and products", async () => {
+    const ctx = createAuthContext(99);
+    const caller = appRouter.createCaller(ctx);
+
+    const saved = await caller.jobs.saveQuote({
+      clientName: "Delete Me",
+      totalEstimate: 5000,
+      walls: [
+        {
+          wallType: "custom",
+          wallName: "Disposable Wall",
+          wallWidthMm: 2400,
+          wallHeightMm: 2400,
+          notes: "temporary",
+          products: [
+            {
+              itemType: "mirror",
+              productId: 401,
+              quantityRequired: 1,
+              unitPrice: 35000,
+              totalPrice: 35000,
+            },
+          ],
+        },
+      ],
+    });
+
+    await expect(caller.walls.getByJobId({ jobId: saved!.id })).resolves.toHaveLength(1);
+    await expect(caller.jobs.delete({ id: saved!.id })).resolves.toBe(true);
+    await expect(caller.jobs.getById({ id: saved!.id })).resolves.toBeUndefined();
+    await expect(caller.walls.getByJobId({ jobId: saved!.id })).rejects.toThrow("Unauthorized");
+  });
 });
 
 describe("Job Items Procedures", () => {
