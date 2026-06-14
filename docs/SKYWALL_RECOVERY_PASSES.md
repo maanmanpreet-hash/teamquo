@@ -78,6 +78,7 @@ These were not bundled into this pass because they carry higher UX/data risk and
 - Long-press delete and swipe delete
 - Email quote integration
 - Full quote lifecycle change to Draft / Sent / Accepted / Rejected
+- Admin panel as editable master list for updating prices and material dimensions
 - Image compression before upload
 - Database pooling/retry strategy
 

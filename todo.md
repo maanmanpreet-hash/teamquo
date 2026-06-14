@@ -39,19 +39,19 @@
 - [x] Appointment renamed to "Appointment Date/Time" with dropdown selector
 - [x] Address autocomplete with suburb auto-population
 - [x] Seed operators table: Manpreet, Ginni, Roopjit, Simar
-- [ ] Add edit functionality for draft quotes
+- [x] Add edit functionality for draft quotes
 - [ ] Allow custom operator name entry
-- [ ] Write tests for partial save workflow
+- [x] Write tests for partial save workflow
 
 ## Phase 2: Acoustic Panel Dimensions + Graphical Indicators
 - [x] Add length and width fields for acoustic panels
 - [x] Add graphical dimension indicators (icons for width, length, height)
 - [x] Show wall dimensions fields alongside acoustic length/width
 - [ ] Create visual guide showing which dimension is which
-- [ ] Update quantity calculation for acoustic panels (length x width)
-- [ ] Add validation for acoustic panel dimensions
-- [ ] Test dimension calculations with various inputs
-- [ ] Write tests for acoustic panel workflows
+- [x] Update quantity calculation for acoustic panels (length x width)
+- [x] Add validation for acoustic panel dimensions
+- [x] Test dimension calculations with various inputs
+- [x] Write tests for acoustic panel workflows
 
 ## Phase 3: Reference Image Upload
 - [x] Add image upload field to client details tab
@@ -78,8 +78,8 @@
 - [x] Update cost calculation to sum all walls
 - [x] Display cost breakdown by wall in summary
 - [x] Calculate per-wall totals
-- [ ] Implement wall-specific product selection
-- [ ] Test multi-wall quote creation
+- [x] Implement wall-specific product selection
+- [x] Test multi-wall quote creation
 
 ## Phase 5: PDF Download Fix + Job Pack with Drawings
 - [x] Fix PDF download so files appear in Downloads folder
@@ -105,6 +105,7 @@
 - [x] Add operator assignment view
 - [ ] Test dashboard performance with many jobs
 - [ ] Optimize for tablet viewing
+- [ ] Admin panel as editable master list for product prices and material dimensions
 
 ## Phase 7: Final Testing & Delivery
 - [ ] End-to-end testing of complete workflow

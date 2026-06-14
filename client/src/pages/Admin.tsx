@@ -127,14 +127,15 @@ export default function Admin() {
               </Button>
             </div>
             <h1 className="text-4xl font-bold text-gray-900">Admin Panel</h1>
-            <p className="text-gray-600 mt-2">Manage operators and system settings</p>
+            <p className="text-gray-600 mt-2">Manage operators, product master data, and system settings</p>
           </div>
         </div>
 
         {/* Tabs */}
         <Tabs defaultValue="operators" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-lg grid-cols-3">
             <TabsTrigger value="operators">Operators</TabsTrigger>
+            <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
@@ -236,6 +237,22 @@ export default function Admin() {
                     No operators yet. Create one to get started!
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="products" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Product Masterlist</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Update the editable product masterlist used by quoting. This includes prices, dimensions, supplier notes, wastage, and orientation rules.
+                </p>
+                <Button onClick={() => navigate("/admin/products")} className="bg-blue-600 hover:bg-blue-700">
+                  Open Product Masterlist
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
