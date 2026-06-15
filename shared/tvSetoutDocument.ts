@@ -25,26 +25,60 @@ export function formatSetoutMm(value: number | undefined) {
   return `${Math.round(value)} mm`;
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function distributeLabelYs(values: number[], minY: number, maxY: number, minGap: number) {
+  if (!values.length) return [];
+
+  const positions = values.map(value => clamp(value, minY, maxY));
+  for (let index = 1; index < positions.length; index += 1) {
+    positions[index] = Math.max(positions[index], positions[index - 1] + minGap);
+  }
+  for (let index = positions.length - 2; index >= 0; index -= 1) {
+    positions[index] = Math.min(positions[index], positions[index + 1] - minGap);
+  }
+  if (positions[0] < minY) {
+    const shift = minY - positions[0];
+    for (let index = 0; index < positions.length; index += 1) positions[index] += shift;
+  }
+  if (positions[positions.length - 1] > maxY) {
+    const shift = positions[positions.length - 1] - maxY;
+    for (let index = 0; index < positions.length; index += 1) positions[index] -= shift;
+  }
+
+  return positions;
+}
+
 function buildSetoutGeometry(document: TvBackdropSetoutDocument) {
   const { setout, cabinetWidthMm, cabinetHeightMm, cabinetHeightFromFloorMm } = document;
   const canvasWidth = 1123;
   const canvasHeight = 794;
-  const leftPad = 118;
-  const rightPad = 112;
-  const topPad = 18;
-  const bottomPad = 116;
+  const leftPad = 182;
+  const rightPad = 164;
+  const topPad = 42;
+  const installStripHeight = 116;
+  const bottomPad = 154;
   const availableWidth = canvasWidth - leftPad - rightPad;
-  const availableHeight = canvasHeight - topPad - bottomPad;
+  const availableHeight = canvasHeight - topPad - bottomPad - installStripHeight;
   const scale = Math.min(availableWidth / setout.wallWidthMm, availableHeight / setout.wallHeightMm);
   const wallWidth = setout.wallWidthMm * scale;
   const wallHeight = setout.wallHeightMm * scale;
   const wallX = leftPad + (availableWidth - wallWidth) / 2;
-  const wallY = topPad + (availableHeight - wallHeight) / 2;
+  const wallY = topPad + (availableHeight - wallHeight) / 2 + 16;
   const floorY = wallY + wallHeight;
   const wallRight = wallX + wallWidth;
+  const installStripY = canvasHeight - installStripHeight;
 
   const toX = (mm: number) => wallX + mm * scale;
   const toY = (afflMm: number) => floorY - afflMm * scale;
+
+  const cabinetTopAfflMm =
+    setout.cabinetTopAfflMm ??
+    (setout.cabinetBottomAfflMm !== undefined && setout.cabinetHeightMm !== undefined
+      ? setout.cabinetBottomAfflMm + setout.cabinetHeightMm
+      : undefined);
 
   const cabinetRect =
     cabinetWidthMm && cabinetHeightMm && cabinetHeightFromFloorMm !== undefined
@@ -65,44 +99,67 @@ function buildSetoutGeometry(document: TvBackdropSetoutDocument) {
     wallHeight,
     wallRight,
     floorY,
+    installStripY,
     toX,
     toY,
     cabinetRect,
+    cabinetTopAfflMm,
+    scale,
   };
 }
 
-function distributeLabelYs(values: number[], minY: number, maxY: number, minGap: number) {
-  if (!values.length) return [];
+function drawValueTag(text: string, centerX: number, centerY: number, width = 96) {
+  return `
+    <rect x="${centerX - width / 2}" y="${centerY - 12}" width="${width}" height="24" rx="4" fill="#ffffff"></rect>
+    <text x="${centerX}" y="${centerY + 4}" text-anchor="middle" font-size="11" font-weight="600" fill="#0f172a">${escapeHtml(text)}</text>
+  `;
+}
 
-  const positions = values.map(value => Math.max(minY, Math.min(maxY, value)));
-  for (let index = 1; index < positions.length; index += 1) {
-    positions[index] = Math.max(positions[index], positions[index - 1] + minGap);
-  }
+function drawAfflLabel(label: string, value: number, x: number, y: number) {
+  return `
+    <text x="${x}" y="${y - 6}" font-size="12" font-weight="700" fill="#0f172a">${escapeHtml(label)}</text>
+    <text x="${x}" y="${y + 12}" font-size="13" font-weight="700" fill="#1e293b">${escapeHtml(formatSetoutMm(value))}</text>
+  `;
+}
 
-  for (let index = positions.length - 2; index >= 0; index -= 1) {
-    positions[index] = Math.min(positions[index], positions[index + 1] - minGap);
-  }
+function drawInstallRow(label: string, value: number | undefined, x: number, y: number) {
+  return `
+    <text x="${x}" y="${y}" font-size="13" font-weight="700" fill="#0f172a">${escapeHtml(label)}:</text>
+    <text x="${x + 180}" y="${y}" font-size="13" font-weight="600" fill="#0f172a">${escapeHtml(formatSetoutMm(value))}</text>
+  `;
+}
 
-  if (positions[0] < minY) {
-    const shift = minY - positions[0];
-    for (let index = 0; index < positions.length; index += 1) {
-      positions[index] += shift;
-    }
-  }
+function drawSetoutRailRow(mark: { label: string; value: number; railY: number; objectY: number; witnessX: number }, railX: number, tickLength: number, labelX: number, valueX: number) {
+  return `
+    <line x1="${mark.witnessX}" y1="${mark.objectY}" x2="${railX - 18}" y2="${mark.objectY}" stroke="#475569" stroke-width="1.4" opacity="0.85"></line>
+    <line x1="${railX - 18}" y1="${mark.objectY}" x2="${railX}" y2="${mark.railY}" stroke="#475569" stroke-width="1.4" opacity="0.85"></line>
+    <circle cx="${mark.witnessX}" cy="${mark.objectY}" r="2.6" fill="#334155"></circle>
+    <line x1="${railX}" y1="${mark.railY}" x2="${railX + tickLength}" y2="${mark.railY}" stroke="#334155" stroke-width="2"></line>
+    <text x="${labelX}" y="${mark.railY - 6}" font-size="12" font-weight="700" fill="#0f172a">${escapeHtml(mark.label)}</text>
+    <text x="${valueX}" y="${mark.railY + 14}" font-size="13" font-weight="700" fill="#1e293b">${escapeHtml(formatSetoutMm(mark.value))}</text>
+  `;
+}
 
-  if (positions[positions.length - 1] > maxY) {
-    const shift = positions[positions.length - 1] - maxY;
-    for (let index = 0; index < positions.length; index += 1) {
-      positions[index] -= shift;
-    }
-  }
+function drawAttachedVerticalDimension(label: string, anchorX: number, topY: number, bottomY: number, value: number, tagX: number, tagWidth: number) {
+  const x = anchorX;
+  return `
+    <line x1="${x - 14}" y1="${topY}" x2="${x}" y2="${topY}" stroke="#475569" stroke-width="1.2"></line>
+    <line x1="${x - 14}" y1="${bottomY}" x2="${x}" y2="${bottomY}" stroke="#475569" stroke-width="1.2"></line>
+    <line x1="${x}" y1="${topY}" x2="${x}" y2="${bottomY}" stroke="#334155" stroke-width="1.8" marker-start="url(#setout-arrow)" marker-end="url(#setout-arrow)"></line>
+    ${drawValueTag(`${escapeHtml(label)} ${formatSetoutMm(value)}`, tagX, (topY + bottomY) / 2, tagWidth)}
+  `;
+}
 
-  return positions;
+function drawWidthDimension(label: string, x1: number, x2: number, y: number, value: number) {
+  return `
+    <line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#94a3b8" stroke-opacity="0.45" stroke-width="1" marker-start="url(#setout-arrow)" marker-end="url(#setout-arrow)"></line>
+    <text x="${(x1 + x2) / 2}" y="${y - 8}" font-size="11" fill="#475569" text-anchor="middle">${escapeHtml(label)}</text>
+    <text x="${(x1 + x2) / 2}" y="${y + 14}" font-size="12" font-weight="600" fill="#475569" text-anchor="middle">${escapeHtml(formatSetoutMm(value))}</text>
+  `;
 }
 
 export function generateTvBackdropSetoutSvg(document: TvBackdropSetoutDocument) {
   const { setout } = document;
-  const geometry = buildSetoutGeometry(document);
   const {
     canvasWidth,
     canvasHeight,
@@ -112,10 +169,12 @@ export function generateTvBackdropSetoutSvg(document: TvBackdropSetoutDocument) 
     wallHeight,
     wallRight,
     floorY,
+    installStripY,
     toX,
     toY,
     cabinetRect,
-  } = geometry;
+    cabinetTopAfflMm,
+  } = buildSetoutGeometry(document);
 
   const backdropX = toX(setout.backdropLeftMm);
   const backdropY = toY(setout.backdropTopAfflMm);
@@ -127,76 +186,87 @@ export function generateTvBackdropSetoutSvg(document: TvBackdropSetoutDocument) 
   const tvHeight = (setout.tvTopAfflMm - setout.tvBottomAfflMm) * (wallHeight / setout.wallHeightMm);
   const centreX = toX(setout.wallCentreX);
 
-  const marks = [
+  const afflMarks = [
     {
       label: "Cabinet bottom",
-      value: document.setout.cabinetBottomAfflMm,
-      y: document.setout.cabinetBottomAfflMm !== undefined ? toY(document.setout.cabinetBottomAfflMm) : undefined,
-      witnessX: cabinetRect ? cabinetRect.x : wallX,
+      value: setout.cabinetBottomAfflMm,
+      objectY: setout.cabinetBottomAfflMm !== undefined ? toY(setout.cabinetBottomAfflMm) : undefined,
+      witnessX: cabinetRect ? cabinetRect.x : backdropX,
     },
     {
       label: "Cabinet top",
-      value: document.setout.cabinetTopAfflMm,
-      y: document.setout.cabinetTopAfflMm !== undefined ? toY(document.setout.cabinetTopAfflMm) : undefined,
-      witnessX: cabinetRect ? cabinetRect.x : wallX,
+      value: cabinetTopAfflMm,
+      objectY: cabinetTopAfflMm !== undefined ? toY(cabinetTopAfflMm) : undefined,
+      witnessX: cabinetRect ? cabinetRect.x : backdropX,
     },
-    { label: "TV bottom", value: setout.tvBottomAfflMm, y: toY(setout.tvBottomAfflMm), witnessX: tvX },
-    { label: "TV top", value: setout.tvTopAfflMm, y: toY(setout.tvTopAfflMm), witnessX: tvX },
-    { label: "Backdrop bottom", value: setout.backdropBottomAfflMm, y: toY(setout.backdropBottomAfflMm), witnessX: backdropX },
-    { label: "Backdrop top", value: setout.backdropTopAfflMm, y: toY(setout.backdropTopAfflMm), witnessX: backdropX },
+    {
+      label: "Backdrop bottom",
+      value: setout.backdropBottomAfflMm,
+      objectY: toY(setout.backdropBottomAfflMm),
+      witnessX: backdropX,
+    },
+    {
+      label: "TV bottom",
+      value: setout.tvBottomAfflMm,
+      objectY: toY(setout.tvBottomAfflMm),
+      witnessX: tvX,
+    },
+    {
+      label: "TV top",
+      value: setout.tvTopAfflMm,
+      objectY: toY(setout.tvTopAfflMm),
+      witnessX: tvX,
+    },
+    {
+      label: "Backdrop top",
+      value: setout.backdropTopAfflMm,
+      objectY: toY(setout.backdropTopAfflMm),
+      witnessX: backdropX,
+    },
   ]
-    .filter(mark => mark.value !== undefined && mark.y !== undefined)
-    .map(mark => ({ ...mark, value: mark.value as number, y: mark.y as number }))
+    .filter(mark => mark.value !== undefined && mark.objectY !== undefined)
+    .map(mark => ({ ...mark, value: mark.value as number, objectY: mark.objectY as number }))
     .sort((a, b) => a.value - b.value);
-  const adjustedMarkYs = distributeLabelYs(
-    marks.map(mark => mark.y),
-    wallY + 24,
-    floorY - 18,
-    40
-  );
-  const leftRailX = wallX - 22;
-  const leftTextX = 18;
-  const leftLeaderEndX = 104;
-  const bottomDimY = floorY + 28;
-  const backdropDimY = floorY + 62;
-  const tvDimY = floorY + 96;
-  const wallDimY = floorY + 130;
-  const rightDimGapX = wallRight + 24;
-  const rightDimCabinetX = wallRight + 54;
-  const rightLabelAnchorX = canvasWidth - 16;
-  const rightLeaderEndX = canvasWidth - 88;
 
-  const drawCalloutLabel = (
-    label: string,
-    value: number,
-    x: number,
-    y: number,
-    textAnchor: "start" | "end" = "start"
-  ) => `
-    <text x="${x}" y="${y - 4}" text-anchor="${textAnchor}" font-size="11" font-weight="600" fill="#0f172a">${escapeHtml(label)}</text>
-    <text x="${x}" y="${y + 11}" text-anchor="${textAnchor}" font-size="11" fill="#334155">${escapeHtml(formatSetoutMm(value))}</text>
-  `;
+  const railX = wallX - 78;
+  const railTop = wallY + 16;
+  const railBottom = floorY - 16;
+  const railCount = afflMarks.length;
+  const railStep = railCount > 1 ? (railBottom - railTop) / (railCount - 1) : 0;
+  const railMarks = afflMarks.map((mark, index) => ({
+    ...mark,
+    railY: railCount > 1 ? railBottom - index * railStep : (railTop + railBottom) / 2,
+  }));
+  const railLabelX = 18;
+  const railValueX = 178;
+  const railTickLength = 16;
 
-  const drawInlineDimLabel = (
-    text: string,
-    centerX: number,
-    y: number,
-    emphasized = false
-  ) => {
-    const width = Math.max(48, text.length * (emphasized ? 6.9 : 6.5) + 18);
-    return `
-      <rect x="${centerX - width / 2}" y="${y - 16}" width="${width}" height="20" rx="3" fill="#ffffff"></rect>
-      <text x="${centerX}" y="${y - 2}" text-anchor="middle" font-size="${emphasized ? 12 : 11}" font-weight="${emphasized ? 600 : 400}" fill="#0f172a">${escapeHtml(text)}</text>
-    `;
-  };
+  const widthDimBaseY = installStripY - 70;
+  const widthDimStep = 18;
+  const cabinetDimX = wallRight + 28;
+  const gapDimX = wallRight + 82;
+  const widthDims = [
+    { label: "Side margin left", x1: wallX, x2: backdropX, value: setout.sideMarginMm },
+    { label: "TV", x1: tvX, x2: tvX + tvWidth, value: setout.tvWidthMm },
+    { label: "Backdrop", x1: backdropX, x2: backdropX + backdropWidth, value: setout.backdropWidthMm },
+    { label: "Side margin right", x1: backdropX + backdropWidth, x2: wallRight, value: setout.sideMarginMm },
+    { label: "Wall", x1: wallX, x2: wallRight, value: setout.wallWidthMm },
+  ];
 
-  const drawRightTag = (label: string, value: number, dimX: number, centerY: number, offsetY = 0) => {
-    const labelY = centerY + offsetY;
-    return `
-      <polyline points="${dimX},${centerY} ${rightLeaderEndX},${centerY}" fill="none" stroke="#64748b" stroke-width="1.2"></polyline>
-      ${drawCalloutLabel(label, value, rightLabelAnchorX, labelY, "end")}
-    `;
-  };
+  const installRows = [
+    { label: "Cabinet bottom", value: setout.cabinetBottomAfflMm },
+    { label: "Cabinet top", value: cabinetTopAfflMm },
+    { label: "Backdrop bottom", value: setout.backdropBottomAfflMm },
+    { label: "TV bottom", value: setout.tvBottomAfflMm },
+    { label: "TV top", value: setout.tvTopAfflMm },
+    { label: "Backdrop top", value: setout.backdropTopAfflMm },
+  ].filter(row => row.value !== undefined) as Array<{ label: string; value: number }>;
+  const installColumnCount = 2;
+  const installRowsPerColumn = Math.ceil(installRows.length / installColumnCount);
+  const installColumnStartX = 30;
+  const installColumnSpacing = 392;
+  const installBaseY = installStripY + 52;
+  const installRowGap = 24;
 
   return `
     <svg viewBox="0 0 ${canvasWidth} ${canvasHeight}" role="img" aria-label="${escapeHtml(document.wallName)} TV backdrop setout">
@@ -205,64 +275,58 @@ export function generateTvBackdropSetoutSvg(document: TvBackdropSetoutDocument) 
           <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"></path>
         </marker>
       </defs>
-      <rect x="1" y="1" width="${canvasWidth - 2}" height="${canvasHeight - 2}" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"></rect>
-      <rect x="${wallX}" y="${wallY}" width="${wallWidth}" height="${wallHeight}" fill="#fcfcfd" stroke="#dbe3ea" stroke-width="1.5"></rect>
-      <line x1="${wallX}" y1="${floorY}" x2="${wallRight}" y2="${floorY}" stroke="#0f172a" stroke-width="3"></line>
-      <line x1="${wallX}" y1="${wallY}" x2="${wallRight}" y2="${wallY}" stroke="#cbd5e1" stroke-width="1.25"></line>
-      <line x1="${centreX}" y1="${wallY}" x2="${centreX}" y2="${floorY}" stroke="#dbe3ea" stroke-width="1" stroke-dasharray="6 6"></line>
 
-      ${cabinetRect ? `<rect x="${cabinetRect.x}" y="${cabinetRect.y}" width="${cabinetRect.width}" height="${cabinetRect.height}" rx="4" fill="#e2e8f0" stroke="#64748b" stroke-width="2"></rect>` : ""}
-      <rect x="${backdropX}" y="${backdropY}" width="${backdropWidth}" height="${backdropHeight}" rx="5" fill="#eef2ff" stroke="#334155" stroke-width="2.5"></rect>
+      <rect x="0" y="0" width="${canvasWidth}" height="${canvasHeight}" fill="#ffffff"></rect>
+
+      <line x1="${railX}" y1="${railTop}" x2="${railX}" y2="${railBottom}" stroke="#64748b" stroke-width="1.4" opacity="0.35"></line>
+      <line x1="${railX}" y1="${railTop}" x2="${railX + railTickLength}" y2="${railTop}" stroke="#64748b" stroke-width="1.4" opacity="0.35"></line>
+      <line x1="${railX}" y1="${railBottom}" x2="${railX + railTickLength}" y2="${railBottom}" stroke="#64748b" stroke-width="1.4" opacity="0.35"></line>
+
+      <rect x="${wallX}" y="${wallY}" width="${wallWidth}" height="${wallHeight}" fill="#ffffff" stroke="#cbd5e1" stroke-width="0.8" stroke-opacity="0.45"></rect>
+      <line x1="${wallX}" y1="${wallY}" x2="${wallRight}" y2="${wallY}" stroke="#cbd5e1" stroke-opacity="0.35" stroke-width="1"></line>
+      <line x1="${wallX}" y1="${floorY}" x2="${wallRight}" y2="${floorY}" stroke="#0f172a" stroke-width="3"></line>
+      <line x1="${centreX}" y1="${wallY}" x2="${centreX}" y2="${floorY}" stroke="#cbd5e1" stroke-opacity="0.35" stroke-width="1" stroke-dasharray="5 6"></line>
+
+      ${cabinetRect ? `<rect x="${cabinetRect.x}" y="${cabinetRect.y}" width="${cabinetRect.width}" height="${cabinetRect.height}" rx="3" fill="#dbe3ef" stroke="#64748b" stroke-width="2"></rect>` : ""}
+      <rect x="${backdropX}" y="${backdropY}" width="${backdropWidth}" height="${backdropHeight}" rx="4" fill="#eef2ff" stroke="#334155" stroke-width="2.5"></rect>
       <rect x="${tvX}" y="${tvY}" width="${tvWidth}" height="${tvHeight}" rx="4" fill="#111827" stroke="#0f172a" stroke-width="2"></rect>
 
-      <text x="${wallX + 6}" y="${floorY - 10}" font-size="10" fill="#64748b">Floor</text>
-      <text x="${wallX + 6}" y="${wallY + 14}" font-size="10" fill="#64748b">Wall top</text>
+      <text x="${wallX + 6}" y="${wallY - 8}" font-size="10" fill="#94a3b8">Wall top reference</text>
+      <text x="${wallX + 6}" y="${floorY - 8}" font-size="10" fill="#64748b">Floor</text>
 
-      ${marks
-        .map(
-          (mark, index) => `
-        <polyline points="${mark.witnessX},${mark.y} ${leftRailX},${mark.y} ${leftRailX},${adjustedMarkYs[index]} ${leftLeaderEndX},${adjustedMarkYs[index]}" fill="none" stroke="#64748b" stroke-width="1.4"></polyline>
-        <circle cx="${mark.witnessX}" cy="${mark.y}" r="2.1" fill="#334155"></circle>
-        ${drawCalloutLabel(mark.label, mark.value, leftTextX, adjustedMarkYs[index])}
-      `
-        )
-        .join("")}
+      ${railMarks.map(mark => drawSetoutRailRow(mark, railX, railTickLength, railLabelX, railValueX)).join("")}
 
-      <line x1="${wallX}" y1="${floorY}" x2="${wallX}" y2="${wallDimY}" stroke="#cbd5e1" stroke-width="1"></line>
-      <line x1="${backdropX}" y1="${floorY}" x2="${backdropX}" y2="${backdropDimY}" stroke="#cbd5e1" stroke-width="1"></line>
-      <line x1="${backdropX + backdropWidth}" y1="${floorY}" x2="${backdropX + backdropWidth}" y2="${backdropDimY}" stroke="#cbd5e1" stroke-width="1"></line>
-      <line x1="${tvX}" y1="${floorY}" x2="${tvX}" y2="${tvDimY}" stroke="#cbd5e1" stroke-width="1"></line>
-      <line x1="${tvX + tvWidth}" y1="${floorY}" x2="${tvX + tvWidth}" y2="${tvDimY}" stroke="#cbd5e1" stroke-width="1"></line>
-      <line x1="${wallRight}" y1="${floorY}" x2="${wallRight}" y2="${wallDimY}" stroke="#cbd5e1" stroke-width="1"></line>
+      ${setout.cabinetHeightMm !== undefined && setout.cabinetBottomAfflMm !== undefined && cabinetTopAfflMm !== undefined ? drawAttachedVerticalDimension(
+        "Cabinet height",
+        cabinetDimX,
+        toY(cabinetTopAfflMm),
+        toY(setout.cabinetBottomAfflMm),
+        setout.cabinetHeightMm,
+        cabinetDimX + 70,
+        164
+      ) : ""}
 
-      <line x1="${wallX}" y1="${bottomDimY}" x2="${backdropX}" y2="${bottomDimY}" stroke="#64748b" stroke-width="1.5" marker-start="url(#setout-arrow)" marker-end="url(#setout-arrow)"></line>
-      ${drawInlineDimLabel(`Side ${formatSetoutMm(setout.sideMarginMm)}`, (wallX + backdropX) / 2, bottomDimY)}
+      ${setout.actualCabinetToTvGapMm !== undefined && cabinetTopAfflMm !== undefined ? drawAttachedVerticalDimension(
+        "Gap",
+        gapDimX,
+        toY(cabinetTopAfflMm),
+        toY(setout.tvBottomAfflMm),
+        setout.actualCabinetToTvGapMm,
+        gapDimX + 56,
+        108
+      ) : ""}
 
-      <line x1="${backdropX + backdropWidth}" y1="${bottomDimY}" x2="${wallRight}" y2="${bottomDimY}" stroke="#64748b" stroke-width="1.5" marker-start="url(#setout-arrow)" marker-end="url(#setout-arrow)"></line>
-      ${drawInlineDimLabel(`Side ${formatSetoutMm(setout.sideMarginMm)}`, (backdropX + backdropWidth + wallRight) / 2, bottomDimY)}
+      ${widthDims.map((dim, index) => drawWidthDimension(dim.label, dim.x1, dim.x2, widthDimBaseY + index * widthDimStep, dim.value)).join("")}
 
-      <line x1="${backdropX}" y1="${backdropDimY}" x2="${backdropX + backdropWidth}" y2="${backdropDimY}" stroke="#475569" stroke-width="1.5" marker-start="url(#setout-arrow)" marker-end="url(#setout-arrow)"></line>
-      ${drawInlineDimLabel(`Backdrop ${formatSetoutMm(setout.backdropWidthMm)}`, backdropX + backdropWidth / 2, backdropDimY)}
-
-      <line x1="${tvX}" y1="${tvDimY}" x2="${tvX + tvWidth}" y2="${tvDimY}" stroke="#475569" stroke-width="1.5" marker-start="url(#setout-arrow)" marker-end="url(#setout-arrow)"></line>
-      ${drawInlineDimLabel(`TV ${formatSetoutMm(setout.tvWidthMm)}`, tvX + tvWidth / 2, tvDimY)}
-
-      <line x1="${wallX}" y1="${wallDimY}" x2="${wallRight}" y2="${wallDimY}" stroke="#64748b" stroke-width="1.5" marker-start="url(#setout-arrow)" marker-end="url(#setout-arrow)"></line>
-      ${drawInlineDimLabel(`Wall ${formatSetoutMm(setout.wallWidthMm)}`, wallX + wallWidth / 2, wallDimY, true)}
-
-      ${setout.actualCabinetToTvGapMm !== undefined && setout.cabinetTopAfflMm !== undefined ? `
-        <line x1="${wallRight}" y1="${toY(setout.cabinetTopAfflMm)}" x2="${rightDimGapX}" y2="${toY(setout.cabinetTopAfflMm)}" stroke="#cbd5e1" stroke-width="1"></line>
-        <line x1="${wallRight}" y1="${toY(setout.tvBottomAfflMm)}" x2="${rightDimGapX}" y2="${toY(setout.tvBottomAfflMm)}" stroke="#cbd5e1" stroke-width="1"></line>
-        <line x1="${rightDimGapX}" y1="${toY(setout.cabinetTopAfflMm)}" x2="${rightDimGapX}" y2="${toY(setout.tvBottomAfflMm)}" stroke="#475569" stroke-width="1.5" marker-start="url(#setout-arrow)" marker-end="url(#setout-arrow)"></line>
-        ${drawRightTag("Gap", setout.actualCabinetToTvGapMm, rightDimGapX, (toY(setout.cabinetTopAfflMm) + toY(setout.tvBottomAfflMm)) / 2, -8)}
-      ` : ""}
-
-      ${setout.cabinetHeightMm !== undefined && setout.cabinetBottomAfflMm !== undefined ? `
-        <line x1="${wallRight}" y1="${toY(setout.cabinetBottomAfflMm)}" x2="${rightDimCabinetX}" y2="${toY(setout.cabinetBottomAfflMm)}" stroke="#cbd5e1" stroke-width="1"></line>
-        <line x1="${wallRight}" y1="${toY(setout.cabinetTopAfflMm || setout.cabinetBottomAfflMm + setout.cabinetHeightMm)}" x2="${rightDimCabinetX}" y2="${toY(setout.cabinetTopAfflMm || setout.cabinetBottomAfflMm + setout.cabinetHeightMm)}" stroke="#cbd5e1" stroke-width="1"></line>
-        <line x1="${rightDimCabinetX}" y1="${toY(setout.cabinetBottomAfflMm)}" x2="${rightDimCabinetX}" y2="${toY(setout.cabinetTopAfflMm || setout.cabinetBottomAfflMm + setout.cabinetHeightMm)}" stroke="#475569" stroke-width="1.5" marker-start="url(#setout-arrow)" marker-end="url(#setout-arrow)"></line>
-        ${drawRightTag("Cabinet height", setout.cabinetHeightMm, rightDimCabinetX, (toY(setout.cabinetBottomAfflMm) + toY(setout.cabinetTopAfflMm || setout.cabinetBottomAfflMm + setout.cabinetHeightMm)) / 2, 14)}
-      ` : ""}
+      <rect x="0" y="${installStripY}" width="${canvasWidth}" height="${canvasHeight - installStripY}" fill="#f8fafc"></rect>
+      <text x="30" y="${installStripY + 26}" font-size="15" font-weight="700" fill="#0f172a">MARK FROM FLOOR</text>
+      <line x1="30" y1="${installStripY + 34}" x2="280" y2="${installStripY + 34}" stroke="#cbd5e1" stroke-width="1"></line>
+      ${installRows.map((row, index) => {
+        const columnIndex = Math.floor(index / installRowsPerColumn);
+        const rowIndex = index % installRowsPerColumn;
+        const columnX = installColumnStartX + columnIndex * installColumnSpacing;
+        return drawInstallRow(row.label, row.value, columnX, installBaseY + rowIndex * installRowGap);
+      }).join("")}
     </svg>
   `;
 }
@@ -276,31 +340,14 @@ export function generateTvBackdropSetoutHtml(document: TvBackdropSetoutDocument)
   <style>
     @page { size: A4 landscape; margin: 0; }
     * { box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; }
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; color: #0f172a; background: #ffffff; }
-    .page {
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      align-items: stretch;
-      justify-content: stretch;
-      background: #ffffff;
-    }
-    .drawing {
-      width: 100%;
-      height: 100%;
-      background: #ffffff;
-    }
-    .drawing svg {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
+    html, body { width: 100%; height: 100%; margin: 0; padding: 0; background: #ffffff; }
+    body { font-family: Arial, sans-serif; color: #0f172a; }
+    .page { width: 100vw; height: 100vh; background: #ffffff; }
+    .drawing { width: 100%; height: 100%; }
+    .drawing svg { width: 100%; height: 100%; display: block; }
     @media print {
-      .page {
-        width: 297mm;
-        height: 210mm;
-      }
+      html, body { width: 297mm; height: 210mm; }
+      .page { width: 297mm; height: 210mm; }
     }
   </style>
 </head>

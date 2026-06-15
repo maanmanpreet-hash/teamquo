@@ -7,13 +7,14 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useLocation } from "wouter";
 import { Loader2, Plus, FileText, Edit, Calendar, MapPin, Trash2, Copy, Ruler } from "lucide-react";
-import { downloadPDF } from "@/lib/pdf";
+import { createPdfPreview } from "@/lib/pdf";
 import { toast } from "sonner";
 import { formatMoneyFromCents, formatQuoteNumber } from "@shared/quote";
 
 type JobStatus = "quoted" | "booked" | "commenced" | "completed" | "cancelled";
 
 const quoteStatusOrder: JobStatus[] = ["quoted", "booked", "commenced", "cancelled", "completed"];
+const DASHBOARD_VIEW_MODE_KEY = "dashboard-view-mode";
 
 const statusColors: Record<JobStatus, string> = {
   quoted: "bg-blue-100 text-blue-800 border-blue-300",
@@ -88,9 +89,14 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const [selectedOperator, setSelectedOperator] = useState("");
-  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  const [viewMode, setViewMode] = useState<"kanban" | "list">(() => {
+    if (typeof window === "undefined") return "kanban";
+    const saved = window.localStorage.getItem(DASHBOARD_VIEW_MODE_KEY);
+    return saved === "list" ? "list" : "kanban";
+  });
   const [downloadingJobId, setDownloadingJobId] = useState<number | null>(null);
   const [downloadingJobPackId, setDownloadingJobPackId] = useState<number | null>(null);
+  const [downloadingMaterialListJobId, setDownloadingMaterialListJobId] = useState<number | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<number | null>(null);
   const [updatingStatusJobId, setUpdatingStatusJobId] = useState<number | null>(null);
   const [duplicatingJobId, setDuplicatingJobId] = useState<number | null>(null);
@@ -106,6 +112,10 @@ export default function Dashboard() {
   const jobPackQuery = trpc.jobItems.generateJobPack.useQuery(
     { jobId: downloadingJobPackId || 0 },
     { enabled: downloadingJobPackId !== null, retry: false }
+  );
+  const materialListQuery = trpc.jobItems.generateMaterialList.useQuery(
+    { jobId: downloadingMaterialListJobId || 0 },
+    { enabled: downloadingMaterialListJobId !== null, retry: false }
   );
 
   const saveQuoteMutation = trpc.jobs.saveQuote.useMutation();
@@ -144,24 +154,28 @@ export default function Dashboard() {
   }, [operators]);
 
   useEffect(() => {
+    window.localStorage.setItem(DASHBOARD_VIEW_MODE_KEY, viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
     if (downloadingJobId === null) return;
     const job = jobs?.find(j => j.id === downloadingJobId);
     const fileName = `${formatQuoteNumber(job)}-supply-install-${safeFilePart(job?.clientName)}.pdf`;
 
     if (pdfQuery.data) {
-      downloadPDF(pdfQuery.data.html, fileName)
-        .then(() => toast.success("Supply-and-install quote PDF downloaded"))
-        .catch(() => downloadPDF(fallbackPdfHtml(job), fileName))
-        .finally(() => setDownloadingJobId(null));
+      const token = createPdfPreview(pdfQuery.data.html, fileName, "/dashboard");
+      navigate(`/print-preview/${token}`);
+      toast.success("Supply-and-install quote opened in preview");
+      setDownloadingJobId(null);
     }
 
     if (pdfQuery.error) {
-      downloadPDF(fallbackPdfHtml(job), fileName)
-        .then(() => toast.success("Fallback supply-and-install PDF downloaded"))
-        .catch(() => toast.error("Failed to generate PDF"))
-        .finally(() => setDownloadingJobId(null));
+      const token = createPdfPreview(fallbackPdfHtml(job), fileName, "/dashboard");
+      navigate(`/print-preview/${token}`);
+      toast.success("Fallback supply-and-install quote opened in preview");
+      setDownloadingJobId(null);
     }
-  }, [downloadingJobId, pdfQuery.data, pdfQuery.error, jobs]);
+  }, [downloadingJobId, navigate, pdfQuery.data, pdfQuery.error, jobs]);
 
   useEffect(() => {
     if (downloadingJobPackId === null) return;
@@ -169,17 +183,35 @@ export default function Dashboard() {
     const fileName = `${formatQuoteNumber(job)}-job-pack-${safeFilePart(job?.clientName)}.pdf`;
 
     if (jobPackQuery.data) {
-      downloadPDF(jobPackQuery.data.html, fileName)
-        .then(() => toast.success("Installer job pack downloaded"))
-        .catch(() => toast.error("Failed to download job pack"))
-        .finally(() => setDownloadingJobPackId(null));
+      const token = createPdfPreview(jobPackQuery.data.html, fileName, "/dashboard");
+      navigate(`/print-preview/${token}`);
+      toast.success("Installer job pack opened in preview");
+      setDownloadingJobPackId(null);
     }
 
     if (jobPackQuery.error) {
       toast.error(jobPackQuery.error.message || "Failed to generate job pack");
       setDownloadingJobPackId(null);
     }
-  }, [downloadingJobPackId, jobPackQuery.data, jobPackQuery.error, jobs]);
+  }, [downloadingJobPackId, jobPackQuery.data, jobPackQuery.error, jobs, navigate]);
+
+  useEffect(() => {
+    if (downloadingMaterialListJobId === null) return;
+    const job = jobs?.find(j => j.id === downloadingMaterialListJobId);
+    const fileName = `${formatQuoteNumber(job)}-materials-${safeFilePart(job?.clientName)}.pdf`;
+
+    if (materialListQuery.data) {
+      const token = createPdfPreview(materialListQuery.data.html, fileName, "/dashboard");
+      navigate(`/print-preview/${token}`);
+      toast.success("Internal material list opened in preview");
+      setDownloadingMaterialListJobId(null);
+    }
+
+    if (materialListQuery.error) {
+      toast.error(materialListQuery.error.message || "Failed to generate material list");
+      setDownloadingMaterialListJobId(null);
+    }
+  }, [downloadingMaterialListJobId, materialListQuery.data, materialListQuery.error, jobs, navigate]);
 
   if (authLoading) {
     return <div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin w-8 h-8" /></div>;
@@ -270,7 +302,7 @@ export default function Dashboard() {
       setDuplicatingJobId(null);
       persistSelectedOperatorFromName(job.operatorName, operators);
       toast.success("Quote duplicated as Draft");
-      navigate(`/quote/${newJobId}`);
+      navigate(`/quote?resumeJobId=${newJobId}`);
     } catch (error: any) {
       toast.error(error?.message || "Failed to duplicate quote");
       setDuplicatingJobId(null);
@@ -283,6 +315,18 @@ export default function Dashboard() {
     deleteJobMutation.mutate({ id: jobId });
   };
 
+  const startQuotePdf = (job: NonNullable<typeof jobs>[number]) => {
+    setDownloadingJobId(job.id);
+  };
+
+  const startJobPackPdf = (job: NonNullable<typeof jobs>[number]) => {
+    setDownloadingJobPackId(job.id);
+  };
+
+  const startMaterialListPdf = (job: NonNullable<typeof jobs>[number]) => {
+    setDownloadingMaterialListJobId(job.id);
+  };
+
   const jobCard = (job: NonNullable<typeof jobs>[number], compact = false) => {
     const currentStatus = (job.status || "quoted") as JobStatus;
     const isUpdatingStatus = updatingStatusJobId === job.id;
@@ -290,7 +334,8 @@ export default function Dashboard() {
     const isDeleting = deletingJobId === job.id;
     const isDownloading = downloadingJobId === job.id;
     const isDownloadingJobPack = downloadingJobPackId === job.id;
-    const actionBusy = isUpdatingStatus || isDuplicating || isDeleting || isDownloading || isDownloadingJobPack;
+    const isDownloadingMaterialList = downloadingMaterialListJobId === job.id;
+    const actionBusy = isUpdatingStatus || isDuplicating || isDeleting || isDownloading || isDownloadingJobPack || isDownloadingMaterialList;
 
     return (
       <Card key={job.id} className="p-4 bg-white shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
@@ -332,8 +377,9 @@ export default function Dashboard() {
               {job.clientName === "[Draft]" ? "Resume" : "Edit"}
             </Button>
             <Button size="sm" variant="outline" onClick={() => duplicateQuote(job)} disabled={actionBusy} className="h-9 text-xs">{isDuplicating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Copy className="w-3 h-3 mr-1" />}Duplicate</Button>
-            <Button size="sm" variant="outline" onClick={() => setDownloadingJobId(job.id)} disabled={actionBusy} className="h-9 text-xs">{isDownloading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Quote PDF</Button>
-            <Button size="sm" variant="outline" onClick={() => setDownloadingJobPackId(job.id)} disabled={actionBusy} className="h-9 text-xs">{isDownloadingJobPack ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Job Pack</Button>
+            <Button size="sm" variant="outline" onClick={() => startQuotePdf(job)} disabled={actionBusy} className="h-9 text-xs">{isDownloading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Quote PDF</Button>
+            <Button size="sm" variant="outline" onClick={() => startJobPackPdf(job)} disabled={actionBusy} className="h-9 text-xs">{isDownloadingJobPack ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Job Pack</Button>
+            <Button size="sm" variant="outline" onClick={() => startMaterialListPdf(job)} disabled={actionBusy} className="h-9 text-xs">{isDownloadingMaterialList ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Materials</Button>
             <Button size="sm" variant="outline" onClick={() => navigate(`/setout/${job.id}`)} disabled={actionBusy} className="h-9 text-xs"><Ruler className="w-3 h-3 mr-1" />Setout</Button>
             <Button size="sm" variant="outline" onClick={() => deleteQuote(job.id)} disabled={actionBusy} className="h-9 text-xs text-red-600 hover:text-red-700 hover:bg-red-50">{isDeleting ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Trash2 className="w-3 h-3 mr-1" />}Delete</Button>
           </div>

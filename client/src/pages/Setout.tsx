@@ -7,13 +7,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { downloadPDF } from "@/lib/pdf";
+import { createPdfPreview } from "@/lib/pdf";
 import { trpc } from "@/lib/trpc";
 import { formatQuoteNumber } from "@shared/quote";
 import { calculateTvBackdropSetout } from "@shared/tvSetout";
 import { generateTvBackdropSetoutHtml, type TvBackdropSetoutDocument } from "@shared/tvSetoutDocument";
 
-type SetoutDocumentRecord = TvBackdropSetoutDocument & { id: string };
+type SetoutDocumentRecord = TvBackdropSetoutDocument & { id: string; selectorLabel: string };
 
 function parseItemDetails(value: unknown): Record<string, any> {
   if (typeof value !== "string" || !value.trim()) return {};
@@ -40,8 +40,10 @@ function buildSetoutDocuments(job: any, walls: any[]): SetoutDocumentRecord[] {
         ? floatingCabinetBottomAfflMm + floatingCabinetHeightMm
         : undefined;
 
+    let backdropIndex = 0;
     return (wall.products || []).flatMap((product: any) => {
       if (product.itemType !== "tv_backdrop") return [];
+      backdropIndex += 1;
 
       const details = parseItemDetails(product.itemDetails);
       const tvSizeInches = safeNumber(details.tvSizeInches);
@@ -49,12 +51,14 @@ function buildSetoutDocuments(job: any, walls: any[]): SetoutDocumentRecord[] {
       const backdropHeightMm = safeNumber(details.backdropHeightMm ?? details.backdrop_height_mm);
       const tvBottomAfflMm = safeNumber(details.tvBottomAfflMm ?? details.tv_bottom_affl_mm);
       const cabinetBottomAfflMm =
-        safeNumber(details.cabinetBottomAfflMm ?? details.cabinet_bottom_affl_mm ?? details.heightFromFloorMm) ??
-        floatingCabinetBottomAfflMm;
+        floatingCabinetBottomAfflMm ??
+        safeNumber(details.cabinetBottomAfflMm ?? details.cabinet_bottom_affl_mm ?? details.heightFromFloorMm);
       const cabinetHeightMm =
-        safeNumber(details.cabinetHeightMm ?? details.cabinet_height_mm ?? details.heightMm) ??
-        floatingCabinetHeightMm;
-      const cabinetTopAfflMm = safeNumber(details.cabinetTopAfflMm ?? details.cabinet_top_affl_mm) ?? cabinetTopFromCabinet;
+        floatingCabinetHeightMm ??
+        safeNumber(details.cabinetHeightMm ?? details.cabinet_height_mm ?? details.heightMm);
+      const cabinetTopAfflMm =
+        cabinetTopFromCabinet ??
+        safeNumber(details.cabinetTopAfflMm ?? details.cabinet_top_affl_mm);
       const cabinetToTvGapMm = safeNumber(details.cabinetToTvGapMm ?? details.cabinet_to_tv_gap_mm);
 
       if (!tvSizeInches || !backdropWidthMm || !backdropHeightMm || !wall.wallWidthMm || !wall.wallHeightMm) {
@@ -78,6 +82,7 @@ function buildSetoutDocuments(job: any, walls: any[]): SetoutDocumentRecord[] {
         return [
           {
             id: `${wall.id}-${product.id}`,
+            selectorLabel: `${wall.wallName || "TV Wall"}${backdropIndex > 1 ? ` - TV Backdrop ${backdropIndex}` : ""}`,
             quoteNumber: formatQuoteNumber(job),
             clientName: job.clientName === "[Draft]" ? "Draft Quote" : job.clientName,
             wallName: wall.wallName || "TV Wall",
@@ -168,56 +173,52 @@ export default function Setout() {
     if (!selectedDocument) return;
     setDownloading(true);
     try {
-      await downloadPDF(
+      const token = createPdfPreview(
         generateTvBackdropSetoutHtml(selectedDocument),
-        `${selectedDocument.quoteNumber}-${selectedDocument.wallName}-setout.pdf`
+        `${selectedDocument.quoteNumber}-${selectedDocument.wallName}-setout.pdf`,
+        `/setout/${jobId}`
       );
-      toast.success("Installer setout opened for print/PDF");
+      navigate(`/print-preview/${token}`);
+      toast.success("Installer setout opened in preview");
     } catch (error: any) {
-      toast.error(error?.message || "Failed to open print/PDF view");
+      toast.error(error?.message || "Failed to open setout preview");
     } finally {
       setDownloading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 p-3 md:p-4">
-      <div className="mx-auto max-w-7xl space-y-3">
-        <div className="flex flex-col gap-3 rounded-xl border bg-white p-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" onClick={() => navigate("/jobs")} className="h-9 w-9 p-0">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900">TV Backdrop Setout</h1>
-              <p className="text-sm text-slate-600">{selectedDocument ? `${selectedDocument.quoteNumber}  ${selectedDocument.clientName}` : "Installer elevation"}</p>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 md:flex-row md:items-center">
-            {documents.length > 1 && selectedDocument && (
-              <div className="w-full md:w-72">
-                <Select value={selectedDocument.id} onValueChange={setSelectedDocumentId}>
-                  <SelectTrigger className="h-10 bg-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {documents.map(document => (
-                      <SelectItem key={document.id} value={document.id}>
-                        {document.wallName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <Button onClick={handleDownload} disabled={!selectedDocument || downloading || jobLoading || wallsLoading} className="h-10">
-              {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
-              Print / PDF
-            </Button>
-          </div>
-        </div>
+    <div className="relative h-screen bg-white">
+      <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
+        <Button variant="outline" onClick={() => navigate("/jobs")} className="h-10 w-10 bg-white/95 p-0 shadow-sm">
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+      </div>
 
-        <Card className="overflow-hidden p-0">
+      <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+        {documents.length > 1 && selectedDocument && (
+          <div className="w-64">
+            <Select value={selectedDocument.id} onValueChange={setSelectedDocumentId}>
+              <SelectTrigger className="h-10 bg-white/95 shadow-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {documents.map(document => (
+                  <SelectItem key={document.id} value={document.id}>
+                    {document.selectorLabel}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <Button onClick={handleDownload} disabled={!selectedDocument || downloading || jobLoading || wallsLoading} className="h-10 shadow-sm">
+          {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+          Print / PDF
+        </Button>
+      </div>
+
+      <Card className="h-full overflow-hidden rounded-none border-0 p-0 shadow-none">
           {jobLoading || wallsLoading ? (
             <div className="flex min-h-[70vh] items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
@@ -227,17 +228,16 @@ export default function Setout() {
           ) : documents.length === 0 || !selectedDocument ? (
             <div className="space-y-2 p-6 text-sm text-slate-600">
               <p>No TV backdrop setout is ready for this job yet.</p>
-              <p>Save a TV backdrop with TV size, backdrop width/height, and cabinet or TV bottom install data.</p>
+              <p>Save a TV backdrop on the selected wall with its current quote measurements and install inputs.</p>
             </div>
           ) : (
             <iframe
               title={`${selectedDocument.wallName} setout preview`}
               srcDoc={previewHtml}
-              className="h-[calc(100vh-8.5rem)] min-h-[980px] w-full bg-white"
+              className="h-full w-full bg-white"
             />
           )}
-        </Card>
-      </div>
+      </Card>
     </div>
   );
 }

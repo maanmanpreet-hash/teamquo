@@ -46,12 +46,11 @@ function isInternalNavigationIntent(event: MouseEvent) {
 
   const text = buttonText(button);
   return (
-    text === "" ||
     text.includes("new quote") ||
     text.includes("resume") ||
-    text.includes("edit") ||
     text.includes("admin") ||
-    text.includes("dashboard")
+    text.includes("dashboard") ||
+    text === "back"
   );
 }
 

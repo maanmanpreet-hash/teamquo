@@ -1,6 +1,6 @@
 import type { Job, JobItem, Product, Wall } from "../drizzle/schema";
 import { formatMoneyFromCents, formatQuoteNumber, COMPANY_CONTACT_DETAILS } from "../shared/quote";
-import { buildQuoteMaterialSummary, type WallForMaterials } from "../shared/materialIntelligence";
+import { buildJobMaterialSummary } from "./jobMaterials";
 
 type WallSummary = Pick<Wall, "id" | "wallName" | "wallType" | "wallWidthMm" | "wallHeightMm" | "notes">;
 
@@ -48,44 +48,99 @@ function buildWallDrawingSvg(wall: WallSummary, index: number) {
   `;
 }
 
-function mapJobToMaterialWalls(
-  wallEntries: Array<[WallSummary, JobItem[]]>,
-  products: Map<number, Product>
-): WallForMaterials[] {
-  return wallEntries.map(([wall, items]) => ({
-    wallName: wall.wallName || "Wall",
-    wallWidthMm: wall.wallWidthMm || 0,
-    wallHeightMm: wall.wallHeightMm || 0,
-    products: items.map(item => {
-      const product = item.productId ? products.get(item.productId) : undefined;
-      return {
-        productType: item.itemType,
-        productName: product?.name || item.itemType,
-        quantity: item.quantityRequired || 1,
-        unitCostCents: item.unitPrice || undefined,
-        includeTvBracket: typeof item.itemDetails === "string" && item.itemDetails.includes("includeTvBracket"),
-        tvSizeInches: (() => {
-          if (typeof item.itemDetails !== "string") return undefined;
-          try {
-            const parsed = JSON.parse(item.itemDetails);
-            const value = Number(parsed.tvSizeInches);
-            return Number.isFinite(value) && value > 0 ? value : undefined;
-          } catch {
-            return undefined;
-          }
-        })(),
-        acousticFixingMethod: (() => {
-          if (typeof item.itemDetails !== "string") return undefined;
-          try {
-            const parsed = JSON.parse(item.itemDetails);
-            return parsed.fixingMethod || parsed.acousticFixingMethod;
-          } catch {
-            return undefined;
-          }
-        })(),
-      };
-    }),
-  }));
+function parseItemDetails(value: unknown): Record<string, any> {
+  if (typeof value !== "string" || !value.trim()) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function safeNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function isCompatibleItemDetails(itemType: JobItem["itemType"], details: Record<string, any>) {
+  if (!details || typeof details !== "object") return false;
+  const keys = Object.keys(details);
+  if (keys.length === 0) return false;
+
+  const detailType = typeof details.productType === "string" ? details.productType : undefined;
+  if (detailType) return detailType === itemType;
+
+  if (itemType === "tv_backdrop") {
+    return ["tvSizeInches", "backdropWidthMm", "backdropHeightMm", "tvBottomAfflMm", "cabinetToTvGapMm"].some(
+      key => key in details
+    );
+  }
+
+  if (["floating_cabinet", "side_tower", "shelving"].includes(itemType)) {
+    return ["widthMm", "heightMm", "depthMm", "heightFromFloorMm", "clientPreferenceNotes"].some(key => key in details);
+  }
+
+  if (itemType === "acoustic_panel") {
+    return ["fixingMethod", "acousticFixingMethod", "glueTubes", "screws"].some(key => key in details);
+  }
+
+  return false;
+}
+
+function getTypedItemDetails(item: JobItem) {
+  const details = parseItemDetails(item.itemDetails);
+  return isCompatibleItemDetails(item.itemType, details) ? details : {};
+}
+
+function buildItemDetailLines(item: JobItem, product?: Product) {
+  const details = getTypedItemDetails(item);
+  const lines: string[] = [];
+
+  if (item.itemType === "tv_backdrop") {
+    const tvSize = safeNumber(details.tvSizeInches);
+    const backdropWidth = safeNumber(details.backdropWidthMm);
+    const backdropHeight = safeNumber(details.backdropHeightMm);
+    const tvBottom = safeNumber(details.tvBottomAfflMm);
+    const cabinetBottom = safeNumber(details.cabinetBottomAfflMm ?? details.heightFromFloorMm ?? item.cabinetHeightFromFloorMm);
+    const cabinetHeight = safeNumber(details.cabinetHeightMm ?? details.heightMm ?? item.cabinetHeightMm);
+    const cabinetGap = safeNumber(details.cabinetToTvGapMm);
+
+    if (tvSize) lines.push(`TV: ${tvSize}"`);
+    if (backdropWidth && backdropHeight) lines.push(`Backdrop: ${backdropWidth} x ${backdropHeight} mm`);
+    if (tvBottom !== undefined) lines.push(`TV bottom AFFL: ${tvBottom} mm`);
+    if (cabinetBottom !== undefined && cabinetHeight) lines.push(`Cabinet: ${cabinetBottom} mm AFFL bottom + ${cabinetHeight} mm height`);
+    if (cabinetGap) lines.push(`Cabinet to TV gap: ${cabinetGap} mm`);
+    if (details.includeTvBracket) lines.push("TV bracket included");
+  }
+
+  if (["floating_cabinet", "side_tower", "shelving"].includes(item.itemType)) {
+    const width = item.cabinetWidthMm ?? safeNumber(details.widthMm);
+    const height = item.cabinetHeightMm ?? safeNumber(details.heightMm);
+    const depth = item.cabinetDepthMm ?? safeNumber(details.depthMm);
+    const bottom = item.cabinetHeightFromFloorMm ?? safeNumber(details.heightFromFloorMm);
+    const preference = typeof details.clientPreferenceNotes === "string" ? details.clientPreferenceNotes.trim() : "";
+
+    if (width && height && depth) lines.push(`Size: ${width} W x ${height} H x ${depth} D mm`);
+    if (bottom !== undefined) lines.push(`Bottom from floor: ${bottom} mm`);
+    if (preference) lines.push(`Preference: ${preference}`);
+  }
+
+  if (item.itemType === "acoustic_panel") {
+    const fixingMethod =
+      typeof details.fixingMethod === "string"
+        ? details.fixingMethod
+        : typeof details.acousticFixingMethod === "string"
+          ? details.acousticFixingMethod
+          : undefined;
+    if (fixingMethod && fixingMethod !== "none") lines.push(`Fixing: ${fixingMethod.replace(/_/g, " ")}`);
+  }
+
+  if (item.itemType === "fireplace" && product?.name) {
+    lines.push(product.name);
+  }
+
+  return lines;
 }
 
 export function generateJobPackHtml(
@@ -107,17 +162,19 @@ export function generateJobPackHtml(
   )
     .map(([wallId, wallItems]) => [walls.get(wallId)!, wallItems] as [WallSummary, JobItem[]]);
 
-  const materialSummary = buildQuoteMaterialSummary(mapJobToMaterialWalls(wallEntries, products));
+  const materialSummary = buildJobMaterialSummary(items, products, walls);
 
   const wallSections = wallEntries
     .map(([wall, wallItems], index) => {
       const productRows = wallItems
         .map(item => {
           const product = item.productId ? products.get(item.productId) : undefined;
+          const detailLines = buildItemDetailLines(item, product);
           return `
             <tr>
               <td>${escapeHtml(product?.name || item.itemType)}</td>
               <td>${escapeHtml(item.itemType)}</td>
+              <td>${detailLines.length ? detailLines.map(line => `<div>${escapeHtml(line)}</div>`).join("") : "-"}</td>
               <td>${item.quantityRequired || 1}</td>
               <td>${formatMoneyFromCents(item.unitPrice || 0)}</td>
             </tr>
@@ -146,7 +203,7 @@ export function generateJobPackHtml(
             <div class="table-card">
               <h3>Selected Products</h3>
               <table>
-                <thead><tr><th>Product</th><th>Type</th><th>Qty</th><th>Quote Rate</th></tr></thead>
+                <thead><tr><th>Product</th><th>Type</th><th>Recorded Details</th><th>Qty</th><th>Quote Rate</th></tr></thead>
                 <tbody>${productRows}</tbody>
               </table>
             </div>

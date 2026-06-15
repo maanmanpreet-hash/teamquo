@@ -71,6 +71,7 @@ interface WallProduct {
   productType: ProductTypeSlug;
   productId: string;
   productName: string;
+  catalogProductName?: string;
   quantity: number;
   unitPrice: number;
   panelWidthMm?: number;
@@ -126,6 +127,18 @@ const productTypeLabels: Record<ProductTypeSlug, string> = {
   shelving: "Shelving",
 };
 
+function formatProductHeading(product: Pick<WallProduct, "productType" | "productName">) {
+  const rawName = product.productName?.trim();
+  if (!rawName) return productTypeLabels[product.productType];
+
+  const normalized = rawName.toLowerCase().replace(/[\s-]+/g, "_");
+  if (normalized === product.productType) {
+    return productTypeLabels[product.productType];
+  }
+
+  return rawName;
+}
+
 function formatMoney(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
@@ -170,6 +183,41 @@ function safeNumber(value: unknown) {
   return Number.isFinite(numberValue) ? numberValue : undefined;
 }
 
+function getBackdropDimensionsFromCatalogProduct(product: { widthMm?: number | null; heightMm?: number | null } | null | undefined) {
+  const widthMm = safeNumber(product?.widthMm);
+  const heightMm = safeNumber(product?.heightMm);
+  if (!widthMm || !heightMm) return undefined;
+
+  return widthMm >= heightMm
+    ? { backdropWidthMm: widthMm, backdropHeightMm: heightMm }
+    : { backdropWidthMm: heightMm, backdropHeightMm: widthMm };
+}
+
+function isCompatibleItemDetails(productType: ProductTypeSlug, details: Record<string, any>) {
+  if (!details || typeof details !== "object") return false;
+  const keys = Object.keys(details);
+  if (keys.length === 0) return false;
+
+  const detailType = typeof details.productType === "string" ? details.productType : undefined;
+  if (detailType) return detailType === productType;
+
+  if (productType === "tv_backdrop") {
+    return ["tvSizeInches", "backdropWidthMm", "backdropHeightMm", "tvBottomAfflMm", "cabinetToTvGapMm"].some(
+      key => key in details
+    );
+  }
+
+  if (["floating_cabinet", "side_tower", "shelving"].includes(productType)) {
+    return ["widthMm", "heightMm", "depthMm", "heightFromFloorMm", "clientPreferenceNotes"].some(key => key in details);
+  }
+
+  if (productType === "acoustic_panel") {
+    return ["fixingMethod", "acousticFixingMethod", "glueTubes", "screws"].some(key => key in details);
+  }
+
+  return false;
+}
+
 export function getResumeJobIdFromLocation(location: string) {
   const [pathname, queryString = ""] = location.split("?");
   const fallbackQuery = typeof window !== "undefined" ? window.location.search.replace(/^\?/, "") : "";
@@ -177,6 +225,12 @@ export function getResumeJobIdFromLocation(location: string) {
   const pathId = pathname.match(/^\/quote\/(\d+)$/)?.[1];
   const parsed = Number(queryId || pathId);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function shouldResetQuoteFormForResumeChange(currentResumeJobId: number | null, nextResumeJobId: number | null) {
+  if (currentResumeJobId === nextResumeJobId) return false;
+  if (currentResumeJobId === null && nextResumeJobId !== null) return false;
+  return true;
 }
 
 export function resolveCatalogProductTypeId(
@@ -244,6 +298,7 @@ export function buildItemDetails(product: WallProduct) {
 
   if (product.productType === "tv_backdrop" && product.tvSizeInches) {
     Object.assign(details, calculateTvBackdrop(product.tvSizeInches));
+    details.catalogProductName = product.catalogProductName || product.productName;
     details.backdropWidthMm = product.backdropWidthMm ?? details.backdropWidthMm;
     details.backdropHeightMm = product.backdropHeightMm ?? details.backdropHeightMm;
     details.tvBottomAfflMm = product.tvBottomAfflMm;
@@ -268,12 +323,20 @@ export function buildItemDetails(product: WallProduct) {
 export function applyItemDetailsToProduct(product: WallProduct, itemDetails: unknown): WallProduct {
   const details = parseItemDetails(itemDetails);
   const nextProduct: WallProduct = { ...product, itemDetails: typeof itemDetails === "string" ? itemDetails : undefined };
+  if (!isCompatibleItemDetails(product.productType, details)) {
+    return nextProduct;
+  }
 
   if (product.productType === "acoustic_panel") {
     nextProduct.acousticFixingMethod = (details.fixingMethod || details.acousticFixingMethod || "none") as AcousticFixingMethod;
   }
 
   if (product.productType === "tv_backdrop") {
+    nextProduct.productName = "TV Backdrop";
+    nextProduct.catalogProductName =
+      typeof details.catalogProductName === "string" && details.catalogProductName.trim()
+        ? details.catalogProductName.trim()
+        : product.catalogProductName;
     nextProduct.tvSizeInches = safeNumber(details.tvSizeInches);
     nextProduct.backdropWidthMm = safeNumber(details.backdropWidthMm);
     nextProduct.backdropHeightMm = safeNumber(details.backdropHeightMm);
@@ -303,6 +366,58 @@ function fileToBase64(file: File) {
     reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+
+function mapSavedWallsToFormWalls(savedWalls: any[]): WallWithProducts[] {
+  return savedWalls.map((wall: any) => {
+    const decodedNotes = decodeWallNotes(wall.notes);
+    return {
+      id: wall.id.toString(),
+      wallType: wall.wallType,
+      wallName: wall.wallName || "Wall",
+      wallWidthMm: wall.wallWidthMm || 0,
+      wallHeightMm: wall.wallHeightMm || 0,
+      obstructionStatus: decodedNotes.obstructionStatus,
+      obstructionNotes: decodedNotes.obstructionNotes,
+      products: (wall.products || []).map((item: any) => {
+        const productType = item.itemType as ProductTypeSlug;
+        const panelCalculation = panelTypes(productType)
+          ? calculatePanelRequirement({
+              wallWidthMm: wall.wallWidthMm || 0,
+              wallHeightMm: wall.wallHeightMm || 0,
+              panelWidthMm: item.productWidthMm || 0,
+              panelHeightMm: item.productHeightMm || 0,
+              productName: item.productName || item.productDesign || item.itemType,
+              obstructionStatus: decodedNotes.obstructionStatus,
+              obstructionNotes: decodedNotes.obstructionNotes,
+            })
+          : undefined;
+
+        const baseProduct: WallProduct = {
+          id: item.id.toString(),
+          productType,
+          productId: String(item.productId || item.claddingVariantId || ""),
+          productName: productType === "tv_backdrop" ? "TV Backdrop" : item.productName || item.productDesign || item.itemType,
+          catalogProductName: productType === "tv_backdrop" ? item.productName || item.productDesign || undefined : undefined,
+          quantity: item.quantityRequired || panelCalculation?.finalQuantity || 1,
+          unitPrice: item.unitPrice || 0,
+          panelWidthMm: item.productWidthMm,
+          panelHeightMm: item.productHeightMm,
+          panelCalculation,
+          manualReviewRequired: panelCalculation?.manualReviewRequired,
+          reviewReasons: panelCalculation?.reviewReasons,
+          internalNotes: panelCalculation?.internalNotes,
+          customerNotes: panelCalculation?.customerNotes,
+          cabinetWidthMm: item.cabinetWidthMm,
+          cabinetHeightMm: item.cabinetHeightMm,
+          cabinetDepthMm: item.cabinetDepthMm,
+          cabinetHeightFromFloorMm: item.cabinetHeightFromFloorMm,
+        };
+
+        return applyItemDetailsToProduct(baseProduct, item.itemDetails);
+      }),
+    };
   });
 }
 
@@ -386,9 +501,21 @@ export default function QuoteForm() {
     closeProductPicker();
   };
 
+  const applySavedJobToForm = (job: any) => {
+    setClientName(job.clientName === "[Draft]" ? "" : job.clientName || "");
+    setClientEmail(job.clientEmail || "");
+    setClientPhone(job.clientPhone || "");
+    setClientAddress(job.clientAddress || "");
+    setSuburb(job.suburb || "");
+    setAppointmentDate(formatDateInput(job.appointmentDate));
+    setAppointmentTime(job.appointmentTime || "");
+    setReferenceImageUrl(job.referenceImageUrl || "");
+    setReferenceImagePreview(job.referenceImageUrl || null);
+  };
+
   useEffect(() => {
     const nextResumeJobId = getResumeJobIdFromLocation(location);
-    if (nextResumeJobId !== resumeJobId) {
+    if (shouldResetQuoteFormForResumeChange(resumeJobId, nextResumeJobId)) {
       resetQuoteForm();
     }
     setResumeJobId(nextResumeJobId);
@@ -397,15 +524,7 @@ export default function QuoteForm() {
   useEffect(() => {
     if (!draftJob || !resumeJobId) return;
 
-    setClientName(draftJob.clientName === "[Draft]" ? "" : draftJob.clientName);
-    setClientEmail(draftJob.clientEmail || "");
-    setClientPhone(draftJob.clientPhone || "");
-    setClientAddress(draftJob.clientAddress || "");
-    setSuburb(draftJob.suburb || "");
-    setAppointmentDate(formatDateInput(draftJob.appointmentDate));
-    setAppointmentTime(draftJob.appointmentTime || "");
-    setReferenceImageUrl(draftJob.referenceImageUrl || "");
-    setReferenceImagePreview(draftJob.referenceImageUrl || null);
+    applySavedJobToForm(draftJob);
 
     if (draftJob.operatorName && operators) {
       const matchingOperator = operators.find((operator: any) => operator.name === draftJob.operatorName);
@@ -417,59 +536,16 @@ export default function QuoteForm() {
 
   useEffect(() => {
     if (!resumeJobId || savedWalls === undefined) return;
-
-    {
-      const wallsData = savedWalls.map((wall: any) => {
-        const decodedNotes = decodeWallNotes(wall.notes);
-        return {
-          id: wall.id.toString(),
-          wallType: wall.wallType,
-          wallName: wall.wallName || "Wall",
-          wallWidthMm: wall.wallWidthMm || 0,
-          wallHeightMm: wall.wallHeightMm || 0,
-          obstructionStatus: decodedNotes.obstructionStatus,
-          obstructionNotes: decodedNotes.obstructionNotes,
-          products: (wall.products || []).map((item: any) => {
-            const productType = item.itemType as ProductTypeSlug;
-            const panelCalculation = panelTypes(productType)
-              ? calculatePanelRequirement({
-                  wallWidthMm: wall.wallWidthMm || 0,
-                  wallHeightMm: wall.wallHeightMm || 0,
-                  panelWidthMm: item.productWidthMm || 0,
-                  panelHeightMm: item.productHeightMm || 0,
-                  productName: item.productName || item.productDesign || item.itemType,
-                  obstructionStatus: decodedNotes.obstructionStatus,
-                  obstructionNotes: decodedNotes.obstructionNotes,
-                })
-              : undefined;
-
-            const baseProduct: WallProduct = {
-              id: item.id.toString(),
-              productType,
-              productId: String(item.productId || item.claddingVariantId || ""),
-              productName: item.productName || item.productDesign || item.itemType,
-              quantity: item.quantityRequired || panelCalculation?.finalQuantity || 1,
-              unitPrice: item.unitPrice || 0,
-              panelWidthMm: item.productWidthMm,
-              panelHeightMm: item.productHeightMm,
-              panelCalculation,
-              manualReviewRequired: panelCalculation?.manualReviewRequired,
-              reviewReasons: panelCalculation?.reviewReasons,
-              internalNotes: panelCalculation?.internalNotes,
-              customerNotes: panelCalculation?.customerNotes,
-              cabinetWidthMm: item.cabinetWidthMm,
-              cabinetHeightMm: item.cabinetHeightMm,
-              cabinetDepthMm: item.cabinetDepthMm,
-              cabinetHeightFromFloorMm: item.cabinetHeightFromFloorMm,
-            };
-
-            return applyItemDetailsToProduct(baseProduct, item.itemDetails);
-          }),
-        };
-      });
-      setWallsWithProducts(wallsData);
-    }
+    setWallsWithProducts(mapSavedWallsToFormWalls(savedWalls));
   }, [resumeJobId, savedWalls]);
+
+  useEffect(() => {
+    if (tempProductType !== "tv_backdrop") return;
+    if (!productsByType || productsByType.length === 0) return;
+    const currentExists = productsByType.some((product: any) => product.id.toString() === tempProductId);
+    if (currentExists) return;
+    setTempProductId(String(productsByType[0].id));
+  }, [productsByType, tempProductId, tempProductType]);
 
   const getSelectedOperatorName = () => {
     const selectedOperator = localStorage.getItem("selectedOperator");
@@ -485,6 +561,10 @@ export default function QuoteForm() {
     );
 
   const materialSummary = useMemo(() => buildQuoteFormMaterialSummary(wallsWithProducts), [wallsWithProducts]);
+  const activeWallFloatingCabinet = activeProductWallId ? getFloatingCabinetForWall(activeProductWallId) : undefined;
+  const selectedBackdropProduct =
+    tempProductType === "tv_backdrop" ? productsByType?.find((product: any) => product.id.toString() === tempProductId) : undefined;
+  const selectedBackdropDimensions = getBackdropDimensionsFromCatalogProduct(selectedBackdropProduct);
 
   const manualReviewItems = useMemo(
     () =>
@@ -525,6 +605,31 @@ export default function QuoteForm() {
     setTempAcousticFixingMethod("none");
   };
 
+  function getFloatingCabinetForWall(wallId: string) {
+    const wall = wallsWithProducts.find(candidate => candidate.id === wallId);
+    return wall?.products.find(product => product.productType === "floating_cabinet");
+  }
+
+  const syncTvBackdropCabinetFieldsFromWall = (wallId: string) => {
+    const floatingCabinet = getFloatingCabinetForWall(wallId);
+    if (!floatingCabinet) return;
+
+    const cabinetBottomAfflMm =
+      floatingCabinet.cabinetHeightFromFloorMm !== undefined
+        ? floatingCabinet.cabinetHeightFromFloorMm
+        : undefined;
+    const cabinetHeightMm =
+      floatingCabinet.cabinetHeightMm !== undefined ? floatingCabinet.cabinetHeightMm : undefined;
+    const cabinetTopAfflMm =
+      cabinetBottomAfflMm !== undefined && cabinetHeightMm !== undefined
+        ? cabinetBottomAfflMm + cabinetHeightMm
+        : undefined;
+
+    setTempCabinetHeightFromFloor(cabinetBottomAfflMm !== undefined ? String(cabinetBottomAfflMm) : "");
+    setTempCabinetHeight(cabinetHeightMm !== undefined ? String(cabinetHeightMm) : "");
+    setTempCabinetTopAfflMm(cabinetTopAfflMm !== undefined ? String(cabinetTopAfflMm) : "");
+  };
+
   const openProductPicker = (wallId: string) => {
     resetProductDraft();
     setActiveProductWallId(wallId);
@@ -546,6 +651,10 @@ export default function QuoteForm() {
     setTempCabinetToTvGapMm("");
     setTempIncludeTvBracket(false);
     setTempAcousticFixingMethod("none");
+
+    if (value === "tv_backdrop" && activeProductWallId) {
+      syncTvBackdropCabinetFieldsFromWall(activeProductWallId);
+    }
   };
 
   const openProductEditor = (wallId: string, product: WallProduct) => {
@@ -568,6 +677,26 @@ export default function QuoteForm() {
     setTempCabinetToTvGapMm(product.cabinetToTvGapMm !== undefined ? String(product.cabinetToTvGapMm) : "");
     setTempIncludeTvBracket(Boolean(product.includeTvBracket));
     setTempAcousticFixingMethod(product.acousticFixingMethod || "none");
+
+    if (product.productType === "tv_backdrop") {
+      const floatingCabinet = getFloatingCabinetForWall(wallId);
+      if (floatingCabinet) {
+        const cabinetBottomAfflMm =
+          floatingCabinet.cabinetHeightFromFloorMm !== undefined
+            ? floatingCabinet.cabinetHeightFromFloorMm
+            : product.cabinetHeightFromFloorMm;
+        const cabinetHeightMm =
+          floatingCabinet.cabinetHeightMm !== undefined ? floatingCabinet.cabinetHeightMm : product.cabinetHeightMm;
+        const cabinetTopAfflMm =
+          cabinetBottomAfflMm !== undefined && cabinetHeightMm !== undefined
+            ? cabinetBottomAfflMm + cabinetHeightMm
+            : product.cabinetTopAfflMm;
+
+        setTempCabinetHeightFromFloor(cabinetBottomAfflMm !== undefined ? String(cabinetBottomAfflMm) : "");
+        setTempCabinetHeight(cabinetHeightMm !== undefined ? String(cabinetHeightMm) : "");
+        setTempCabinetTopAfflMm(cabinetTopAfflMm !== undefined ? String(cabinetTopAfflMm) : "");
+      }
+    }
   };
 
   const closeProductPicker = () => {
@@ -661,9 +790,13 @@ export default function QuoteForm() {
     if (!wall) return;
 
     const requiresCatalogSelection = tempProductType !== "floating_cabinet";
+    const selectedCatalogProduct = requiresCatalogSelection
+      ? productsByType?.find((product: any) => product.id.toString() === tempProductId)
+      : null;
+    const fallbackTvBackdropProduct = tempProductType === "tv_backdrop" ? productsByType?.[0] : null;
     const foundProduct =
       (requiresCatalogSelection
-        ? productsByType?.find((product: any) => product.id.toString() === tempProductId)
+        ? selectedCatalogProduct ?? fallbackTvBackdropProduct
         : {
             id: 0,
             name: "Floating Cabinet - Custom",
@@ -673,19 +806,23 @@ export default function QuoteForm() {
             heightMm: undefined,
           }) || null;
     if (requiresCatalogSelection && !tempProductId) {
-      toast.error("Please select a product");
+      toast.error(tempProductType === "tv_backdrop" ? "Select a marble sheet variant before adding TV Backdrop" : "Please select a product");
       return;
     }
     if (!foundProduct) {
-      toast.error("Product not found");
+      toast.error(tempProductType === "tv_backdrop" ? "Selected marble sheet variant could not be loaded" : "Product not found");
       return;
+    }
+    if (tempProductType === "tv_backdrop" && tempProductId !== String(foundProduct.id)) {
+      setTempProductId(String(foundProduct.id));
     }
 
     let newProduct: WallProduct = {
       id: editingProductId || Date.now().toString(),
       productType: tempProductType,
-      productId: requiresCatalogSelection ? tempProductId : "",
-      productName: foundProduct.name,
+      productId: requiresCatalogSelection ? String(foundProduct.id) : "",
+      productName: tempProductType === "tv_backdrop" ? "TV Backdrop" : foundProduct.name,
+      catalogProductName: tempProductType === "tv_backdrop" ? foundProduct.name : undefined,
       quantity: 1,
       unitPrice: foundProduct.pricePerUnit,
     };
@@ -723,13 +860,36 @@ export default function QuoteForm() {
 
     if (tempProductType === "tv_backdrop") {
       const tvSizeInches = Number(tempTvSizeInches);
-      const backdropWidthMm = Number(tempBackdropWidthMm);
-      const backdropHeightMm = Number(tempBackdropHeightMm);
+      const backdropDimensions = getBackdropDimensionsFromCatalogProduct(foundProduct);
+      const backdropWidthMm = backdropDimensions?.backdropWidthMm;
+      const backdropHeightMm = backdropDimensions?.backdropHeightMm;
+      const floatingCabinet = getFloatingCabinetForWall(wallId);
       const tvBottomAfflMm = tempTvBottomAfflMm ? Number(tempTvBottomAfflMm) : undefined;
-      const cabinetBottomAfflMm = tempCabinetHeightFromFloor !== "" ? Number(tempCabinetHeightFromFloor) : undefined;
-      const cabinetHeightMm = tempCabinetHeight ? Number(tempCabinetHeight) : undefined;
-      const cabinetTopAfflMm = tempCabinetTopAfflMm ? Number(tempCabinetTopAfflMm) : undefined;
+      const cabinetBottomAfflMm =
+        floatingCabinet?.cabinetHeightFromFloorMm !== undefined
+          ? floatingCabinet.cabinetHeightFromFloorMm
+          : tempCabinetHeightFromFloor !== ""
+            ? Number(tempCabinetHeightFromFloor)
+            : undefined;
+      const cabinetHeightMm =
+        floatingCabinet?.cabinetHeightMm !== undefined
+          ? floatingCabinet.cabinetHeightMm
+          : tempCabinetHeight
+            ? Number(tempCabinetHeight)
+            : undefined;
+      const cabinetTopAfflMm =
+        cabinetBottomAfflMm !== undefined && cabinetHeightMm !== undefined
+          ? cabinetBottomAfflMm + cabinetHeightMm
+          : tempCabinetTopAfflMm
+            ? Number(tempCabinetTopAfflMm)
+            : undefined;
       const cabinetToTvGapMm = tempCabinetToTvGapMm ? Number(tempCabinetToTvGapMm) : undefined;
+      const hasFloatingCabinet =
+        cabinetBottomAfflMm !== undefined &&
+        Number.isFinite(cabinetBottomAfflMm) &&
+        cabinetHeightMm !== undefined &&
+        Number.isFinite(cabinetHeightMm) &&
+        cabinetHeightMm > 0;
       const hasPreferredCabinetInputs =
         cabinetBottomAfflMm !== undefined &&
         Number.isFinite(cabinetBottomAfflMm) &&
@@ -747,12 +907,16 @@ export default function QuoteForm() {
         toast.error("Enter TV size in inches before adding TV Backdrop");
         return;
       }
-      if (!Number.isFinite(backdropWidthMm) || backdropWidthMm <= 0 || !Number.isFinite(backdropHeightMm) || backdropHeightMm <= 0) {
-        toast.error("Enter valid backdrop width and height before adding TV Backdrop");
+      if (!backdropWidthMm || !backdropHeightMm) {
+        toast.error("Selected marble sheet variant is missing standard dimensions");
         return;
       }
-      if (!hasPreferredCabinetInputs && !hasSecondaryCabinetInputs && (!tvBottomAfflMm || tvBottomAfflMm < 0)) {
-        toast.error("Enter cabinet bottom plus height and gap, cabinet top plus gap, or TV bottom AFFL");
+      if (hasFloatingCabinet && (!Number.isFinite(cabinetToTvGapMm) || cabinetToTvGapMm! <= 0)) {
+        toast.error("Enter cabinet to TV gap before adding TV Backdrop");
+        return;
+      }
+      if (!hasFloatingCabinet && (!tvBottomAfflMm || tvBottomAfflMm < 0)) {
+        toast.error("Enter TV bottom AFFL before adding TV Backdrop");
         return;
       }
       newProduct = {
@@ -880,16 +1044,24 @@ export default function QuoteForm() {
       if (!jobId) throw new Error("Quote could not be saved");
 
       setResumeJobId(jobId);
-      await Promise.all([
-        utils.jobs.list.invalidate(),
-        utils.jobs.getById.invalidate({ id: jobId }),
-        utils.walls.getByJobId.invalidate({ jobId }),
+      await utils.jobs.list.invalidate();
+      const [freshJob, freshWalls] = await Promise.all([
+        utils.jobs.getById.fetch({ id: jobId }),
+        utils.walls.getByJobId.fetch({ jobId }),
       ]);
+      if (freshJob) {
+        applySavedJobToForm(freshJob);
+      } else {
+        applySavedJobToForm(jobInput);
+      }
+      if (freshWalls) {
+        setWallsWithProducts(mapSavedWallsToFormWalls(freshWalls));
+      }
       toast.success(requireComplete ? "Quote saved" : "Draft saved");
       if (requireComplete) {
         navigate("/jobs");
       } else if (!resumeJobId) {
-        navigate(`/quote/${jobId}`);
+        navigate(`/quote?resumeJobId=${jobId}`);
       }
     } catch (error: any) {
       toast.error(error?.message || "Failed to save quote");
@@ -1100,8 +1272,11 @@ export default function QuoteForm() {
                         <div key={product.id} className="rounded-lg bg-gray-50 p-3">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <p className="font-medium">{product.productName}</p>
+                              <p className="font-medium">{formatProductHeading(product)}</p>
                               <p className="text-sm text-gray-600">Qty {product.quantity} x {formatMoney(product.unitPrice)} = {formatMoney(product.quantity * product.unitPrice)}</p>
+                              {product.productType === "tv_backdrop" && product.catalogProductName && (
+                                <p className="text-xs text-gray-600">Marble sheet: {product.catalogProductName}</p>
+                              )}
                               {product.productType === "tv_backdrop" && product.tvSizeInches && <p className="text-xs text-gray-600">TV size: {product.tvSizeInches}&quot;</p>}
                               {product.productType === "tv_backdrop" && product.backdropWidthMm && product.backdropHeightMm && (
                                 <p className="text-xs text-gray-600">
@@ -1251,21 +1426,13 @@ export default function QuoteForm() {
                               <Input
                                 type="number"
                                 value={tempTvSizeInches}
-                                onChange={e => {
-                                  const nextValue = e.target.value;
-                                  setTempTvSizeInches(nextValue);
-                                  const parsed = Number(nextValue);
-                                  if (Number.isFinite(parsed) && parsed > 0 && !tempBackdropWidthMm && !tempBackdropHeightMm) {
-                                    const recommended = calculateTvBackdrop(parsed);
-                                    setTempBackdropWidthMm(String(recommended.backdropWidthMm));
-                                    setTempBackdropHeightMm(String(recommended.backdropHeightMm));
-                                  }
-                                }}
+                                onChange={e => setTempTvSizeInches(e.target.value)}
                                 placeholder="75"
                                 className="mt-1 h-10"
                               />
                             </div>
-                            <div>
+                            {!activeWallFloatingCabinet && (
+                              <div>
                               <Label>TV Bottom AFFL mm *</Label>
                               <Input
                                 type="number"
@@ -1274,73 +1441,40 @@ export default function QuoteForm() {
                                 placeholder="700"
                                 className="mt-1 h-10"
                               />
-                            </div>
+                              </div>
+                            )}
                           </div>
+                          {selectedBackdropDimensions && (
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                              <div>
+                                <Label>Applied Sheet Width mm</Label>
+                                <Input
+                                  value={String(selectedBackdropDimensions.backdropWidthMm)}
+                                  readOnly
+                                  className="mt-1 h-10 bg-gray-50"
+                                />
+                              </div>
+                              <div>
+                                <Label>Applied Sheet Height mm</Label>
+                                <Input
+                                  value={String(selectedBackdropDimensions.backdropHeightMm)}
+                                  readOnly
+                                  className="mt-1 h-10 bg-gray-50"
+                                />
+                              </div>
+                            </div>
+                          )}
                           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                            <div>
-                              <Label>Backdrop Width mm *</Label>
-                              <Input
-                                type="number"
-                                value={tempBackdropWidthMm}
-                                onChange={e => setTempBackdropWidthMm(e.target.value)}
-                                placeholder="2420"
-                                className="mt-1 h-10"
-                              />
-                            </div>
-                            <div>
-                              <Label>Backdrop Height mm *</Label>
-                              <Input
-                                type="number"
-                                value={tempBackdropHeightMm}
-                                onChange={e => setTempBackdropHeightMm(e.target.value)}
-                                placeholder="1220"
-                                className="mt-1 h-10"
-                              />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                            <div>
-                              <Label>Cabinet Top AFFL mm</Label>
-                              <Input
-                                type="number"
-                                value={tempCabinetTopAfflMm}
-                                onChange={e => setTempCabinetTopAfflMm(e.target.value)}
-                                placeholder="450"
-                                className="mt-1 h-10"
-                              />
-                            </div>
                             <div>
                               <Label>Cabinet to TV Gap mm</Label>
-                              <Input
-                                type="number"
-                                value={tempCabinetToTvGapMm}
-                                onChange={e => setTempCabinetToTvGapMm(e.target.value)}
-                                placeholder="250"
-                                className="mt-1 h-10"
-                              />
-                            </div>
+                            <Input
+                              type="number"
+                              value={tempCabinetToTvGapMm}
+                              onChange={e => setTempCabinetToTvGapMm(e.target.value)}
+                              placeholder="250"
+                              className="mt-1 h-10"
+                            />
                           </div>
-                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                            <div>
-                              <Label>Cabinet Bottom AFFL mm</Label>
-                              <Input
-                                type="number"
-                                value={tempCabinetHeightFromFloor}
-                                onChange={e => setTempCabinetHeightFromFloor(e.target.value)}
-                                placeholder="0"
-                                className="mt-1 h-10"
-                              />
-                            </div>
-                            <div>
-                              <Label>Cabinet Height mm</Label>
-                              <Input
-                                type="number"
-                                value={tempCabinetHeight}
-                                onChange={e => setTempCabinetHeight(e.target.value)}
-                                placeholder="450"
-                                className="mt-1 h-10"
-                              />
-                            </div>
                           </div>
                           <label className="flex items-center gap-2 text-sm text-gray-700">
                             <input
@@ -1397,7 +1531,7 @@ export default function QuoteForm() {
                     <div className="mt-2 space-y-2">
                       {wall.products.map(product => (
                         <div key={product.id} className="flex justify-between gap-3 text-sm">
-                          <span>Supply and install {product.productName}</span>
+                          <span>Supply and install {formatProductHeading(product)}</span>
                           <span className="font-medium whitespace-nowrap">{product.quantity} x {formatMoney(product.unitPrice)}</span>
                         </div>
                       ))}
@@ -1410,7 +1544,7 @@ export default function QuoteForm() {
                 <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
                   <p className="font-medium">Manual review flags</p>
                   <ul className="mt-1 list-disc pl-5">
-                    {manualReviewItems.map(({ wall, product }) => <li key={`${wall.id}-${product.id}`}>{wall.wallName} - {product.productName}</li>)}
+                    {manualReviewItems.map(({ wall, product }) => <li key={`${wall.id}-${product.id}`}>{wall.wallName} - {formatProductHeading(product)}</li>)}
                   </ul>
                 </div>
               )}

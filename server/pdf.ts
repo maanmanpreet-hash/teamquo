@@ -10,6 +10,51 @@ import { parseMaterialMetadata } from "../shared/quoteCalculations";
 
 type WallSummary = Pick<Wall, "id" | "wallName" | "wallType" | "wallWidthMm" | "wallHeightMm" | "notes">;
 
+function parseItemDetails(value: unknown): Record<string, any> {
+  if (typeof value !== "string" || !value.trim()) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function safeNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function isCompatibleItemDetails(itemType: JobItem["itemType"], details: Record<string, any>) {
+  if (!details || typeof details !== "object") return false;
+  const keys = Object.keys(details);
+  if (keys.length === 0) return false;
+
+  const detailType = typeof details.productType === "string" ? details.productType : undefined;
+  if (detailType) return detailType === itemType;
+
+  if (itemType === "tv_backdrop") {
+    return ["tvSizeInches", "backdropWidthMm", "backdropHeightMm", "tvBottomAfflMm", "cabinetToTvGapMm"].some(
+      key => key in details
+    );
+  }
+
+  if (["floating_cabinet", "side_tower", "shelving"].includes(itemType)) {
+    return ["widthMm", "heightMm", "depthMm", "heightFromFloorMm", "clientPreferenceNotes"].some(key => key in details);
+  }
+
+  if (itemType === "acoustic_panel") {
+    return ["fixingMethod", "acousticFixingMethod", "glueTubes", "screws"].some(key => key in details);
+  }
+
+  return false;
+}
+
+function getTypedItemDetails(item: JobItem) {
+  const details = parseItemDetails(item.itemDetails);
+  return isCompatibleItemDetails(item.itemType, details) ? details : {};
+}
+
 function decodeWallNotes(notes: string | null | undefined) {
   if (!notes) return { obstructionStatus: "unknown", obstructionNotes: "" };
 
@@ -94,17 +139,25 @@ export function generateQuoteHTML(
   };
 
   const formatProductDimensions = (item: JobItem, product?: Product) => {
+    const itemDetails = getTypedItemDetails(item);
+
     if (["floating_cabinet", "side_tower", "shelving"].includes(item.itemType)) {
       const dims = [
-        item.cabinetWidthMm,
-        item.cabinetHeightMm,
-        item.cabinetDepthMm,
+        item.cabinetWidthMm ?? safeNumber(itemDetails.widthMm),
+        item.cabinetHeightMm ?? safeNumber(itemDetails.heightMm),
+        item.cabinetDepthMm ?? safeNumber(itemDetails.depthMm),
       ].filter(Boolean);
       return dims.length ? `${dims.join("mm x ")}mm` : "Custom size";
     }
 
     if (item.itemType === "tv_backdrop") {
-      return "TV size and backdrop allowance recorded for final site check";
+      const tvSize = safeNumber(itemDetails.tvSizeInches);
+      const backdropWidth = safeNumber(itemDetails.backdropWidthMm);
+      const backdropHeight = safeNumber(itemDetails.backdropHeightMm);
+      if (backdropWidth && backdropHeight) {
+        return `${backdropWidth}mm x ${backdropHeight}mm backdrop${tvSize ? ` for ${tvSize}" TV` : ""}`;
+      }
+      return tvSize ? `${tvSize}" TV backdrop allowance` : "TV backdrop allowance recorded";
     }
 
     if (product?.widthMm && product?.heightMm) {
@@ -118,6 +171,7 @@ export function generateQuoteHTML(
     const notes: string[] = [];
     const metadata = parseMaterialMetadata(product?.description);
     const decodedWallNotes = decodeWallNotes(wall?.notes);
+    const itemDetails = getTypedItemDetails(item);
 
     if (["cladding", "acoustic_panel", "marble_sheet", "tv_backdrop"].includes(item.itemType)) {
       notes.push("Final join layout and cut positions are subject to site measurement confirmation.");
@@ -125,6 +179,16 @@ export function generateQuoteHTML(
 
     if (["floating_cabinet", "side_tower", "shelving"].includes(item.itemType)) {
       notes.push("Custom dimensions and final finish details are subject to site measurement confirmation.");
+      if (typeof itemDetails.clientPreferenceNotes === "string" && itemDetails.clientPreferenceNotes.trim()) {
+        notes.push(`Recorded preference: ${itemDetails.clientPreferenceNotes.trim()}.`);
+      }
+    }
+
+    if (item.itemType === "tv_backdrop") {
+      const tvBottom = safeNumber(itemDetails.tvBottomAfflMm);
+      if (tvBottom !== undefined) {
+        notes.push(`TV install setout is recorded with TV bottom at ${tvBottom}mm AFFL for installer confirmation.`);
+      }
     }
 
     if (metadata.orientationRule) {

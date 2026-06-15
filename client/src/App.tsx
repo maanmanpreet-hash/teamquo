@@ -7,6 +7,7 @@ import { QuotePageDraftSafety } from "./components/QuotePageDraftSafety";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
+import PdfPreview from "./pages/PdfPreview";
 import QuoteForm from "./pages/QuoteForm";
 import AdminProducts from "./pages/AdminProducts";
 import Admin from "./pages/Admin";
@@ -17,6 +18,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/dashboard" component={Dashboard} />
+      <Route path="/print-preview/:token" component={PdfPreview} />
       <Route path="/quote/:jobId" component={QuoteForm} />
       <Route path="/setout/:jobId" component={Setout} />
       <Route path="/quote" component={QuoteForm} />

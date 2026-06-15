@@ -194,6 +194,75 @@ describe("Jobs Procedures", () => {
     );
   });
 
+  it("should persist client details and tv backdrop details through save and reload", async () => {
+    const ctx = createAuthContext(111);
+    const caller = appRouter.createCaller(ctx);
+
+    const saved = await caller.jobs.saveQuote({
+      clientName: "Saved Client",
+      clientEmail: "saved@example.com",
+      clientPhone: "0412345678",
+      clientAddress: "99 Example Road",
+      suburb: "Kalkallo",
+      operatorName: "Manpreet",
+      totalEstimate: 8000,
+      walls: [
+        {
+          wallType: "custom",
+          wallName: "TV Wall",
+          wallWidthMm: 3800,
+          wallHeightMm: 2600,
+          notes: JSON.stringify({ obstructionStatus: "none", obstructionNotes: "" }),
+          products: [
+            {
+              itemType: "tv_backdrop",
+              productId: 301,
+              wallWidthMm: 3800,
+              wallHeightMm: 2600,
+              quantityRequired: 1,
+              unitPrice: 8000,
+              totalPrice: 8000,
+              itemDetails: JSON.stringify({
+                productType: "tv_backdrop",
+                tvSizeInches: 75,
+                backdropWidthMm: 2900,
+                backdropHeightMm: 1220,
+                tvBottomAfflMm: 700,
+                cabinetTopAfflMm: 450,
+                cabinetToTvGapMm: 250,
+              }),
+            },
+          ],
+        },
+      ],
+    });
+
+    const savedJob = await caller.jobs.getById({ id: saved!.id });
+    expect(savedJob?.clientName).toBe("Saved Client");
+    expect(savedJob?.clientEmail).toBe("saved@example.com");
+    expect(savedJob?.clientPhone).toBe("0412345678");
+    expect(savedJob?.clientAddress).toBe("99 Example Road");
+    expect(savedJob?.suburb).toBe("Kalkallo");
+
+    const loadedWalls = await caller.walls.getByJobId({ jobId: saved!.id });
+    expect(loadedWalls).toHaveLength(1);
+    expect(loadedWalls[0].products[0]).toEqual(
+      expect.objectContaining({
+        itemType: "tv_backdrop",
+        productId: 301,
+        itemDetails: JSON.stringify({
+          productType: "tv_backdrop",
+          tvSizeInches: 75,
+          backdropWidthMm: 2900,
+          backdropHeightMm: 1220,
+          tvBottomAfflMm: 700,
+          cabinetTopAfflMm: 450,
+          cabinetToTvGapMm: 250,
+        }),
+      })
+    );
+  });
+
   it("should replace existing walls and products when saving an existing quote", async () => {
     const ctx = createAuthContext(88);
     const caller = appRouter.createCaller(ctx);
@@ -320,6 +389,18 @@ describe("Job Items Procedures", () => {
     } catch (error: any) {
       expect(error.message).toContain("too_small");
     }
+  });
+
+  it("should generate an internal material list html document in preview mode", async () => {
+    const ctx = createAuthContext(1);
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.jobItems.generateMaterialList({ jobId: 9001 });
+
+    expect(result.quoteNumber).toBe("Q-2026-9001");
+    expect(result.html).toContain("Internal Material List");
+    expect(result.html).toContain("Example Test Client");
+    expect(result.html).toContain("PVC Marble Sheet 1220x3x2900mm");
   });
 });
 

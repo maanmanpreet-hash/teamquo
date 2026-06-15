@@ -11,8 +11,10 @@ import { z } from "zod";
 import * as db from "./db";
 import { generateQuoteHTML } from "./pdf";
 import { generateJobPackHtml } from "./jobPack";
+import { buildJobMaterialSummary } from "./jobMaterials";
 import { formatQuoteNumber } from "../shared/quote";
 import { getMasterProductCatalog } from "./masterProductList";
+import { generateInternalMaterialListHtml } from "../shared/materialListHtml";
 
 const supportedItemTypes = [
   "cladding",
@@ -139,7 +141,7 @@ const previewJobItems: any[] = [
     jobId: 9001,
     wallId: 8001,
     itemType: "tv_backdrop",
-    productId: 501,
+    productId: 301,
     claddingVariantId: null,
     wallWidthMm: 3800,
     wallHeightMm: 2600,
@@ -148,8 +150,8 @@ const previewJobItems: any[] = [
     cabinetDepthMm: null,
     cabinetHeightFromFloorMm: null,
     quantityRequired: 1,
-    unitPrice: 0,
-    totalPrice: 0,
+    unitPrice: 8000,
+    totalPrice: 8000,
     manualPriceOverride: null,
     itemDetails: JSON.stringify({
       productType: "tv_backdrop",
@@ -516,6 +518,25 @@ export const appRouter = router({
       const productMap = new Map(products.map(product => [product.id, product]));
       const wallMap = new Map(wallRows.map(wall => [wall.id, wall]));
       const html = generateJobPackHtml(job as any, items as any, productMap as any, wallMap as any);
+      return { html, jobId: job.id, clientName: job.clientName, quoteNumber: formatQuoteNumber(job as any) };
+    }),
+    generateMaterialList: protectedProcedure.input(z.object({ jobId: z.number() })).query(async ({ input, ctx }) => {
+      const job = await assertOwnsJob(input.jobId, ctx.user.id);
+      const previewMode = await isPreviewMode();
+      const items = previewMode ? previewJobItems.filter(item => item.jobId === input.jobId) : await db.getJobItemsByJobId(input.jobId);
+      if (!items.length) throw new Error("Cannot generate material list until the quote has at least one saved product.");
+      const products = previewMode ? previewProducts : await db.getAllProducts();
+      const wallRows = previewMode ? previewWalls.filter(wall => wall.jobId === input.jobId) : await db.getWallsByJobId(input.jobId);
+      const productMap = new Map(products.map(product => [product.id, product]));
+      const wallMap = new Map(wallRows.map(wall => [wall.id, wall]));
+      const summary = buildJobMaterialSummary(items as any, productMap as any, wallMap as any);
+      const html = generateInternalMaterialListHtml({
+        quoteNumber: formatQuoteNumber(job as any),
+        clientName: job.clientName,
+        clientAddress: job.clientAddress || undefined,
+        generatedDateText: new Date().toLocaleDateString(),
+        summary,
+      });
       return { html, jobId: job.id, clientName: job.clientName, quoteNumber: formatQuoteNumber(job as any) };
     }),
     create: protectedProcedure.input(jobItemCreateSchema).mutation(async ({ input, ctx }) => {

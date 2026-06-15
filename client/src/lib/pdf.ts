@@ -1,3 +1,11 @@
+const PDF_PREVIEW_STORAGE_PREFIX = "pdf-preview:";
+
+export type PdfPreviewPayload = {
+  html: string;
+  filename: string;
+  backPath?: string;
+};
+
 function normaliseQuoteHtml(html: string) {
   const wrapper = document.createElement("div");
   wrapper.innerHTML = html;
@@ -17,23 +25,8 @@ function safePdfFilename(filename: string) {
   return base.replace(/[\\/:*?"<>|]+/g, "-");
 }
 
-/**
- * Opens the quote HTML in a dedicated print window and triggers the browser's
- * native PDF/print flow. This avoids the previous CDN html2pdf dependency,
- * which could hang even after the server returned a successful 200 response.
- */
-export async function downloadPDF(html: string, filename: string) {
-  return new Promise<boolean>((resolve, reject) => {
-    const pdfFilename = safePdfFilename(filename);
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=1200");
-
-    if (!printWindow) {
-      reject(new Error("Popup blocked. Allow popups for this site and try Quote PDF again."));
-      return;
-    }
-
-    const content = normaliseQuoteHtml(html);
-    const printHtml = `<!doctype html>
+export function buildPrintHtml(content: string, pdfFilename: string, autoPrint = false) {
+  return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
@@ -47,7 +40,7 @@ export async function downloadPDF(html: string, filename: string) {
 </head>
 <body>
 ${content}
-<script>
+${autoPrint ? `<script>
   window.addEventListener('load', function () {
     setTimeout(function () {
       document.title = ${JSON.stringify(pdfFilename)};
@@ -55,18 +48,33 @@ ${content}
       window.print();
     }, 250);
   });
-<\/script>
+<\/script>` : ""}
 </body>
 </html>`;
+}
 
-    try {
-      printWindow.document.open();
-      printWindow.document.write(printHtml);
-      printWindow.document.close();
-      resolve(true);
-    } catch (error) {
-      printWindow.close();
-      reject(error);
-    }
-  });
+export function createPdfPreview(html: string, filename: string, backPath?: string) {
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const payload: PdfPreviewPayload = {
+    html: normaliseQuoteHtml(html),
+    filename: safePdfFilename(filename),
+    backPath,
+  };
+  sessionStorage.setItem(`${PDF_PREVIEW_STORAGE_PREFIX}${token}`, JSON.stringify(payload));
+  return token;
+}
+
+export function readPdfPreview(token: string) {
+  try {
+    const raw = sessionStorage.getItem(`${PDF_PREVIEW_STORAGE_PREFIX}${token}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PdfPreviewPayload;
+    return parsed?.html && parsed?.filename ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPdfPreview(token: string) {
+  sessionStorage.removeItem(`${PDF_PREVIEW_STORAGE_PREFIX}${token}`);
 }

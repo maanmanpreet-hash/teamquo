@@ -12,8 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useState } from "react";
 import { Loader2, Plus, FileText, Edit, Ruler } from "lucide-react";
-import { Link, useLocation } from "wouter";
-import { downloadPDF } from "@/lib/pdf";
+import { useLocation } from "wouter";
+import { createPdfPreview } from "@/lib/pdf";
 import { toast } from "sonner";
 import { formatMoneyFromCents, formatQuoteNumber } from "@shared/quote";
 
@@ -52,6 +52,7 @@ export default function Jobs() {
   const [selectedSuburb, setSelectedSuburb] = useState<string | "all">("all");
   const [downloadingJobId, setDownloadingJobId] = useState<number | null>(null);
   const [downloadingJobPackId, setDownloadingJobPackId] = useState<number | null>(null);
+  const [downloadingMaterialListJobId, setDownloadingMaterialListJobId] = useState<number | null>(null);
   const [updatingStatusJobId, setUpdatingStatusJobId] = useState<number | null>(null);
 
   const SUBURBS = [
@@ -91,6 +92,13 @@ export default function Jobs() {
       retry: false,
     }
   );
+  const generateMaterialListMutation = trpc.jobItems.generateMaterialList.useQuery(
+    { jobId: downloadingMaterialListJobId || 0 },
+    {
+      enabled: downloadingMaterialListJobId !== null,
+      retry: false,
+    }
+  );
 
   const handleDownloadPDF = (jobId: number) => {
     setDownloadingJobId(jobId);
@@ -98,6 +106,10 @@ export default function Jobs() {
 
   const handleDownloadJobPack = (jobId: number) => {
     setDownloadingJobPackId(jobId);
+  };
+
+  const handleDownloadMaterialList = (jobId: number) => {
+    setDownloadingMaterialListJobId(jobId);
   };
 
   const startNewQuote = () => {
@@ -112,6 +124,8 @@ export default function Jobs() {
 
   useEffect(() => {
     if (downloadingJobId === null) return;
+    const job = jobs?.find(currentJob => currentJob.id === downloadingJobId);
+    const fileName = `${formatQuoteNumber(job)}-${job?.clientName || "quote"}.pdf`;
 
     if (generatePDFMutation.error) {
       toast.error(generatePDFMutation.error.message || "Failed to generate PDF");
@@ -121,23 +135,16 @@ export default function Jobs() {
 
     if (!generatePDFMutation.data) return;
 
-    const job = jobs?.find(j => j.id === downloadingJobId);
-    downloadPDF(
-      generatePDFMutation.data.html,
-      `${formatQuoteNumber(job)}-${job?.clientName || "quote"}.pdf`
-    )
-      .then(() => {
-        toast.success("PDF downloaded successfully");
-        setDownloadingJobId(null);
-      })
-      .catch(() => {
-        toast.error("Failed to download PDF");
-        setDownloadingJobId(null);
-      });
-  }, [downloadingJobId, generatePDFMutation.data, generatePDFMutation.error, jobs]);
+    const token = createPdfPreview(generatePDFMutation.data.html, fileName, "/jobs");
+    navigate(`/print-preview/${token}`);
+    toast.success("PDF opened in preview");
+    setDownloadingJobId(null);
+  }, [downloadingJobId, generatePDFMutation.data, generatePDFMutation.error, jobs, navigate]);
 
   useEffect(() => {
     if (downloadingJobPackId === null) return;
+    const job = jobs?.find(currentJob => currentJob.id === downloadingJobPackId);
+    const fileName = `${formatQuoteNumber(job)}-${job?.clientName || "quote"}-job-pack.pdf`;
 
     if (generateJobPackMutation.error) {
       toast.error(generateJobPackMutation.error.message || "Failed to generate job pack");
@@ -147,20 +154,30 @@ export default function Jobs() {
 
     if (!generateJobPackMutation.data) return;
 
-    const job = jobs?.find(j => j.id === downloadingJobPackId);
-    downloadPDF(
-      generateJobPackMutation.data.html,
-      `${formatQuoteNumber(job)}-${job?.clientName || "quote"}-job-pack.pdf`
-    )
-      .then(() => {
-        toast.success("Job pack downloaded successfully");
-        setDownloadingJobPackId(null);
-      })
-      .catch(() => {
-        toast.error("Failed to download job pack");
-        setDownloadingJobPackId(null);
-      });
-  }, [downloadingJobPackId, generateJobPackMutation.data, generateJobPackMutation.error, jobs]);
+    const token = createPdfPreview(generateJobPackMutation.data.html, fileName, "/jobs");
+    navigate(`/print-preview/${token}`);
+    toast.success("Job pack opened in preview");
+    setDownloadingJobPackId(null);
+  }, [downloadingJobPackId, generateJobPackMutation.data, generateJobPackMutation.error, jobs, navigate]);
+
+  useEffect(() => {
+    if (downloadingMaterialListJobId === null) return;
+    const job = jobs?.find(currentJob => currentJob.id === downloadingMaterialListJobId);
+    const fileName = `${formatQuoteNumber(job)}-${job?.clientName || "quote"}-materials.pdf`;
+
+    if (generateMaterialListMutation.error) {
+      toast.error(generateMaterialListMutation.error.message || "Failed to generate material list");
+      setDownloadingMaterialListJobId(null);
+      return;
+    }
+
+    if (!generateMaterialListMutation.data) return;
+
+    const token = createPdfPreview(generateMaterialListMutation.data.html, fileName, "/jobs");
+    navigate(`/print-preview/${token}`);
+    toast.success("Material list opened in preview");
+    setDownloadingMaterialListJobId(null);
+  }, [downloadingMaterialListJobId, generateMaterialListMutation.data, generateMaterialListMutation.error, jobs, navigate]);
 
   if (!user) {
     return (
@@ -317,7 +334,7 @@ export default function Jobs() {
                   <div className="mt-4 flex gap-2 flex-wrap">
                     <Button
                       size="sm"
-                      disabled={downloadingJobId === job.id || downloadingJobPackId === job.id || updatingStatusJobId === job.id}
+                      disabled={downloadingJobId === job.id || downloadingJobPackId === job.id || downloadingMaterialListJobId === job.id || updatingStatusJobId === job.id}
                       onClick={() => {
                         if (job.operatorName) {
                           const matchingOperator = operators?.find(operator => operator.name === job.operatorName);
@@ -335,7 +352,7 @@ export default function Jobs() {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDownloadPDF(job.id)}
-                      disabled={downloadingJobId === job.id || downloadingJobPackId === job.id || updatingStatusJobId === job.id}
+                      disabled={downloadingJobId === job.id || downloadingJobPackId === job.id || downloadingMaterialListJobId === job.id || updatingStatusJobId === job.id}
                     >
                       {downloadingJobId === job.id ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -349,7 +366,7 @@ export default function Jobs() {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDownloadJobPack(job.id)}
-                      disabled={downloadingJobId === job.id || downloadingJobPackId === job.id || updatingStatusJobId === job.id}
+                      disabled={downloadingJobId === job.id || downloadingJobPackId === job.id || downloadingMaterialListJobId === job.id || updatingStatusJobId === job.id}
                     >
                       {downloadingJobPackId === job.id ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -361,8 +378,21 @@ export default function Jobs() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      onClick={() => handleDownloadMaterialList(job.id)}
+                      disabled={downloadingJobId === job.id || downloadingJobPackId === job.id || downloadingMaterialListJobId === job.id || updatingStatusJobId === job.id}
+                    >
+                      {downloadingMaterialListJobId === job.id ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <FileText className="w-4 h-4 mr-2" />
+                      )}
+                      {downloadingMaterialListJobId === job.id ? "Generating..." : "Materials"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => navigate(`/setout/${job.id}`)}
-                      disabled={downloadingJobId === job.id || downloadingJobPackId === job.id || updatingStatusJobId === job.id}
+                      disabled={downloadingJobId === job.id || downloadingJobPackId === job.id || downloadingMaterialListJobId === job.id || updatingStatusJobId === job.id}
                     >
                       <Ruler className="w-4 h-4 mr-2" />
                       Setout
@@ -378,7 +408,7 @@ export default function Jobs() {
                             setUpdatingStatusJobId(job.id);
                             updateStatusMutation.mutate({ id: job.id, status });
                           }}
-                          disabled={downloadingJobId === job.id || downloadingJobPackId === job.id || updatingStatusJobId === job.id}
+                          disabled={downloadingJobId === job.id || downloadingJobPackId === job.id || downloadingMaterialListJobId === job.id || updatingStatusJobId === job.id}
                         >
                           Mark {statusLabels[status]}
                         </Button>
