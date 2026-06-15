@@ -257,6 +257,23 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<AuthenticatedUser> {
+    // Local dev bypass: if enabled via ENV and not in production, return a fixed
+    // local dev user without verifying session cookies. This keeps production
+    // behaviour unchanged while allowing local browser testing without external
+    // OAuth.
+    if (!ENV.isProduction && ENV.localDevAuth) {
+      console.log('[Auth] LOCAL_DEV_AUTH enabled');
+      return {
+        id: -1,
+        openId: 'local-dev-user',
+        name: 'Local Dev User',
+        email: 'local-dev@teamquo.test',
+        loginMethod: 'local',
+        role: 'admin',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as AuthenticatedUser;
+    }
     // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);

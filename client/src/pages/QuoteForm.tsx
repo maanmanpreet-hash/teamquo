@@ -8,6 +8,7 @@ import {
   ClipboardList,
   FileWarning,
   Loader2,
+  Pencil,
   Plus,
   Ruler,
   Save,
@@ -83,8 +84,14 @@ interface WallProduct {
   cabinetHeightMm?: number;
   cabinetDepthMm?: number;
   cabinetHeightFromFloorMm?: number;
+  clientPreferenceNotes?: string;
   acousticFixingMethod?: AcousticFixingMethod;
   tvSizeInches?: number;
+  backdropWidthMm?: number;
+  backdropHeightMm?: number;
+  tvBottomAfflMm?: number;
+  cabinetTopAfflMm?: number;
+  cabinetToTvGapMm?: number;
   includeTvBracket?: boolean;
   itemDetails?: string;
 }
@@ -172,6 +179,15 @@ export function getResumeJobIdFromLocation(location: string) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+export function resolveCatalogProductTypeId(
+  productType: ProductTypeSlug | null,
+  productTypes: Array<{ id: number; slug: string }> | undefined
+) {
+  if (!productType || !productTypes) return 0;
+  const catalogType = productType === "tv_backdrop" ? "marble_sheet" : productType;
+  return productTypes.find(type => productTypeSlugAliases[catalogType].includes(type.slug))?.id || 0;
+}
+
 function formatDateInput(value: unknown) {
   if (!value) return "";
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
@@ -228,6 +244,13 @@ export function buildItemDetails(product: WallProduct) {
 
   if (product.productType === "tv_backdrop" && product.tvSizeInches) {
     Object.assign(details, calculateTvBackdrop(product.tvSizeInches));
+    details.backdropWidthMm = product.backdropWidthMm ?? details.backdropWidthMm;
+    details.backdropHeightMm = product.backdropHeightMm ?? details.backdropHeightMm;
+    details.tvBottomAfflMm = product.tvBottomAfflMm;
+    details.cabinetBottomAfflMm = product.cabinetHeightFromFloorMm;
+    details.cabinetHeightMm = product.cabinetHeightMm;
+    details.cabinetTopAfflMm = product.cabinetTopAfflMm;
+    details.cabinetToTvGapMm = product.cabinetToTvGapMm;
     details.includeTvBracket = Boolean(product.includeTvBracket);
   }
 
@@ -236,6 +259,7 @@ export function buildItemDetails(product: WallProduct) {
     details.heightMm = product.cabinetHeightMm;
     details.depthMm = product.cabinetDepthMm;
     details.heightFromFloorMm = product.cabinetHeightFromFloorMm;
+    details.clientPreferenceNotes = product.clientPreferenceNotes;
   }
 
   return JSON.stringify(details);
@@ -251,6 +275,13 @@ export function applyItemDetailsToProduct(product: WallProduct, itemDetails: unk
 
   if (product.productType === "tv_backdrop") {
     nextProduct.tvSizeInches = safeNumber(details.tvSizeInches);
+    nextProduct.backdropWidthMm = safeNumber(details.backdropWidthMm);
+    nextProduct.backdropHeightMm = safeNumber(details.backdropHeightMm);
+    nextProduct.tvBottomAfflMm = safeNumber(details.tvBottomAfflMm);
+    nextProduct.cabinetHeightFromFloorMm = safeNumber(details.cabinetBottomAfflMm ?? details.heightFromFloorMm);
+    nextProduct.cabinetHeightMm = safeNumber(details.cabinetHeightMm ?? details.heightMm);
+    nextProduct.cabinetTopAfflMm = safeNumber(details.cabinetTopAfflMm);
+    nextProduct.cabinetToTvGapMm = safeNumber(details.cabinetToTvGapMm);
     nextProduct.includeTvBracket = Boolean(details.includeTvBracket);
   }
 
@@ -259,6 +290,8 @@ export function applyItemDetailsToProduct(product: WallProduct, itemDetails: unk
     nextProduct.cabinetHeightMm = product.cabinetHeightMm ?? safeNumber(details.heightMm);
     nextProduct.cabinetDepthMm = product.cabinetDepthMm ?? safeNumber(details.depthMm);
     nextProduct.cabinetHeightFromFloorMm = product.cabinetHeightFromFloorMm ?? safeNumber(details.heightFromFloorMm);
+    nextProduct.clientPreferenceNotes =
+      product.clientPreferenceNotes ?? (typeof details.clientPreferenceNotes === "string" ? details.clientPreferenceNotes : undefined);
   }
 
   return nextProduct;
@@ -298,20 +331,25 @@ export default function QuoteForm() {
   const [tempWallHeight, setTempWallHeight] = useState("");
 
   const [activeProductWallId, setActiveProductWallId] = useState<string | null>(null);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [tempProductType, setTempProductType] = useState<ProductTypeSlug | null>(null);
   const [tempProductId, setTempProductId] = useState("");
   const [tempCabinetWidth, setTempCabinetWidth] = useState("");
   const [tempCabinetHeight, setTempCabinetHeight] = useState("");
   const [tempCabinetDepth, setTempCabinetDepth] = useState("");
   const [tempCabinetHeightFromFloor, setTempCabinetHeightFromFloor] = useState("");
+  const [tempClientPreferenceNotes, setTempClientPreferenceNotes] = useState("");
   const [tempTvSizeInches, setTempTvSizeInches] = useState("");
+  const [tempBackdropWidthMm, setTempBackdropWidthMm] = useState("");
+  const [tempBackdropHeightMm, setTempBackdropHeightMm] = useState("");
+  const [tempTvBottomAfflMm, setTempTvBottomAfflMm] = useState("");
+  const [tempCabinetTopAfflMm, setTempCabinetTopAfflMm] = useState("");
+  const [tempCabinetToTvGapMm, setTempCabinetToTvGapMm] = useState("");
   const [tempIncludeTvBracket, setTempIncludeTvBracket] = useState(false);
   const [tempAcousticFixingMethod, setTempAcousticFixingMethod] = useState<AcousticFixingMethod>("none");
 
   const { data: productTypes } = trpc.products.listTypes.useQuery();
-  const selectedProductTypeId = tempProductType
-    ? productTypes?.find((type: any) => productTypeSlugAliases[tempProductType].includes(type.slug))?.id || 0
-    : 0;
+  const selectedProductTypeId = resolveCatalogProductTypeId(tempProductType, productTypes);
   const { data: productsByType } = trpc.products.listByType.useQuery(
     { productTypeId: selectedProductTypeId },
     { enabled: selectedProductTypeId > 0 }
@@ -469,13 +507,20 @@ export default function QuoteForm() {
   const formBusy = saveInProgress || isResumeLoading;
 
   const resetProductDraft = () => {
+    setEditingProductId(null);
     setTempProductType(null);
     setTempProductId("");
     setTempCabinetWidth("");
     setTempCabinetHeight("");
     setTempCabinetDepth("");
     setTempCabinetHeightFromFloor("");
+    setTempClientPreferenceNotes("");
     setTempTvSizeInches("");
+    setTempBackdropWidthMm("");
+    setTempBackdropHeightMm("");
+    setTempTvBottomAfflMm("");
+    setTempCabinetTopAfflMm("");
+    setTempCabinetToTvGapMm("");
     setTempIncludeTvBracket(false);
     setTempAcousticFixingMethod("none");
   };
@@ -483,6 +528,46 @@ export default function QuoteForm() {
   const openProductPicker = (wallId: string) => {
     resetProductDraft();
     setActiveProductWallId(wallId);
+  };
+
+  const handleProductTypeChange = (value: ProductTypeSlug) => {
+    setTempProductType(value);
+    setTempProductId("");
+    setTempCabinetWidth("");
+    setTempCabinetHeight("");
+    setTempCabinetDepth("");
+    setTempCabinetHeightFromFloor("");
+    setTempClientPreferenceNotes("");
+    setTempTvSizeInches("");
+    setTempBackdropWidthMm("");
+    setTempBackdropHeightMm("");
+    setTempTvBottomAfflMm("");
+    setTempCabinetTopAfflMm("");
+    setTempCabinetToTvGapMm("");
+    setTempIncludeTvBracket(false);
+    setTempAcousticFixingMethod("none");
+  };
+
+  const openProductEditor = (wallId: string, product: WallProduct) => {
+    setActiveProductWallId(wallId);
+    setEditingProductId(product.id);
+    setTempProductType(product.productType);
+    setTempProductId(product.productId);
+    setTempCabinetWidth(product.cabinetWidthMm ? String(product.cabinetWidthMm) : "");
+    setTempCabinetHeight(product.cabinetHeightMm ? String(product.cabinetHeightMm) : "");
+    setTempCabinetDepth(product.cabinetDepthMm ? String(product.cabinetDepthMm) : "");
+    setTempCabinetHeightFromFloor(
+      product.cabinetHeightFromFloorMm !== undefined ? String(product.cabinetHeightFromFloorMm) : ""
+    );
+    setTempClientPreferenceNotes(product.clientPreferenceNotes || "");
+    setTempTvSizeInches(product.tvSizeInches ? String(product.tvSizeInches) : "");
+    setTempBackdropWidthMm(product.backdropWidthMm ? String(product.backdropWidthMm) : "");
+    setTempBackdropHeightMm(product.backdropHeightMm ? String(product.backdropHeightMm) : "");
+    setTempTvBottomAfflMm(product.tvBottomAfflMm !== undefined ? String(product.tvBottomAfflMm) : "");
+    setTempCabinetTopAfflMm(product.cabinetTopAfflMm !== undefined ? String(product.cabinetTopAfflMm) : "");
+    setTempCabinetToTvGapMm(product.cabinetToTvGapMm !== undefined ? String(product.cabinetToTvGapMm) : "");
+    setTempIncludeTvBracket(Boolean(product.includeTvBracket));
+    setTempAcousticFixingMethod(product.acousticFixingMethod || "none");
   };
 
   const closeProductPicker = () => {
@@ -567,7 +652,7 @@ export default function QuoteForm() {
   };
 
   const handleAddProductToWall = (wallId: string) => {
-    if (!tempProductType || !tempProductId) {
+    if (!tempProductType) {
       toast.error("Please select a product");
       return;
     }
@@ -575,16 +660,31 @@ export default function QuoteForm() {
     const wall = wallsWithProducts.find(w => w.id === wallId);
     if (!wall) return;
 
-    const foundProduct = productsByType?.find((product: any) => product.id.toString() === tempProductId);
+    const requiresCatalogSelection = tempProductType !== "floating_cabinet";
+    const foundProduct =
+      (requiresCatalogSelection
+        ? productsByType?.find((product: any) => product.id.toString() === tempProductId)
+        : {
+            id: 0,
+            name: "Floating Cabinet - Custom",
+            pricePerUnit: 0,
+            description: "",
+            widthMm: undefined,
+            heightMm: undefined,
+          }) || null;
+    if (requiresCatalogSelection && !tempProductId) {
+      toast.error("Please select a product");
+      return;
+    }
     if (!foundProduct) {
       toast.error("Product not found");
       return;
     }
 
     let newProduct: WallProduct = {
-      id: Date.now().toString(),
+      id: editingProductId || Date.now().toString(),
       productType: tempProductType,
-      productId: tempProductId,
+      productId: requiresCatalogSelection ? tempProductId : "",
       productName: foundProduct.name,
       quantity: 1,
       unitPrice: foundProduct.pricePerUnit,
@@ -607,8 +707,8 @@ export default function QuoteForm() {
       newProduct = {
         ...newProduct,
         quantity: panelCalculation.finalQuantity,
-        panelWidthMm: foundProduct.widthMm,
-        panelHeightMm: foundProduct.heightMm,
+        panelWidthMm: foundProduct.widthMm ?? undefined,
+        panelHeightMm: foundProduct.heightMm ?? undefined,
         panelCalculation,
         manualReviewRequired: panelCalculation.manualReviewRequired,
         reviewReasons: panelCalculation.reviewReasons,
@@ -623,11 +723,50 @@ export default function QuoteForm() {
 
     if (tempProductType === "tv_backdrop") {
       const tvSizeInches = Number(tempTvSizeInches);
+      const backdropWidthMm = Number(tempBackdropWidthMm);
+      const backdropHeightMm = Number(tempBackdropHeightMm);
+      const tvBottomAfflMm = tempTvBottomAfflMm ? Number(tempTvBottomAfflMm) : undefined;
+      const cabinetBottomAfflMm = tempCabinetHeightFromFloor !== "" ? Number(tempCabinetHeightFromFloor) : undefined;
+      const cabinetHeightMm = tempCabinetHeight ? Number(tempCabinetHeight) : undefined;
+      const cabinetTopAfflMm = tempCabinetTopAfflMm ? Number(tempCabinetTopAfflMm) : undefined;
+      const cabinetToTvGapMm = tempCabinetToTvGapMm ? Number(tempCabinetToTvGapMm) : undefined;
+      const hasPreferredCabinetInputs =
+        cabinetBottomAfflMm !== undefined &&
+        Number.isFinite(cabinetBottomAfflMm) &&
+        cabinetBottomAfflMm >= 0 &&
+        Number.isFinite(cabinetHeightMm) &&
+        cabinetHeightMm! > 0 &&
+        Number.isFinite(cabinetToTvGapMm) &&
+        cabinetToTvGapMm! > 0;
+      const hasSecondaryCabinetInputs =
+        Number.isFinite(cabinetTopAfflMm) &&
+        cabinetTopAfflMm! >= 0 &&
+        Number.isFinite(cabinetToTvGapMm) &&
+        cabinetToTvGapMm! > 0;
       if (!Number.isFinite(tvSizeInches) || tvSizeInches <= 0) {
         toast.error("Enter TV size in inches before adding TV Backdrop");
         return;
       }
-      newProduct = { ...newProduct, tvSizeInches, includeTvBracket: tempIncludeTvBracket };
+      if (!Number.isFinite(backdropWidthMm) || backdropWidthMm <= 0 || !Number.isFinite(backdropHeightMm) || backdropHeightMm <= 0) {
+        toast.error("Enter valid backdrop width and height before adding TV Backdrop");
+        return;
+      }
+      if (!hasPreferredCabinetInputs && !hasSecondaryCabinetInputs && (!tvBottomAfflMm || tvBottomAfflMm < 0)) {
+        toast.error("Enter cabinet bottom plus height and gap, cabinet top plus gap, or TV bottom AFFL");
+        return;
+      }
+      newProduct = {
+        ...newProduct,
+        tvSizeInches,
+        backdropWidthMm,
+        backdropHeightMm,
+        tvBottomAfflMm,
+        cabinetHeightFromFloorMm: cabinetBottomAfflMm,
+        cabinetHeightMm,
+        cabinetTopAfflMm,
+        cabinetToTvGapMm,
+        includeTvBracket: tempIncludeTvBracket,
+      };
     }
 
     if (["floating_cabinet", "side_tower", "shelving"].includes(tempProductType)) {
@@ -645,6 +784,7 @@ export default function QuoteForm() {
         cabinetHeightMm,
         cabinetDepthMm,
         cabinetHeightFromFloorMm: Number.isFinite(cabinetHeightFromFloorMm) ? cabinetHeightFromFloorMm : undefined,
+        clientPreferenceNotes: tempClientPreferenceNotes.trim() || undefined,
       };
     }
 
@@ -652,11 +792,18 @@ export default function QuoteForm() {
 
     setWallsWithProducts(currentWalls =>
       currentWalls.map(currentWall =>
-        currentWall.id === wallId ? { ...currentWall, products: [...currentWall.products, newProduct] } : currentWall
+        currentWall.id === wallId
+          ? {
+              ...currentWall,
+              products: editingProductId
+                ? currentWall.products.map(product => (product.id === editingProductId ? newProduct : product))
+                : [...currentWall.products, newProduct],
+            }
+          : currentWall
       )
     );
     closeProductPicker();
-    toast.success("Product added");
+    toast.success(editingProductId ? "Product updated" : "Product added");
   };
 
   const handleDeleteWall = (wallId: string) => {
@@ -955,12 +1102,58 @@ export default function QuoteForm() {
                             <div>
                               <p className="font-medium">{product.productName}</p>
                               <p className="text-sm text-gray-600">Qty {product.quantity} x {formatMoney(product.unitPrice)} = {formatMoney(product.quantity * product.unitPrice)}</p>
-                              {product.tvSizeInches && <p className="text-xs text-gray-600">TV size: {product.tvSizeInches}&quot;</p>}
-                              {product.includeTvBracket && <p className="text-xs text-gray-600">TV bracket: included internally</p>}
-                              {product.acousticFixingMethod && product.acousticFixingMethod !== "none" && <p className="text-xs text-gray-600">Fixing: {product.acousticFixingMethod.replace(/_/g, " ")}</p>}
+                              {product.productType === "tv_backdrop" && product.tvSizeInches && <p className="text-xs text-gray-600">TV size: {product.tvSizeInches}&quot;</p>}
+                              {product.productType === "tv_backdrop" && product.backdropWidthMm && product.backdropHeightMm && (
+                                <p className="text-xs text-gray-600">
+                                  Backdrop: {product.backdropWidthMm} x {product.backdropHeightMm} mm
+                                </p>
+                              )}
+                              {product.productType === "tv_backdrop" && product.tvBottomAfflMm && (
+                                <p className="text-xs text-gray-600">TV bottom AFFL: {product.tvBottomAfflMm} mm</p>
+                              )}
+                              {product.productType === "tv_backdrop" && product.cabinetHeightFromFloorMm !== undefined && product.cabinetHeightMm && (
+                                <p className="text-xs text-gray-600">
+                                  Cabinet bottom AFFL: {product.cabinetHeightFromFloorMm} mm, height: {product.cabinetHeightMm} mm
+                                </p>
+                              )}
+                              {["floating_cabinet", "side_tower", "shelving"].includes(product.productType) &&
+                                product.cabinetWidthMm &&
+                                product.cabinetHeightMm &&
+                                product.cabinetDepthMm && (
+                                  <p className="text-xs text-gray-600">
+                                    Size: {product.cabinetWidthMm} W x {product.cabinetHeightMm} H x {product.cabinetDepthMm} D mm
+                                  </p>
+                                )}
+                              {["floating_cabinet", "side_tower", "shelving"].includes(product.productType) &&
+                                product.cabinetHeightFromFloorMm !== undefined && (
+                                  <p className="text-xs text-gray-600">
+                                    From floor: {product.cabinetHeightFromFloorMm} mm
+                                  </p>
+                                )}
+                              {product.productType === "floating_cabinet" && product.clientPreferenceNotes && (
+                                <p className="text-xs text-gray-600">Client preference: {product.clientPreferenceNotes}</p>
+                              )}
+                              {product.productType === "tv_backdrop" && product.cabinetTopAfflMm && product.cabinetToTvGapMm && (
+                                <p className="text-xs text-gray-600">
+                                  Cabinet top AFFL: {product.cabinetTopAfflMm} mm, gap: {product.cabinetToTvGapMm} mm
+                                </p>
+                              )}
+                              {product.productType === "tv_backdrop" && product.includeTvBracket && <p className="text-xs text-gray-600">TV bracket: included internally</p>}
+                              {product.productType === "acoustic_panel" && product.acousticFixingMethod && product.acousticFixingMethod !== "none" && <p className="text-xs text-gray-600">Fixing: {product.acousticFixingMethod.replace(/_/g, " ")}</p>}
                               {product.manualReviewRequired && <p className="text-xs font-semibold text-amber-700">Manual review required</p>}
                             </div>
-                            <Button onClick={() => handleRemoveProduct(wall.id, product.id)} disabled={formBusy} variant="ghost" size="sm" className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                onClick={() => openProductEditor(wall.id, product)}
+                                disabled={formBusy}
+                                variant="ghost"
+                                size="sm"
+                                className="text-gray-600"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button onClick={() => handleRemoveProduct(wall.id, product.id)} disabled={formBusy} variant="ghost" size="sm" className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -978,16 +1171,19 @@ export default function QuoteForm() {
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                         <div>
                           <Label>Product Type *</Label>
-                          <Select value={tempProductType || ""} onValueChange={value => { setTempProductType(value as ProductTypeSlug); setTempProductId(""); }}>
+                          <Select
+                            value={tempProductType || ""}
+                            onValueChange={value => handleProductTypeChange(value as ProductTypeSlug)}
+                          >
                             <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Select type" /></SelectTrigger>
                             <SelectContent>
                               {Object.entries(productTypeLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
-                        {tempProductType && (
+                        {tempProductType && tempProductType !== "floating_cabinet" && (
                           <div>
-                            <Label>Product *</Label>
+                            <Label>{tempProductType === "tv_backdrop" ? "Marble Sheet Variant *" : "Product *"}</Label>
                             <Select value={tempProductId} onValueChange={setTempProductId}>
                               <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Select product" /></SelectTrigger>
                               <SelectContent>
@@ -1004,25 +1200,147 @@ export default function QuoteForm() {
                           </div>
                         )}
                         <div className="flex items-end gap-2">
-                          <Button onClick={() => handleAddProductToWall(wall.id)} disabled={formBusy} className="h-10 flex-1"><Plus className="mr-2 h-4 w-4" />Add</Button>
+                          <Button onClick={() => handleAddProductToWall(wall.id)} disabled={formBusy} className="h-10 flex-1">
+                            {editingProductId ? <Save className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}
+                            {editingProductId ? "Save" : "Add"}
+                          </Button>
                           <Button onClick={closeProductPicker} disabled={formBusy} type="button" variant="outline" className="h-10">Cancel</Button>
                         </div>
                       </div>
 
                       {(["floating_cabinet", "side_tower", "shelving"].includes(tempProductType || "")) && (
-                        <div className="grid grid-cols-2 gap-2 rounded-lg border bg-white p-3 md:grid-cols-4">
-                          <Input type="number" value={tempCabinetWidth} onChange={e => setTempCabinetWidth(e.target.value)} placeholder="Width mm" className="h-10" />
-                          <Input type="number" value={tempCabinetHeight} onChange={e => setTempCabinetHeight(e.target.value)} placeholder="Height mm" className="h-10" />
-                          <Input type="number" value={tempCabinetDepth} onChange={e => setTempCabinetDepth(e.target.value)} placeholder="Depth mm" className="h-10" />
-                          <Input type="number" value={tempCabinetHeightFromFloor} onChange={e => setTempCabinetHeightFromFloor(e.target.value)} placeholder="From floor mm" className="h-10" />
+                        <div className="space-y-3 rounded-lg border bg-white p-3">
+                          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                            <div>
+                              <Label htmlFor="customWidthMm">Width mm *</Label>
+                              <Input id="customWidthMm" type="number" value={tempCabinetWidth} onChange={e => setTempCabinetWidth(e.target.value)} placeholder="2100" className="mt-1 h-10" />
+                            </div>
+                            <div>
+                              <Label htmlFor="customHeightMm">Height mm *</Label>
+                              <Input id="customHeightMm" type="number" value={tempCabinetHeight} onChange={e => setTempCabinetHeight(e.target.value)} placeholder="450" className="mt-1 h-10" />
+                            </div>
+                            <div>
+                              <Label htmlFor="customDepthMm">Depth mm *</Label>
+                              <Input id="customDepthMm" type="number" value={tempCabinetDepth} onChange={e => setTempCabinetDepth(e.target.value)} placeholder="360" className="mt-1 h-10" />
+                            </div>
+                            <div>
+                              <Label htmlFor="customAfflMm">Bottom from floor mm</Label>
+                              <Input id="customAfflMm" type="number" value={tempCabinetHeightFromFloor} onChange={e => setTempCabinetHeightFromFloor(e.target.value)} placeholder="0" className="mt-1 h-10" />
+                            </div>
+                          </div>
+                          {tempProductType === "floating_cabinet" && (
+                            <div>
+                              <Label htmlFor="floatingCabinetNotes">Client preference notes</Label>
+                              <textarea
+                                id="floatingCabinetNotes"
+                                value={tempClientPreferenceNotes}
+                                onChange={e => setTempClientPreferenceNotes(e.target.value)}
+                                placeholder="Optional finish, handle, profile, colour, or other client preference"
+                                className="mt-1 min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm"
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
 
                       {tempProductType === "tv_backdrop" && (
                         <div className="space-y-3 rounded-lg border bg-white p-3">
-                          <div>
-                            <Label>TV Size inches *</Label>
-                            <Input type="number" value={tempTvSizeInches} onChange={e => setTempTvSizeInches(e.target.value)} placeholder="75" className="mt-1 h-10" />
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            <div>
+                              <Label>TV Size inches *</Label>
+                              <Input
+                                type="number"
+                                value={tempTvSizeInches}
+                                onChange={e => {
+                                  const nextValue = e.target.value;
+                                  setTempTvSizeInches(nextValue);
+                                  const parsed = Number(nextValue);
+                                  if (Number.isFinite(parsed) && parsed > 0 && !tempBackdropWidthMm && !tempBackdropHeightMm) {
+                                    const recommended = calculateTvBackdrop(parsed);
+                                    setTempBackdropWidthMm(String(recommended.backdropWidthMm));
+                                    setTempBackdropHeightMm(String(recommended.backdropHeightMm));
+                                  }
+                                }}
+                                placeholder="75"
+                                className="mt-1 h-10"
+                              />
+                            </div>
+                            <div>
+                              <Label>TV Bottom AFFL mm *</Label>
+                              <Input
+                                type="number"
+                                value={tempTvBottomAfflMm}
+                                onChange={e => setTempTvBottomAfflMm(e.target.value)}
+                                placeholder="700"
+                                className="mt-1 h-10"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            <div>
+                              <Label>Backdrop Width mm *</Label>
+                              <Input
+                                type="number"
+                                value={tempBackdropWidthMm}
+                                onChange={e => setTempBackdropWidthMm(e.target.value)}
+                                placeholder="2420"
+                                className="mt-1 h-10"
+                              />
+                            </div>
+                            <div>
+                              <Label>Backdrop Height mm *</Label>
+                              <Input
+                                type="number"
+                                value={tempBackdropHeightMm}
+                                onChange={e => setTempBackdropHeightMm(e.target.value)}
+                                placeholder="1220"
+                                className="mt-1 h-10"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            <div>
+                              <Label>Cabinet Top AFFL mm</Label>
+                              <Input
+                                type="number"
+                                value={tempCabinetTopAfflMm}
+                                onChange={e => setTempCabinetTopAfflMm(e.target.value)}
+                                placeholder="450"
+                                className="mt-1 h-10"
+                              />
+                            </div>
+                            <div>
+                              <Label>Cabinet to TV Gap mm</Label>
+                              <Input
+                                type="number"
+                                value={tempCabinetToTvGapMm}
+                                onChange={e => setTempCabinetToTvGapMm(e.target.value)}
+                                placeholder="250"
+                                className="mt-1 h-10"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            <div>
+                              <Label>Cabinet Bottom AFFL mm</Label>
+                              <Input
+                                type="number"
+                                value={tempCabinetHeightFromFloor}
+                                onChange={e => setTempCabinetHeightFromFloor(e.target.value)}
+                                placeholder="0"
+                                className="mt-1 h-10"
+                              />
+                            </div>
+                            <div>
+                              <Label>Cabinet Height mm</Label>
+                              <Input
+                                type="number"
+                                value={tempCabinetHeight}
+                                onChange={e => setTempCabinetHeight(e.target.value)}
+                                placeholder="450"
+                                className="mt-1 h-10"
+                              />
+                            </div>
                           </div>
                           <label className="flex items-center gap-2 text-sm text-gray-700">
                             <input
@@ -1031,7 +1349,7 @@ export default function QuoteForm() {
                               onChange={event => setTempIncludeTvBracket(event.target.checked)}
                               className="h-4 w-4 rounded border-gray-300"
                             />
-                            Supply TV Bracket - internal $50 reference only
+                            TV Bracket
                           </label>
                         </div>
                       )}

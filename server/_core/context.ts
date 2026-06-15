@@ -25,8 +25,11 @@ export async function createContext(
   opts: CreateExpressContextOptions
 ): Promise<TrpcContext> {
   let user: User | null = null;
-
-  if (process.env.NODE_ENV === "development" && !ENV.oAuthServerUrl) {
+  // Local development auth bypass: when LOCAL_DEV_AUTH=true and not in production,
+  // short-circuit authentication and return a fixed local dev user. This is
+  // strictly for developer convenience and does not alter production behavior.
+  if (!ENV.isProduction && ENV.localDevAuth) {
+    console.log('[Auth] LOCAL_DEV_AUTH enabled');
     user = localDevUser;
   } else {
     try {

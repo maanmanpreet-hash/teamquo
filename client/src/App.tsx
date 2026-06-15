@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import QuoteForm from "./pages/QuoteForm";
 import AdminProducts from "./pages/AdminProducts";
 import Admin from "./pages/Admin";
+import Setout from "./pages/Setout";
 
 function Router() {
   return (
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/quote/:jobId" component={QuoteForm} />
+      <Route path="/setout/:jobId" component={Setout} />
       <Route path="/quote" component={QuoteForm} />
       <Route path="/stage1" component={QuoteForm} />
       <Route path="/jobs" component={Dashboard} />

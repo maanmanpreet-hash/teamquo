@@ -31,6 +31,32 @@ describe("material intelligence", () => {
     );
   });
 
+  it("reflects selected cladding variants in the internal material summary", () => {
+    const estimate = estimateWallMaterials({
+      wallName: "Feature Wall",
+      wallWidthMm: 3800,
+      wallHeightMm: 2600,
+      products: [
+        {
+          productType: "cladding",
+          productName: "PVC Internal Wall Cladding Excel 01",
+          quantity: 23,
+          unitCostCents: 1500,
+        },
+      ],
+    });
+
+    expect(estimate.lines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "PVC Internal Wall Cladding Excel 01",
+          quantity: 23,
+          unitCostCents: 1500,
+        }),
+      ])
+    );
+  });
+
   it("converts TV size to 16:9 dimensions and adds 100mm backdrop extension each side", () => {
     expect(calculateTvDimensions(75)).toEqual({
       diagonalInches: 75,
@@ -155,6 +181,44 @@ describe("material intelligence", () => {
     expect(estimate.lines).toEqual(
       expect.arrayContaining([expect.objectContaining({ key: "tv-bracket", quantity: 1, unitCostCents: 5000 })])
     );
+  });
+
+  it("reflects mirrors and fireplaces without applying wastage rules", () => {
+    const estimate = estimateWallMaterials({
+      wallName: "Media Wall",
+      wallWidthMm: 3800,
+      wallHeightMm: 2600,
+      products: [
+        {
+          productType: "mirror",
+          productName: "LED Full Moon Mirror Round 1200mm",
+          quantity: 1,
+          unitCostCents: 35000,
+        },
+        {
+          productType: "fireplace",
+          productName: "Fire Place 2 60 inch",
+          quantity: 1,
+          unitCostCents: 70000,
+        },
+      ],
+    });
+
+    expect(estimate.lines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "LED Full Moon Mirror Round 1200mm",
+          quantity: 1,
+          unitCostCents: 35000,
+        }),
+        expect.objectContaining({
+          name: "Fire Place 2 60 inch",
+          quantity: 1,
+          unitCostCents: 70000,
+        }),
+      ])
+    );
+    expect(estimate.lines.some(line => line.key === "high-tack-glue")).toBe(false);
   });
 
   it("excludes custom cabinetry from automatic material costing", () => {

@@ -37,6 +37,23 @@ describe("Cladding Procedures", () => {
     // This should not throw even if DB is unavailable
     const result = await caller.cladding.list();
     expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it("should load stocked masterlist categories and products in preview mode", async () => {
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const productTypes = await caller.products.listTypes();
+    expect(productTypes.some(type => type.slug === "marble-sheet")).toBe(true);
+    expect(productTypes.some(type => type.slug === "tv-backdrop")).toBe(true);
+
+    const marbleSheetType = productTypes.find(type => type.slug === "marble-sheet");
+    expect(marbleSheetType).toBeTruthy();
+
+    const marbleProducts = await caller.products.listByType({ productTypeId: marbleSheetType!.id });
+    expect(marbleProducts.length).toBeGreaterThan(0);
+    expect(marbleProducts.every(product => product.productTypeId === marbleSheetType!.id)).toBe(true);
   });
 
   it("should validate cladding creation input", async () => {

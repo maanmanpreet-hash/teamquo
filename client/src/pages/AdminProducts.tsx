@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { Edit2, Loader2, Trash2 } from "lucide-react";
+import { useLocation } from "wouter";
+import { ArrowLeft, Edit2, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,19 @@ import {
   parseMaterialMetadata,
   type OrientationRule,
 } from "@shared/quoteCalculations";
+
+const nonStockedProductTypeSlugs = new Set([
+  "floating-cabinets",
+  "tv-backdrop",
+  "side-towers",
+  "shelving",
+]);
+
+const materialRuleProductTypeSlugs = new Set([
+  "cladding",
+  "acoustic-panels",
+  "marble-sheet",
+]);
 
 interface ProductFormData {
   name: string;
@@ -59,18 +73,20 @@ function parsePositiveInteger(value: string, label: string) {
   return parsed;
 }
 
-function buildStructuredDescription(formData: ProductFormData) {
+function buildStructuredDescription(formData: ProductFormData, includeMaterialRules: boolean) {
   const lines: string[] = [];
 
   if (formData.supplier.trim()) {
     lines.push(`Supplier: ${formData.supplier.trim()}`);
   }
 
-  if (formData.wastagePercent.trim()) {
+  if (includeMaterialRules && formData.wastagePercent.trim()) {
     lines.push(`Wastage: ${formData.wastagePercent.trim()}%`);
   }
 
-  lines.push(`Orientation: ${formData.orientationRule}`);
+  if (includeMaterialRules) {
+    lines.push(`Orientation: ${formData.orientationRule}`);
+  }
 
   if (formData.materialNotes.trim()) {
     lines.push(`Notes: ${formData.materialNotes.trim()}`);
@@ -107,6 +123,7 @@ function resetFormData() {
 }
 
 export default function AdminProducts() {
+  const [, navigate] = useLocation();
   const [selectedTypeId, setSelectedTypeId] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -117,6 +134,13 @@ export default function AdminProducts() {
     { productTypeId: parseInt(selectedTypeId) },
     { enabled: !!selectedTypeId }
   );
+  const stockedProductTypes = productTypes.data?.filter(
+    type => !nonStockedProductTypeSlugs.has(type.slug)
+  );
+  const selectedProductType = stockedProductTypes?.find(type => String(type.id) === selectedTypeId);
+  const supportsMaterialRules = selectedProductType
+    ? materialRuleProductTypeSlugs.has(selectedProductType.slug)
+    : false;
 
   const resetAndCloseForm = () => {
     setFormData(resetFormData());
@@ -200,8 +224,8 @@ export default function AdminProducts() {
     const depthMm = parsePositiveInteger(formData.depthMm, "Depth");
     if (depthMm === null) return;
 
-    const wastage = parseWastage(formData.wastagePercent);
-    if (wastage === null) return;
+    const wastage = supportsMaterialRules ? parseWastage(formData.wastagePercent) : null;
+    if (supportsMaterialRules && wastage === null) return;
 
     const data = {
       productTypeId: parseInt(selectedTypeId),
@@ -213,8 +237,8 @@ export default function AdminProducts() {
       pricePerUnit,
       description: buildStructuredDescription({
         ...formData,
-        wastagePercent: String(wastage),
-      }),
+        wastagePercent: supportsMaterialRules ? String(wastage) : "",
+      }, supportsMaterialRules),
     };
 
     if (editingId) {
@@ -244,9 +268,15 @@ export default function AdminProducts() {
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
+        <div className="mb-4">
+          <Button variant="outline" onClick={() => navigate("/admin")} className="h-10">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Admin
+          </Button>
+        </div>
         <h1 className="text-3xl font-bold mb-2">Product Management</h1>
         <p className="text-sm text-muted-foreground mb-8">
-          Edit product size, cost, supplier, wastage, and orientation rules used by the quote calculator.
+          Edit product size, cost, supplier, and product notes used by the quote calculator.
         </p>
 
         <Card className="mb-6">
@@ -265,7 +295,7 @@ export default function AdminProducts() {
                   <SelectValue placeholder="Choose a product type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {productTypes.data?.map(type => (
+                  {stockedProductTypes?.map(type => (
                     <SelectItem key={type.id} value={String(type.id)}>
                       {type.name}
                     </SelectItem>
@@ -378,46 +408,50 @@ export default function AdminProducts() {
                           placeholder="e.g., Bunnings, Laminex, Supplier name"
                         />
                       </div>
-                      <div>
-                        <Label htmlFor="wastagePercent">Default Wastage (%) *</Label>
-                        <Input
-                          id="wastagePercent"
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="1"
-                          value={formData.wastagePercent}
-                          onChange={e =>
-                            setFormData({
-                              ...formData,
-                              wastagePercent: e.target.value,
-                            })
-                          }
-                          required
-                          placeholder="e.g., 10"
-                        />
-                      </div>
-                      <div>
-                        <Label>Install Orientation Rule *</Label>
-                        <Select
-                          value={formData.orientationRule}
-                          onValueChange={value =>
-                            setFormData({
-                              ...formData,
-                              orientationRule: value as OrientationRule,
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="vertical">Vertical / as supplied</SelectItem>
-                            <SelectItem value="horizontal">Horizontal / rotated</SelectItem>
-                            <SelectItem value="either">Either - choose lower risk</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {supportsMaterialRules && (
+                        <>
+                          <div>
+                            <Label htmlFor="wastagePercent">Default Wastage (%) *</Label>
+                            <Input
+                              id="wastagePercent"
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="1"
+                              value={formData.wastagePercent}
+                              onChange={e =>
+                                setFormData({
+                                  ...formData,
+                                  wastagePercent: e.target.value,
+                                })
+                              }
+                              required
+                              placeholder="e.g., 10"
+                            />
+                          </div>
+                          <div>
+                            <Label>Install Orientation Rule *</Label>
+                            <Select
+                              value={formData.orientationRule}
+                              onValueChange={value =>
+                                setFormData({
+                                  ...formData,
+                                  orientationRule: value as OrientationRule,
+                                })
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="vertical">Vertical / as supplied</SelectItem>
+                                <SelectItem value="horizontal">Horizontal / rotated</SelectItem>
+                                <SelectItem value="either">Either - choose lower risk</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     <div>
@@ -512,12 +546,18 @@ export default function AdminProducts() {
                                   : "-"}
                               </td>
                               <td className="py-2 px-2 text-xs">
-                                <div>
-                                  Wastage: {metadata.wastagePercent ?? 10}%
-                                </div>
-                                <div>
-                                  Orientation: {metadata.orientationRule || "vertical"}
-                                </div>
+                                {supportsMaterialRules ? (
+                                  <>
+                                    <div>
+                                      Wastage: {metadata.wastagePercent ?? 10}%
+                                    </div>
+                                    <div>
+                                      Orientation: {metadata.orientationRule || "vertical"}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div>-</div>
+                                )}
                                 {metadata.notes && (
                                   <div className="text-muted-foreground max-w-[260px] truncate">
                                     {metadata.notes}

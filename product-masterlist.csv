@@ -1,0 +1,119 @@
+product_type,variant_name,sku,design,width_mm,height_mm,depth_mm,unit,price_per_unit,is_active,notes
+cladding,PVC Internal Wall Cladding Excel 01,CLAD-PVC-EXCEL-001,pvc internal wall cladding,168,2900,24,panel,1500,true,highest selling
+cladding,PVC Internal Wall Cladding Excel 02,CLAD-PVC-EXCEL-002,pvc internal wall cladding,168,2900,24,panel,1500,true,highest selling
+cladding,PVC Internal Wall Cladding Excel 03,CLAD-PVC-EXCEL-003,pvc internal wall cladding,168,2900,24,panel,1500,true,
+cladding,PVC Internal Wall Cladding Excel 04,CLAD-PVC-EXCEL-004,pvc internal wall cladding,168,2900,24,panel,1500,true,
+cladding,PVC Internal Wall Cladding Excel 05,CLAD-PVC-EXCEL-005,pvc internal wall cladding,168,2900,24,panel,1500,true,
+cladding,PVC Internal Wall Cladding Excel 06,CLAD-PVC-EXCEL-006,pvc internal wall cladding,168,2900,24,panel,1500,false,out of stock
+cladding,PVC Internal Wall Cladding Excel 07,CLAD-PVC-EXCEL-007,pvc internal wall cladding,168,2900,24,panel,1500,true,
+cladding,PVC Internal Wall Cladding Excel 09,CLAD-PVC-EXCEL-009,pvc internal wall cladding,168,2900,24,panel,1500,true,
+cladding,PVC Internal Wall Cladding Excel 10,CLAD-PVC-EXCEL-010,pvc internal wall cladding,158,2900,18,panel,1500,true,highest selling
+cladding,PVC Internal Wall Cladding Excel 11,CLAD-PVC-EXCEL-011,pvc internal wall cladding,168,2900,24,panel,1500,true,highest selling
+cladding,PVC Internal Wall Cladding Excel 12,CLAD-PVC-EXCEL-012,pvc internal wall cladding,158,2900,18,panel,1500,true,
+cladding,PVC Internal Wall Cladding Excel 14,CLAD-PVC-EXCEL-014,pvc internal wall cladding,168,2900,24,panel,1500,true,
+cladding,PVC Internal Wall Cladding Excel 15,CLAD-PVC-EXCEL-015,pvc internal wall cladding,168,2900,24,panel,1500,true,
+cladding,PVC Internal Wall Cladding Excel 16,CLAD-PVC-EXCEL-016,pvc internal wall cladding,168,2900,24,panel,1500,true,
+cladding,PVC Internal Wall Cladding Excel 17,CLAD-PVC-EXCEL-017,pvc internal wall cladding,211,2900,9,panel,2200,true,
+cladding,PVC Internal Wall Cladding Excel 18,CLAD-PVC-EXCEL-018,pvc internal wall cladding,211,2900,9,panel,2200,true,
+cladding,PVC Internal Wall Cladding Excel 19,CLAD-PVC-EXCEL-019,pvc internal wall cladding,211,2900,9,panel,2200,true,
+cladding,PVC Internal Wall Cladding Excel 22,CLAD-PVC-EXCEL-022,pvc internal wall cladding,202,2900,14,panel,2000,true,
+cladding,PVC Internal Wall Cladding Excel 23,CLAD-PVC-EXCEL-023,pvc internal wall cladding,202,2900,14,panel,2000,true,
+cladding,PVC Internal Wall Cladding Excel 24,CLAD-PVC-EXCEL-024,pvc internal wall cladding,202,2900,14,panel,2000,true,
+cladding,PVC Internal Wall Cladding Excel 25,CLAD-PVC-EXCEL-025,pvc internal wall cladding,202,2900,14,panel,2000,true,
+cladding,PVC Internal Wall Cladding Excel 26,CLAD-PVC-EXCEL-026,pvc internal wall cladding,204,2900,26,panel,1800,true,sale price; was 2400 cents
+cladding,PVC Internal Wall Cladding Excel 27,CLAD-PVC-EXCEL-027,pvc internal wall cladding,204,2900,26,panel,1800,true,sale price; was 2400 cents
+cladding,PVC Internal Wall Cladding Excel 28,CLAD-PVC-EXCEL-028,pvc internal wall cladding,202,2900,14,panel,2200,true,
+cladding,PVC Internal Wall Cladding Excel 29,CLAD-PVC-EXCEL-029,pvc internal wall cladding,202,2900,14,panel,2200,true,
+cladding,PVC Internal Wall Cladding Excel 31,CLAD-PVC-EXCEL-031,pvc internal wall cladding,180,2900,25,panel,2200,true,
+cladding,PVC Internal Wall Cladding Excel 32,CLAD-PVC-EXCEL-032,pvc internal wall cladding,180,2900,25,panel,2200,true,
+cladding,PVC Internal Wall Cladding Excel 33,CLAD-PVC-EXCEL-033,pvc internal wall cladding,158,2900,18,panel,1500,true,
+cladding,PVC Internal Wall Cladding Excel 34,CLAD-PVC-EXCEL-034,pvc internal wall cladding,158,2900,18,panel,1500,true,
+cladding,PVC Internal Wall Cladding Excel 35,CLAD-PVC-EXCEL-035,pvc internal wall cladding,202,2900,14,panel,2200,true,highest selling
+cladding,PS Form Internal Wall Cladding Excel 052,CLAD-PSFORM-EXCEL-052,ps form internal wall cladding,150,2900,12,panel,1700,true,highest selling
+cladding,PS Form Internal Wall Cladding Excel 054,CLAD-PSFORM-EXCEL-054,ps form internal wall cladding,150,2900,12,panel,1700,true,highest selling
+cladding,PS Form Internal Wall Cladding Excel 065,CLAD-PSFORM-EXCEL-065,ps form internal wall cladding,160,2900,12,panel,1700,true,
+cladding,PS Form Internal Wall Cladding Excel 066,CLAD-PSFORM-EXCEL-066,ps form internal wall cladding,160,2900,12,panel,1700,true,
+cladding,PS Form Internal Wall Cladding Excel 080,CLAD-PSFORM-EXCEL-080,ps form internal wall cladding,160,2900,12,panel,1700,true,
+cladding,PS Form Internal Wall Cladding Excel 081,CLAD-PSFORM-EXCEL-081,ps form internal wall cladding,160,2900,12,panel,1700,false,out of stock
+cladding,PS Form Internal Wall Cladding Excel 082,CLAD-PSFORM-EXCEL-082,ps form internal wall cladding,160,2900,12,panel,1700,false,out of stock
+cladding,PS Form Internal Wall Cladding Excel 083,CLAD-PSFORM-EXCEL-083,ps form internal wall cladding,160,2900,12,panel,1700,true,
+cladding,PS Form Internal Wall Cladding Excel 084,CLAD-PSFORM-EXCEL-084,ps form internal wall cladding,160,2900,12,panel,1200,true,clearance sale; was 1700 cents
+cladding,PS Form Internal Wall Cladding Excel 085,CLAD-PSFORM-EXCEL-085,ps form internal wall cladding,300,2900,7,panel,2800,true,
+cladding,PS Form Internal Wall Cladding Excel 087,CLAD-PSFORM-EXCEL-087,ps form internal wall cladding,300,2900,7,panel,2800,true,
+cladding,PS Form Internal Wall Cladding Excel 088,CLAD-PSFORM-EXCEL-088,ps form internal wall cladding,300,2900,7,panel,2800,true,
+cladding,PS Form Internal Wall Cladding Excel 089,CLAD-PSFORM-EXCEL-089,ps form internal wall cladding,120,2900,11,panel,1500,true,
+cladding,PS Form Internal Wall Cladding Excel 090,CLAD-PSFORM-EXCEL-090,ps form internal wall cladding,130,2900,11,panel,1500,true,
+cladding,PS Form Internal Wall Cladding Excel 091,CLAD-PSFORM-EXCEL-091,ps form internal wall cladding,130,2900,11,panel,1500,true,
+cladding,PS Form Internal Wall Cladding Excel 092,CLAD-PSFORM-EXCEL-092,ps form internal wall cladding,122,2900,8,panel,1500,true,
+cladding,External WPC Wall Cladding White 2200mm,CLAD-WPC-EXT-WHITE-2200,external wpc white,220,2200,26,panel,2700,true,external wall cladding
+cladding,External WPC Wall Cladding White 2900mm,CLAD-WPC-EXT-WHITE-2900,external wpc white,220,2900,26,panel,3500,true,external wall cladding
+cladding,External WPC Wall Cladding White 5400mm,CLAD-WPC-EXT-WHITE-5400,external wpc white,220,5400,26,panel,6500,true,external wall cladding
+cladding,External WPC Wall Cladding Teak 2200mm,CLAD-WPC-EXT-TEAK-2200,external wpc teak,220,2200,26,panel,2700,true,external wall cladding
+cladding,External WPC Wall Cladding Teak 2900mm,CLAD-WPC-EXT-TEAK-2900,external wpc teak,220,2900,26,panel,3500,true,external wall cladding
+cladding,External WPC Wall Cladding Teak 5400mm,CLAD-WPC-EXT-TEAK-5400,external wpc teak,220,5400,26,panel,6500,true,external wall cladding
+cladding,External WPC Wall Cladding Teak Black 2200mm,CLAD-WPC-EXT-TEAK-BLACK-2200,external wpc teak black,220,2200,26,panel,2700,true,external wall cladding
+cladding,External WPC Wall Cladding Teak Black 2900mm,CLAD-WPC-EXT-TEAK-BLACK-2900,external wpc teak black,220,2900,26,panel,3500,true,external wall cladding
+cladding,External WPC Wall Cladding Teak Black 5400mm,CLAD-WPC-EXT-TEAK-BLACK-5400,external wpc teak black,220,5400,26,panel,6500,true,external wall cladding
+cladding,External WPC Wall Cladding Smoke Grey 2200mm,CLAD-WPC-EXT-SMOKE-GREY-2200,external wpc smoke grey,220,2200,26,panel,2700,true,external wall cladding
+cladding,External WPC Wall Cladding Smoke Grey 2900mm,CLAD-WPC-EXT-SMOKE-GREY-2900,external wpc smoke grey,220,2900,26,panel,3500,true,external wall cladding
+cladding,External WPC Wall Cladding Smoke Grey 5400mm,CLAD-WPC-EXT-SMOKE-GREY-5400,external wpc smoke grey,220,5400,26,panel,6500,true,external wall cladding
+cladding,External WPC Wall Cladding Coffee 2200mm,CLAD-WPC-EXT-COFFEE-2200,external wpc coffee,220,2200,26,panel,2700,true,external wall cladding
+cladding,External WPC Wall Cladding Coffee 2900mm,CLAD-WPC-EXT-COFFEE-2900,external wpc coffee,220,2900,26,panel,3500,true,external wall cladding
+cladding,External WPC Wall Cladding Coffee 5400mm,CLAD-WPC-EXT-COFFEE-5400,external wpc coffee,220,5400,26,panel,6500,true,external wall cladding
+cladding,External WPC Wall Cladding Coffee Black 2200mm,CLAD-WPC-EXT-COFFEE-BLACK-2200,external wpc coffee black,220,2200,26,panel,2700,true,external wall cladding
+cladding,External WPC Wall Cladding Coffee Black 2900mm,CLAD-WPC-EXT-COFFEE-BLACK-2900,external wpc coffee black,220,2900,26,panel,3500,true,external wall cladding
+cladding,External WPC Wall Cladding Coffee Black 5400mm,CLAD-WPC-EXT-COFFEE-BLACK-5400,external wpc coffee black,220,5400,26,panel,6500,true,external wall cladding
+cladding,External WPC Wall Cladding Black 2200mm,CLAD-WPC-EXT-BLACK-2200,external wpc black,220,2200,26,panel,2700,true,external wall cladding
+cladding,External WPC Wall Cladding Black 2900mm,CLAD-WPC-EXT-BLACK-2900,external wpc black,220,2900,26,panel,3500,true,external wall cladding
+cladding,External WPC Wall Cladding Black 5400mm,CLAD-WPC-EXT-BLACK-5400,external wpc black,220,5400,26,panel,6500,true,external wall cladding
+cladding,External WPC Wall Cladding Antique Black 2200mm,CLAD-WPC-EXT-ANTIQUE-BLACK-2200,external wpc antique black,220,2200,26,panel,2700,true,external wall cladding
+cladding,External WPC Wall Cladding Antique Black 2900mm,CLAD-WPC-EXT-ANTIQUE-BLACK-2900,external wpc antique black,220,2900,26,panel,3500,true,external wall cladding
+cladding,External WPC Wall Cladding Antique Black 5400mm,CLAD-WPC-EXT-ANTIQUE-BLACK-5400,external wpc antique black,220,5400,26,panel,6500,true,external wall cladding
+cladding,External WPC Wall Cladding White + Black 2200mm,CLAD-WPC-EXT-WHITE-BLACK-2200,external wpc white + black,220,2200,26,panel,2700,true,external wall cladding
+cladding,External WPC Wall Cladding White + Black 2900mm,CLAD-WPC-EXT-WHITE-BLACK-2900,external wpc white + black,220,2900,26,panel,3500,true,external wall cladding
+cladding,External WPC Wall Cladding White + Black 5400mm,CLAD-WPC-EXT-WHITE-BLACK-5400,external wpc white + black,220,5400,26,panel,6500,true,external wall cladding
+cladding,External WPC Wall Cladding Oak Wood 2200mm,CLAD-WPC-EXT-OAK-WOOD-2200,external wpc oak wood,220,2200,26,panel,2700,true,external wall cladding
+cladding,External WPC Wall Cladding Oak Wood 2900mm,CLAD-WPC-EXT-OAK-WOOD-2900,external wpc oak wood,220,2900,26,panel,3500,true,external wall cladding
+cladding,External WPC Wall Cladding Oak Wood 5400mm,CLAD-WPC-EXT-OAK-WOOD-5400,external wpc oak wood,220,5400,26,panel,6500,true,external wall cladding
+cladding,External WPC Wall Cladding Walnut 2200mm,CLAD-WPC-EXT-WALNUT-2200,external wpc walnut,220,2200,26,panel,2700,true,external wall cladding
+cladding,External WPC Wall Cladding Walnut 2900mm,CLAD-WPC-EXT-WALNUT-2900,external wpc walnut,220,2900,26,panel,3500,true,external wall cladding
+cladding,External WPC Wall Cladding Walnut 5400mm,CLAD-WPC-EXT-WALNUT-5400,external wpc walnut,220,5400,26,panel,6500,true,external wall cladding
+cladding,External WPC Wall Cladding Ash White 2200mm,CLAD-WPC-EXT-ASH-WHITE-2200,external wpc ash white,220,2200,26,panel,2700,true,external wall cladding
+cladding,External WPC Wall Cladding Ash White 2900mm,CLAD-WPC-EXT-ASH-WHITE-2900,external wpc ash white,220,2900,26,panel,3500,true,external wall cladding
+cladding,External WPC Wall Cladding Ash White 5400mm,CLAD-WPC-EXT-ASH-WHITE-5400,external wpc ash white,220,5400,26,panel,6500,true,external wall cladding
+cladding,Curved Wall Panel Variant 1,CLAD-CURVED-001,curved wall panel,600,2900,12,panel,15500,true,variant label not shown on source
+cladding,Curved Wall Panel Variant 2,CLAD-CURVED-002,curved wall panel,600,2900,12,panel,15500,true,variant label not shown on source
+cladding,Curved Wall Panel Variant 3,CLAD-CURVED-003,curved wall panel,600,2900,12,panel,15500,true,variant label not shown on source
+cladding,Curved Wall Panel Variant 4,CLAD-CURVED-004,curved wall panel,600,2900,12,panel,15500,true,variant label not shown on source
+cladding,Curved Wall Panel Variant 5,CLAD-CURVED-005,curved wall panel,600,2900,12,panel,15500,true,variant label not shown on source
+marble_sheet,PVC Marble Sheet Excel 2,MARBLE-EXCEL-002,excel 2,1220,2900,3,sheet,8000,false,out of stock
+marble_sheet,PVC Marble Sheet Excel 3,MARBLE-EXCEL-003,excel 3,1220,2900,3,sheet,8000,false,out of stock
+marble_sheet,PVC Marble Sheet Excel 4,MARBLE-EXCEL-004,excel 4,1220,2900,3,sheet,8000,true,pvc marble sheet
+marble_sheet,PVC Marble Sheet Excel 7,MARBLE-EXCEL-007,excel 7,1220,2900,3,sheet,8000,true,pvc marble sheet
+marble_sheet,PVC Marble Sheet Excel 8,MARBLE-EXCEL-008,excel 8,1220,2900,3,sheet,8000,true,pvc marble sheet
+marble_sheet,PVC Marble Sheet Excel 9,MARBLE-EXCEL-009,excel 9,1220,2900,3,sheet,8000,false,out of stock
+marble_sheet,PVC Marble Sheet Excel 10,MARBLE-EXCEL-010,excel 10,1220,2900,3,sheet,8000,false,out of stock
+marble_sheet,PVC Marble Sheet Excel 11,MARBLE-EXCEL-011,excel 11,1220,2900,3,sheet,8000,true,pvc marble sheet
+marble_sheet,PVC Marble Sheet Excel 12,MARBLE-EXCEL-012,excel 12,1220,2900,3,sheet,8000,true,pvc marble sheet
+marble_sheet,PVC Marble Sheet Excel 13,MARBLE-EXCEL-013,excel 13,1220,2900,3,sheet,8000,true,pvc marble sheet
+marble_sheet,PVC Marble Sheet Excel 14,MARBLE-EXCEL-014,excel 14,1220,2900,3,sheet,8000,true,pvc marble sheet
+marble_sheet,PVC Marble Sheet Excel 15,MARBLE-EXCEL-015,excel 15,1220,2900,3,sheet,8000,true,pvc marble sheet
+marble_sheet,PVC Marble Sheet Excel 16,MARBLE-EXCEL-016,excel 16,1220,2900,3,sheet,8000,true,pvc marble sheet
+marble_sheet,PVC Marble Sheet Excel 17,MARBLE-EXCEL-017,excel 17,1220,2900,3,sheet,8000,true,pvc marble sheet
+marble_sheet,PVC Marble Sheet Excel 18,MARBLE-EXCEL-018,excel 18,1220,2900,3,sheet,8000,true,pvc marble sheet
+marble_sheet,PVC Marble Sheet Excel 19,MARBLE-EXCEL-019,excel 19,1220,2900,3,sheet,8000,true,pvc marble sheet
+mirror,LED Full Moon Mirror Round 1200mm,MIRROR-FULL-MOON-ROUND-1200,led full moon round,1200,1200,,each,35000,true,frameless; 3 colour light; dimmable
+mirror,LED Full Moon Mirror Round 1500mm,MIRROR-FULL-MOON-ROUND-1500,led full moon round,1500,1500,,each,45000,true,frameless; 3 colour light; dimmable
+mirror,LED Full Moon Mirror Round 1800mm,MIRROR-FULL-MOON-ROUND-1800,led full moon round,1800,1800,,each,55000,true,frameless; 3 colour light; dimmable
+mirror,LED Half Moon Mirror 900x1800mm,MIRROR-HALF-MOON-900X1800,led half moon,900,1800,,each,37000,true,frameless; 3 colour light; dimmable
+mirror,LED Half Moon Mirror 750x1500mm,MIRROR-HALF-MOON-750X1500,led half moon,750,1500,,each,32000,true,frameless; 3 colour light; dimmable
+fireplace,Fire Place 1 50 inch,FIREPLACE-050,50 inch electric fireplace,1270,,,each,60000,true,nominal 50 inch
+fireplace,Fire Place 2 60 inch,FIREPLACE-060,60 inch electric fireplace,1524,,,each,70000,true,nominal 60 inch
+fireplace,Fire Place 3 72 inch,FIREPLACE-072,72 inch electric fireplace,1829,,,each,85000,true,nominal 72 inch
+acoustic_panel,Sound Proof Acoustic Wall Panel Light Grey,ACOUSTIC-LIGHT-GREY,light grey,600,2900,21,panel,7500,true,sound proof acoustic wall panel
+acoustic_panel,Sound Proof Acoustic Wall Panel Dark Grey,ACOUSTIC-DARK-GREY,dark grey,600,2900,21,panel,7500,true,sound proof acoustic wall panel
+acoustic_panel,Sound Proof Acoustic Wall Panel Oak,ACOUSTIC-OAK,oak,600,2900,21,panel,7500,true,sound proof acoustic wall panel
+acoustic_panel,Sound Proof Acoustic Wall Panel Walnut,ACOUSTIC-WALNUT,walnut,600,2900,21,panel,7500,true,sound proof acoustic wall panel
+acoustic_panel,Sound Proof Acoustic Wall Panel Coffee,ACOUSTIC-COFFEE,coffee,600,2900,21,panel,7500,true,sound proof acoustic wall panel
+acoustic_panel,Sound Proof Acoustic Wall Panel Black,ACOUSTIC-BLACK,black,600,2900,21,panel,7500,true,sound proof acoustic wall panel
+acoustic_panel,Sound Proof Acoustic Wall Panel Natural Wood,ACOUSTIC-NATURAL-WOOD,natural wood,600,2900,21,panel,7500,true,sound proof acoustic wall panel

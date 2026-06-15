@@ -10,7 +10,9 @@ import {
 import { z } from "zod";
 import * as db from "./db";
 import { generateQuoteHTML } from "./pdf";
+import { generateJobPackHtml } from "./jobPack";
 import { formatQuoteNumber } from "../shared/quote";
+import { getMasterProductCatalog } from "./masterProductList";
 
 const supportedItemTypes = [
   "cladding",
@@ -26,32 +28,7 @@ const supportedItemTypes = [
 
 const now = () => new Date();
 const isPreviewMode = async () => !(await db.getDb());
-
-const previewProductTypes: any[] = [
-  { id: 1, name: "Cladding", slug: "cladding", description: "Wall cladding panels", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 2, name: "Acoustic Panels", slug: "acoustic-panels", description: "Sound-absorbing acoustic panels", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 3, name: "UV Panel (Marble Sheet)", slug: "marble-sheet", description: "PVC marble sheet panels", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 4, name: "Mirrors", slug: "mirrors", description: "Designer LED mirrors", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 5, name: "Fireplace", slug: "fireplace", description: "Designer fireplaces", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 6, name: "Floating Cabinets", slug: "floating-cabinets", description: "Custom floating cabinets", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 7, name: "TV Backdrop", slug: "tv-backdrop", description: "PVC/MDF TV backdrop allowance", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 8, name: "Side Towers", slug: "side-towers", description: "Custom side towers", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 9, name: "Shelving", slug: "shelving", description: "Custom shelving", isActive: 1, createdAt: now(), updatedAt: now() },
-];
-
-const previewProducts: any[] = [
-  { id: 101, productTypeId: 1, name: "Timber Look 300x600", design: "Timber", widthMm: 300, heightMm: 600, depthMm: null, pricePerUnit: 5000, description: "Natural timber look cladding", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 102, productTypeId: 1, name: "Stone Look 300x600", design: "Stone", widthMm: 300, heightMm: 600, depthMm: null, pricePerUnit: 5500, description: "Stone finish cladding", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 201, productTypeId: 2, name: "Acoustic Panel Oak", design: "Oak", widthMm: 600, heightMm: 2900, depthMm: 21, pricePerUnit: 7500, description: "Acoustic slat panel in Oak", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 202, productTypeId: 2, name: "Acoustic Panel Black", design: "Black", widthMm: 600, heightMm: 2900, depthMm: 21, pricePerUnit: 7500, description: "Acoustic slat panel in Black", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 301, productTypeId: 3, name: "PVC Marble Sheet 1220x2900", design: "Marble", widthMm: 1220, heightMm: 2900, depthMm: 3, pricePerUnit: 8000, description: "PVC marble sheet", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 401, productTypeId: 4, name: "Full Moon LED Mirror 1200mm", design: "Round", widthMm: 1200, heightMm: 1200, depthMm: null, pricePerUnit: 35000, description: "Frameless 3 colour LED mirror", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 501, productTypeId: 5, name: "Fireplace 60 inch", design: "Premium", widthMm: null, heightMm: null, depthMm: null, pricePerUnit: 70000, description: "Premium designer fireplace", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 601, productTypeId: 6, name: "Floating Cabinet - Custom", design: "Melamine", widthMm: null, heightMm: null, depthMm: null, pricePerUnit: 120000, description: "Custom floating cabinet allowance", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 701, productTypeId: 7, name: "TV Backdrop - Custom", design: "PVC/MDF", widthMm: 1220, heightMm: 2900, depthMm: null, pricePerUnit: 0, description: "TV backdrop dimensions captured for internal material summary. Operator prices manually.", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 801, productTypeId: 8, name: "Side Tower - Custom", design: "Melamine", widthMm: null, heightMm: null, depthMm: null, pricePerUnit: 0, description: "Custom side tower dimensions only. Operator prices manually.", isActive: 1, createdAt: now(), updatedAt: now() },
-  { id: 901, productTypeId: 9, name: "Shelving - Custom", design: "Melamine", widthMm: null, heightMm: null, depthMm: null, pricePerUnit: 0, description: "Custom shelving dimensions only. Operator prices manually.", isActive: 1, createdAt: now(), updatedAt: now() },
-];
+const { productTypes: previewProductTypes, products: previewProducts } = getMasterProductCatalog();
 
 const previewCladdingVariants = previewProducts
   .filter(product => product.productTypeId === 1)
@@ -133,6 +110,59 @@ const previewJobItems: any[] = [
     totalPrice: 52500,
     manualPriceOverride: null,
     itemDetails: JSON.stringify({ fixingMethod: "none" }),
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 7002,
+    jobId: 9001,
+    wallId: 8001,
+    itemType: "floating_cabinet",
+    productId: null,
+    claddingVariantId: null,
+    wallWidthMm: 3800,
+    wallHeightMm: 2600,
+    cabinetWidthMm: 2100,
+    cabinetHeightMm: 450,
+    cabinetDepthMm: 360,
+    cabinetHeightFromFloorMm: 0,
+    quantityRequired: 1,
+    unitPrice: 145000,
+    totalPrice: 145000,
+    manualPriceOverride: null,
+    itemDetails: JSON.stringify({ widthMm: 2100, heightMm: 450, depthMm: 360, heightFromFloorMm: 0 }),
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 7003,
+    jobId: 9001,
+    wallId: 8001,
+    itemType: "tv_backdrop",
+    productId: 501,
+    claddingVariantId: null,
+    wallWidthMm: 3800,
+    wallHeightMm: 2600,
+    cabinetWidthMm: null,
+    cabinetHeightMm: null,
+    cabinetDepthMm: null,
+    cabinetHeightFromFloorMm: null,
+    quantityRequired: 1,
+    unitPrice: 0,
+    totalPrice: 0,
+    manualPriceOverride: null,
+    itemDetails: JSON.stringify({
+      productType: "tv_backdrop",
+      tvSizeInches: 86,
+      tvWidthMm: 1900,
+      tvHeightMm: 1069,
+      backdropWidthMm: 2420,
+      backdropHeightMm: 1220,
+      tvBottomAfflMm: 700,
+      cabinetTopAfflMm: 450,
+      cabinetToTvGapMm: 250,
+      includeTvBracket: true,
+    }),
     createdAt: now(),
     updatedAt: now(),
   },
@@ -476,6 +506,18 @@ export const appRouter = router({
       const html = generateQuoteHTML(job as any, items as any, variantMap as any, productMap as any, undefined, undefined, wallMap as any);
       return { html, jobId: job.id, clientName: job.clientName, quoteNumber: formatQuoteNumber(job as any) };
     }),
+    generateJobPack: protectedProcedure.input(z.object({ jobId: z.number() })).query(async ({ input, ctx }) => {
+      const job = await assertOwnsJob(input.jobId, ctx.user.id);
+      const previewMode = await isPreviewMode();
+      const items = previewMode ? previewJobItems.filter(item => item.jobId === input.jobId) : await db.getJobItemsByJobId(input.jobId);
+      if (!items.length) throw new Error("Cannot generate job pack until the quote has at least one saved product.");
+      const products = previewMode ? previewProducts : await db.getAllProducts();
+      const wallRows = previewMode ? previewWalls.filter(wall => wall.jobId === input.jobId) : await db.getWallsByJobId(input.jobId);
+      const productMap = new Map(products.map(product => [product.id, product]));
+      const wallMap = new Map(wallRows.map(wall => [wall.id, wall]));
+      const html = generateJobPackHtml(job as any, items as any, productMap as any, wallMap as any);
+      return { html, jobId: job.id, clientName: job.clientName, quoteNumber: formatQuoteNumber(job as any) };
+    }),
     create: protectedProcedure.input(jobItemCreateSchema).mutation(async ({ input, ctx }) => {
       await assertOwnsJob(input.jobId, ctx.user.id);
       if (input.wallId) {
@@ -530,7 +572,20 @@ export const appRouter = router({
     }),
     create: adminProcedure.input(z.object({ productTypeId: z.number(), name: z.string().min(1), design: z.string().optional(), widthMm: z.number().int().positive().optional(), heightMm: z.number().int().positive().optional(), depthMm: z.number().int().positive().optional(), pricePerUnit: z.number().int().nonnegative(), description: z.string().optional() })).mutation(async ({ input }) => {
       if (await isPreviewMode()) {
-        const product = { id: Math.max(...previewProducts.map(product => product.id)) + 1, ...input, isActive: 1, createdAt: now(), updatedAt: now() };
+        const product = {
+          id: Math.max(...previewProducts.map(product => product.id)) + 1,
+          productTypeId: input.productTypeId,
+          name: input.name,
+          design: input.design ?? null,
+          widthMm: input.widthMm ?? null,
+          heightMm: input.heightMm ?? null,
+          depthMm: input.depthMm ?? null,
+          pricePerUnit: input.pricePerUnit,
+          description: input.description ?? null,
+          isActive: 1,
+          createdAt: now(),
+          updatedAt: now(),
+        };
         previewProducts.push(product);
         return product;
       }

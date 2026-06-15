@@ -31,6 +31,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  const isDevelopment = process.env.NODE_ENV !== "production";
   
   // Trust proxy so req.secure and req.protocol are correct behind reverse proxy
   app.set('trust proxy', 1);
@@ -48,8 +49,8 @@ async function startServer() {
       createContext,
     })
   );
-  // development mode uses Vite, production mode uses static files
-  if (process.env.NODE_ENV === "development") {
+  // Default to Vite in local runs unless production is explicitly requested.
+  if (isDevelopment) {
     await setupVite(app, server);
   } else {
     serveStatic(app);

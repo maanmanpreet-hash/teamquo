@@ -4,6 +4,7 @@ import {
   applyItemDetailsToProduct,
   buildItemDetails,
   getResumeJobIdFromLocation,
+  resolveCatalogProductTypeId,
 } from "../client/src/pages/QuoteForm";
 
 describe("quote form persistence helpers", () => {
@@ -28,6 +29,15 @@ describe("quote form persistence helpers", () => {
     });
 
     expect(getResumeJobIdFromLocation("/quote")).toBe(128);
+  });
+
+  it("maps TV backdrop to the marble sheet masterlist when loading product options", () => {
+    expect(
+      resolveCatalogProductTypeId("tv_backdrop", [
+        { id: 3, slug: "marble-sheet" },
+        { id: 7, slug: "tv-backdrop" },
+      ])
+    ).toBe(3);
   });
 
   it("round-trips acoustic fixing details through itemDetails", () => {
@@ -61,11 +71,18 @@ describe("quote form persistence helpers", () => {
     const tvItemDetails = buildItemDetails({
       id: "tv-1",
       productType: "tv_backdrop",
-      productId: "701",
-      productName: "TV Backdrop - Custom",
+      productId: "301",
+      productName: "PVC Marble Sheet Excel 4",
       quantity: 1,
       unitPrice: 0,
       tvSizeInches: 75,
+      backdropWidthMm: 2200,
+      backdropHeightMm: 1400,
+      tvBottomAfflMm: 760,
+      cabinetHeightFromFloorMm: 180,
+      cabinetHeightMm: 420,
+      cabinetTopAfflMm: 450,
+      cabinetToTvGapMm: 310,
       includeTvBracket: true,
     });
 
@@ -73,8 +90,8 @@ describe("quote form persistence helpers", () => {
       {
         id: "tv-1",
         productType: "tv_backdrop",
-        productId: "701",
-        productName: "TV Backdrop - Custom",
+        productId: "301",
+        productName: "PVC Marble Sheet Excel 4",
         quantity: 1,
         unitPrice: 0,
       },
@@ -82,29 +99,37 @@ describe("quote form persistence helpers", () => {
     );
 
     expect(restoredTv.tvSizeInches).toBe(75);
+    expect(restoredTv.backdropWidthMm).toBe(2200);
+    expect(restoredTv.backdropHeightMm).toBe(1400);
+    expect(restoredTv.tvBottomAfflMm).toBe(760);
+    expect(restoredTv.cabinetHeightFromFloorMm).toBe(180);
+    expect(restoredTv.cabinetHeightMm).toBe(420);
+    expect(restoredTv.cabinetTopAfflMm).toBe(450);
+    expect(restoredTv.cabinetToTvGapMm).toBe(310);
     expect(restoredTv.includeTvBracket).toBe(true);
 
     const joineryItemDetails = buildItemDetails({
       id: "cabinet-1",
       productType: "floating_cabinet",
-      productId: "601",
+      productId: "",
       productName: "Floating Cabinet - Custom",
       quantity: 1,
-      unitPrice: 120000,
+      unitPrice: 0,
       cabinetWidthMm: 1800,
       cabinetHeightMm: 420,
       cabinetDepthMm: 350,
       cabinetHeightFromFloorMm: 180,
+      clientPreferenceNotes: "Matte beige finish with push-to-open profile",
     });
 
     const restoredJoinery = applyItemDetailsToProduct(
       {
         id: "cabinet-1",
         productType: "floating_cabinet",
-        productId: "601",
+        productId: "",
         productName: "Floating Cabinet - Custom",
         quantity: 1,
-        unitPrice: 120000,
+        unitPrice: 0,
       },
       joineryItemDetails
     );
@@ -113,5 +138,6 @@ describe("quote form persistence helpers", () => {
     expect(restoredJoinery.cabinetHeightMm).toBe(420);
     expect(restoredJoinery.cabinetDepthMm).toBe(350);
     expect(restoredJoinery.cabinetHeightFromFloorMm).toBe(180);
+    expect(restoredJoinery.clientPreferenceNotes).toBe("Matte beige finish with push-to-open profile");
   });
 });

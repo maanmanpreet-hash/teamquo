@@ -211,6 +211,11 @@ function addPvcBackdropLines(lines: MaterialLine[], sheetQty: number, notes: str
   });
 }
 
+function buildSelectedProductKey(product: ProductSelectionForMaterials) {
+  const safeName = product.productName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return `selected-${product.productType}-${safeName || "item"}`;
+}
+
 export function estimateWallMaterials(wall: WallForMaterials): MaterialEstimate {
   const lines: MaterialLine[] = [];
   const notes: string[] = [];
@@ -221,6 +226,17 @@ export function estimateWallMaterials(wall: WallForMaterials): MaterialEstimate 
   const marbleSheetSelected = hasMarbleSheetProduct(wall.products);
 
   for (const product of wall.products) {
+    if (product.productType === "cladding") {
+      addOrMergeLine(lines, {
+        key: buildSelectedProductKey(product),
+        name: product.productName,
+        quantity: positiveNumber(product.quantity),
+        unitCostCents: product.unitCostCents,
+        source: "operator_selected",
+        notes: ["Selected cladding variant reflected from the quote quantity."],
+      });
+    }
+
     if (product.productType === "marble_sheet") {
       const calculationWidthMm = tvBackdropDimensions?.backdropWidthMm ?? wall.wallWidthMm;
       const calculationHeightMm = tvBackdropDimensions?.backdropHeightMm ?? wall.wallHeightMm;
@@ -291,6 +307,28 @@ export function estimateWallMaterials(wall: WallForMaterials): MaterialEstimate 
           notes: ["Locked rule: 9 screws per acoustic panel."],
         });
       }
+    }
+
+    if (product.productType === "mirror") {
+      addOrMergeLine(lines, {
+        key: buildSelectedProductKey(product),
+        name: product.productName,
+        quantity: positiveNumber(product.quantity),
+        unitCostCents: product.unitCostCents,
+        source: "operator_selected",
+        notes: ["Selected mirror reflected for internal planning. No automatic wastage rule applied."],
+      });
+    }
+
+    if (product.productType === "fireplace") {
+      addOrMergeLine(lines, {
+        key: buildSelectedProductKey(product),
+        name: product.productName,
+        quantity: positiveNumber(product.quantity),
+        unitCostCents: product.unitCostCents,
+        source: "operator_selected",
+        notes: ["Selected fireplace reflected for internal planning. No automatic wastage rule applied."],
+      });
     }
 
     if (["floating_cabinet", "side_tower", "shelving"].includes(product.productType)) {

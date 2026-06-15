@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useLocation } from "wouter";
-import { Loader2, Plus, FileText, Edit, Calendar, MapPin, Trash2, Copy } from "lucide-react";
+import { Loader2, Plus, FileText, Edit, Calendar, MapPin, Trash2, Copy, Ruler } from "lucide-react";
 import { downloadPDF } from "@/lib/pdf";
 import { toast } from "sonner";
 import { formatMoneyFromCents, formatQuoteNumber } from "@shared/quote";
@@ -90,6 +90,7 @@ export default function Dashboard() {
   const [selectedOperator, setSelectedOperator] = useState("");
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [downloadingJobId, setDownloadingJobId] = useState<number | null>(null);
+  const [downloadingJobPackId, setDownloadingJobPackId] = useState<number | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<number | null>(null);
   const [updatingStatusJobId, setUpdatingStatusJobId] = useState<number | null>(null);
   const [duplicatingJobId, setDuplicatingJobId] = useState<number | null>(null);
@@ -101,6 +102,10 @@ export default function Dashboard() {
   const pdfQuery = trpc.jobItems.generatePDF.useQuery(
     { jobId: downloadingJobId || 0 },
     { enabled: downloadingJobId !== null, retry: false }
+  );
+  const jobPackQuery = trpc.jobItems.generateJobPack.useQuery(
+    { jobId: downloadingJobPackId || 0 },
+    { enabled: downloadingJobPackId !== null, retry: false }
   );
 
   const saveQuoteMutation = trpc.jobs.saveQuote.useMutation();
@@ -157,6 +162,24 @@ export default function Dashboard() {
         .finally(() => setDownloadingJobId(null));
     }
   }, [downloadingJobId, pdfQuery.data, pdfQuery.error, jobs]);
+
+  useEffect(() => {
+    if (downloadingJobPackId === null) return;
+    const job = jobs?.find(j => j.id === downloadingJobPackId);
+    const fileName = `${formatQuoteNumber(job)}-job-pack-${safeFilePart(job?.clientName)}.pdf`;
+
+    if (jobPackQuery.data) {
+      downloadPDF(jobPackQuery.data.html, fileName)
+        .then(() => toast.success("Installer job pack downloaded"))
+        .catch(() => toast.error("Failed to download job pack"))
+        .finally(() => setDownloadingJobPackId(null));
+    }
+
+    if (jobPackQuery.error) {
+      toast.error(jobPackQuery.error.message || "Failed to generate job pack");
+      setDownloadingJobPackId(null);
+    }
+  }, [downloadingJobPackId, jobPackQuery.data, jobPackQuery.error, jobs]);
 
   if (authLoading) {
     return <div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin w-8 h-8" /></div>;
@@ -266,7 +289,8 @@ export default function Dashboard() {
     const isDuplicating = duplicatingJobId === job.id;
     const isDeleting = deletingJobId === job.id;
     const isDownloading = downloadingJobId === job.id;
-    const actionBusy = isUpdatingStatus || isDuplicating || isDeleting || isDownloading;
+    const isDownloadingJobPack = downloadingJobPackId === job.id;
+    const actionBusy = isUpdatingStatus || isDuplicating || isDeleting || isDownloading || isDownloadingJobPack;
 
     return (
       <Card key={job.id} className="p-4 bg-white shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
@@ -309,6 +333,8 @@ export default function Dashboard() {
             </Button>
             <Button size="sm" variant="outline" onClick={() => duplicateQuote(job)} disabled={actionBusy} className="h-9 text-xs">{isDuplicating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Copy className="w-3 h-3 mr-1" />}Duplicate</Button>
             <Button size="sm" variant="outline" onClick={() => setDownloadingJobId(job.id)} disabled={actionBusy} className="h-9 text-xs">{isDownloading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Quote PDF</Button>
+            <Button size="sm" variant="outline" onClick={() => setDownloadingJobPackId(job.id)} disabled={actionBusy} className="h-9 text-xs">{isDownloadingJobPack ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}Job Pack</Button>
+            <Button size="sm" variant="outline" onClick={() => navigate(`/setout/${job.id}`)} disabled={actionBusy} className="h-9 text-xs"><Ruler className="w-3 h-3 mr-1" />Setout</Button>
             <Button size="sm" variant="outline" onClick={() => deleteQuote(job.id)} disabled={actionBusy} className="h-9 text-xs text-red-600 hover:text-red-700 hover:bg-red-50">{isDeleting ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Trash2 className="w-3 h-3 mr-1" />}Delete</Button>
           </div>
         </div>
