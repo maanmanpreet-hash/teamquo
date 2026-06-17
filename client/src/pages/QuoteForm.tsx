@@ -85,6 +85,8 @@ interface WallProduct {
   cabinetHeightMm?: number;
   cabinetDepthMm?: number;
   cabinetHeightFromFloorMm?: number;
+  cabinetSectionWidthsMm?: number[];
+  cabinetShelfHeightsBySectionMm?: number[][];
   clientPreferenceNotes?: string;
   acousticFixingMethod?: AcousticFixingMethod;
   tvSizeInches?: number;
@@ -208,7 +210,9 @@ function isCompatibleItemDetails(productType: ProductTypeSlug, details: Record<s
   }
 
   if (["floating_cabinet", "side_tower", "shelving"].includes(productType)) {
-    return ["widthMm", "heightMm", "depthMm", "heightFromFloorMm", "clientPreferenceNotes"].some(key => key in details);
+    return ["widthMm", "heightMm", "depthMm", "heightFromFloorMm", "clientPreferenceNotes", "sectionWidthsMm", "shelfHeightsBySectionMm"].some(
+      key => key in details
+    );
   }
 
   if (productType === "acoustic_panel") {
@@ -261,6 +265,40 @@ function parseItemDetails(value: unknown): Record<string, any> {
   }
 }
 
+function parsePositiveNumberList(value: string) {
+  return value
+    .split(",")
+    .map(token => safeNumber(token.trim()))
+    .filter((numberValue): numberValue is number => numberValue !== undefined && numberValue > 0);
+}
+
+function parseShelfHeightsBySection(value: string) {
+  return value
+    .split("|")
+    .map(sectionValue => parsePositiveNumberList(sectionValue))
+    .filter(section => section.length > 0);
+}
+
+function formatPositiveNumberList(values: number[] | undefined) {
+  return values?.length ? values.map(value => Math.round(value)).join(", ") : "";
+}
+
+function formatShelfHeightsBySection(values: number[][] | undefined) {
+  return values?.length ? values.map(section => formatPositiveNumberList(section)).join(" | ") : "";
+}
+
+function normaliseCabinetBreakdown(sectionWidthsMm: number[] | undefined, shelfHeightsBySectionMm: number[][] | undefined) {
+  const normalisedSectionWidths = (sectionWidthsMm || []).filter(value => value > 0);
+  const normalisedShelfHeights = (shelfHeightsBySectionMm || [])
+    .map(section => section.filter(value => value > 0))
+    .filter(section => section.length > 0);
+
+  return {
+    sectionWidthsMm: normalisedSectionWidths.length > 0 ? normalisedSectionWidths : undefined,
+    shelfHeightsBySectionMm: normalisedShelfHeights.length > 0 ? normalisedShelfHeights : undefined,
+  };
+}
+
 function calculateTvBackdrop(tvSizeInches: number) {
   const diagonalMm = tvSizeInches * 25.4;
   const ratioDiagonal = Math.sqrt(16 * 16 + 9 * 9);
@@ -310,11 +348,17 @@ export function buildItemDetails(product: WallProduct) {
   }
 
   if (["floating_cabinet", "side_tower", "shelving"].includes(product.productType)) {
+    const { sectionWidthsMm, shelfHeightsBySectionMm } = normaliseCabinetBreakdown(
+      product.cabinetSectionWidthsMm,
+      product.cabinetShelfHeightsBySectionMm
+    );
     details.widthMm = product.cabinetWidthMm;
     details.heightMm = product.cabinetHeightMm;
     details.depthMm = product.cabinetDepthMm;
     details.heightFromFloorMm = product.cabinetHeightFromFloorMm;
     details.clientPreferenceNotes = product.clientPreferenceNotes;
+    details.sectionWidthsMm = sectionWidthsMm;
+    details.shelfHeightsBySectionMm = shelfHeightsBySectionMm;
   }
 
   return JSON.stringify(details);
@@ -349,10 +393,24 @@ export function applyItemDetailsToProduct(product: WallProduct, itemDetails: unk
   }
 
   if (["floating_cabinet", "side_tower", "shelving"].includes(product.productType)) {
+    const sectionWidthsMm = Array.isArray(details.sectionWidthsMm)
+      ? details.sectionWidthsMm.map((value: unknown) => safeNumber(value)).filter((value): value is number => value !== undefined && value > 0)
+      : undefined;
+    const shelfHeightsBySectionMm = Array.isArray(details.shelfHeightsBySectionMm)
+      ? details.shelfHeightsBySectionMm
+          .map((section: unknown) =>
+            Array.isArray(section)
+              ? section.map((value: unknown) => safeNumber(value)).filter((value): value is number => value !== undefined && value > 0)
+              : []
+          )
+          .filter(section => section.length > 0)
+      : undefined;
     nextProduct.cabinetWidthMm = product.cabinetWidthMm ?? safeNumber(details.widthMm);
     nextProduct.cabinetHeightMm = product.cabinetHeightMm ?? safeNumber(details.heightMm);
     nextProduct.cabinetDepthMm = product.cabinetDepthMm ?? safeNumber(details.depthMm);
     nextProduct.cabinetHeightFromFloorMm = product.cabinetHeightFromFloorMm ?? safeNumber(details.heightFromFloorMm);
+    nextProduct.cabinetSectionWidthsMm = sectionWidthsMm;
+    nextProduct.cabinetShelfHeightsBySectionMm = shelfHeightsBySectionMm;
     nextProduct.clientPreferenceNotes =
       product.clientPreferenceNotes ?? (typeof details.clientPreferenceNotes === "string" ? details.clientPreferenceNotes : undefined);
   }
@@ -453,6 +511,8 @@ export default function QuoteForm() {
   const [tempCabinetHeight, setTempCabinetHeight] = useState("");
   const [tempCabinetDepth, setTempCabinetDepth] = useState("");
   const [tempCabinetHeightFromFloor, setTempCabinetHeightFromFloor] = useState("");
+  const [tempCabinetSectionWidths, setTempCabinetSectionWidths] = useState("");
+  const [tempCabinetShelfHeightsBySection, setTempCabinetShelfHeightsBySection] = useState("");
   const [tempClientPreferenceNotes, setTempClientPreferenceNotes] = useState("");
   const [tempTvSizeInches, setTempTvSizeInches] = useState("");
   const [tempBackdropWidthMm, setTempBackdropWidthMm] = useState("");
@@ -594,6 +654,8 @@ export default function QuoteForm() {
     setTempCabinetHeight("");
     setTempCabinetDepth("");
     setTempCabinetHeightFromFloor("");
+    setTempCabinetSectionWidths("");
+    setTempCabinetShelfHeightsBySection("");
     setTempClientPreferenceNotes("");
     setTempTvSizeInches("");
     setTempBackdropWidthMm("");
@@ -642,6 +704,8 @@ export default function QuoteForm() {
     setTempCabinetHeight("");
     setTempCabinetDepth("");
     setTempCabinetHeightFromFloor("");
+    setTempCabinetSectionWidths("");
+    setTempCabinetShelfHeightsBySection("");
     setTempClientPreferenceNotes("");
     setTempTvSizeInches("");
     setTempBackdropWidthMm("");
@@ -668,6 +732,8 @@ export default function QuoteForm() {
     setTempCabinetHeightFromFloor(
       product.cabinetHeightFromFloorMm !== undefined ? String(product.cabinetHeightFromFloorMm) : ""
     );
+    setTempCabinetSectionWidths(formatPositiveNumberList(product.cabinetSectionWidthsMm));
+    setTempCabinetShelfHeightsBySection(formatShelfHeightsBySection(product.cabinetShelfHeightsBySectionMm));
     setTempClientPreferenceNotes(product.clientPreferenceNotes || "");
     setTempTvSizeInches(product.tvSizeInches ? String(product.tvSizeInches) : "");
     setTempBackdropWidthMm(product.backdropWidthMm ? String(product.backdropWidthMm) : "");
@@ -938,8 +1004,29 @@ export default function QuoteForm() {
       const cabinetHeightMm = Number(tempCabinetHeight);
       const cabinetDepthMm = Number(tempCabinetDepth);
       const cabinetHeightFromFloorMm = Number(tempCabinetHeightFromFloor || 0);
+      const cabinetSectionWidthsMm = parsePositiveNumberList(tempCabinetSectionWidths);
+      const cabinetShelfHeightsBySectionMm = parseShelfHeightsBySection(tempCabinetShelfHeightsBySection);
       if ([cabinetWidthMm, cabinetHeightMm, cabinetDepthMm].some(value => !Number.isFinite(value) || value <= 0)) {
         toast.error("Enter valid cabinet/tower/shelving dimensions before adding");
+        return;
+      }
+      if (tempCabinetSectionWidths.trim()) {
+        if (!cabinetSectionWidthsMm.length) {
+          toast.error("Enter section widths as comma-separated millimetres");
+          return;
+        }
+        const totalSectionWidthMm = cabinetSectionWidthsMm.reduce((sum, value) => sum + value, 0);
+        if (totalSectionWidthMm !== cabinetWidthMm) {
+          toast.error(`Section widths must add up to overall width (${cabinetWidthMm} mm)`);
+          return;
+        }
+      }
+      if (tempCabinetShelfHeightsBySection.trim() && !tempCabinetSectionWidths.trim()) {
+        toast.error("Enter section widths before adding shelf heights by section");
+        return;
+      }
+      if (cabinetShelfHeightsBySectionMm.length > cabinetSectionWidthsMm.length && cabinetSectionWidthsMm.length > 0) {
+        toast.error("Shelf section groups cannot exceed the number of cabinet sections");
         return;
       }
       newProduct = {
@@ -948,6 +1035,8 @@ export default function QuoteForm() {
         cabinetHeightMm,
         cabinetDepthMm,
         cabinetHeightFromFloorMm: Number.isFinite(cabinetHeightFromFloorMm) ? cabinetHeightFromFloorMm : undefined,
+        cabinetSectionWidthsMm: cabinetSectionWidthsMm.length ? cabinetSectionWidthsMm : undefined,
+        cabinetShelfHeightsBySectionMm: cabinetShelfHeightsBySectionMm.length ? cabinetShelfHeightsBySectionMm : undefined,
         clientPreferenceNotes: tempClientPreferenceNotes.trim() || undefined,
       };
     }
@@ -983,7 +1072,7 @@ export default function QuoteForm() {
     );
   };
 
-  const handleSaveDraft = async (requireComplete = false) => {
+  const handleSaveDraft = async (requireComplete = false, destination: "stay" | "jobs" | "setout" = "stay") => {
     if (isUploadingImage || uploadImageMutation.isPending) {
       toast.error("Please wait for the reference image upload to finish before saving");
       return;
@@ -1058,7 +1147,9 @@ export default function QuoteForm() {
         setWallsWithProducts(mapSavedWallsToFormWalls(freshWalls));
       }
       toast.success(requireComplete ? "Quote saved" : "Draft saved");
-      if (requireComplete) {
+      if (destination === "setout") {
+        navigate(`/setout/${jobId}`);
+      } else if (requireComplete || destination === "jobs") {
         navigate("/jobs");
       } else if (!resumeJobId) {
         navigate(`/quote?resumeJobId=${jobId}`);
@@ -1083,10 +1174,18 @@ export default function QuoteForm() {
               <p className="text-xs text-gray-600">Client &gt; Walls &gt; Review</p>
             </div>
           </div>
-          <Button onClick={() => handleSaveDraft(false)} variant="outline" disabled={formBusy || !hasClientDetails} className="h-9">
-            {saveInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Draft
-          </Button>
+          <div className="flex items-center gap-2">
+            {resumeJobId && (
+              <Button onClick={() => navigate(`/setout/${resumeJobId}`)} variant="outline" disabled={formBusy} className="h-9">
+                <Ruler className="mr-2 h-4 w-4" />
+                View Setout
+              </Button>
+            )}
+            <Button onClick={() => handleSaveDraft(false)} variant="outline" disabled={formBusy || !hasClientDetails} className="h-9">
+              {saveInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Draft
+            </Button>
+          </div>
         </div>
 
         <Card className="p-2">
@@ -1305,6 +1404,18 @@ export default function QuoteForm() {
                                     From floor: {product.cabinetHeightFromFloorMm} mm
                                   </p>
                                 )}
+                              {["floating_cabinet", "side_tower", "shelving"].includes(product.productType) &&
+                                product.cabinetSectionWidthsMm?.length && (
+                                  <p className="text-xs text-gray-600">
+                                    Sections: {formatPositiveNumberList(product.cabinetSectionWidthsMm)} mm
+                                  </p>
+                                )}
+                              {["floating_cabinet", "side_tower", "shelving"].includes(product.productType) &&
+                                product.cabinetShelfHeightsBySectionMm?.length && (
+                                  <p className="text-xs text-gray-600">
+                                    Shelves by section: {formatShelfHeightsBySection(product.cabinetShelfHeightsBySectionMm)} mm
+                                  </p>
+                                )}
                               {product.productType === "floating_cabinet" && product.clientPreferenceNotes && (
                                 <p className="text-xs text-gray-600">Client preference: {product.clientPreferenceNotes}</p>
                               )}
@@ -1401,6 +1512,34 @@ export default function QuoteForm() {
                             <div>
                               <Label htmlFor="customAfflMm">Bottom from floor mm</Label>
                               <Input id="customAfflMm" type="number" value={tempCabinetHeightFromFloor} onChange={e => setTempCabinetHeightFromFloor(e.target.value)} placeholder="0" className="mt-1 h-10" />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            <div>
+                              <Label htmlFor="cabinetSectionWidths">Section widths mm</Label>
+                              <Input
+                                id="cabinetSectionWidths"
+                                value={tempCabinetSectionWidths}
+                                onChange={e => setTempCabinetSectionWidths(e.target.value)}
+                                placeholder="700, 700, 700"
+                                className="mt-1 h-10"
+                              />
+                              <p className="mt-1 text-xs text-gray-500">
+                                Optional. Comma-separated widths that add up to the overall cabinet width.
+                              </p>
+                            </div>
+                            <div>
+                              <Label htmlFor="cabinetShelfHeights">Shelf heights by section mm</Label>
+                              <Input
+                                id="cabinetShelfHeights"
+                                value={tempCabinetShelfHeightsBySection}
+                                onChange={e => setTempCabinetShelfHeightsBySection(e.target.value)}
+                                placeholder="230 | 230, 460 |"
+                                className="mt-1 h-10"
+                              />
+                              <p className="mt-1 text-xs text-gray-500">
+                                Optional. Use `|` between sections and commas within each section.
+                              </p>
                             </div>
                           </div>
                           {tempProductType === "floating_cabinet" && (
@@ -1550,10 +1689,19 @@ export default function QuoteForm() {
               )}
 
               <div className="text-right"><p className="text-2xl font-bold">Total: {formatMoney(calculateTotal())}</p></div>
-              <Button onClick={() => handleSaveDraft(true)} className="h-10 w-full" disabled={saveInProgress || !workflowReady}>
-                {saveInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Quote
-              </Button>
+                          <Button onClick={() => handleSaveDraft(true, "jobs")} className="h-10 w-full" disabled={saveInProgress || !workflowReady}>
+                            {saveInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Save Quote
+                          </Button>
+                          <Button
+                            onClick={() => handleSaveDraft(true, "setout")}
+                            variant="outline"
+                            className="h-10 w-full"
+                            disabled={saveInProgress || !workflowReady}
+                          >
+                            {saveInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Save + View Setout
+                          </Button>
             </Card>
 
             <MaterialSummaryCard summary={materialSummary} />

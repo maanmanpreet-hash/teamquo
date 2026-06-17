@@ -119,6 +119,8 @@ describe("quote form persistence helpers", () => {
       cabinetHeightMm: 420,
       cabinetDepthMm: 350,
       cabinetHeightFromFloorMm: 180,
+      cabinetSectionWidthsMm: [600, 600, 600],
+      cabinetShelfHeightsBySectionMm: [[210], [], [210, 320]],
       clientPreferenceNotes: "Matte beige finish with push-to-open profile",
     });
 
@@ -138,6 +140,8 @@ describe("quote form persistence helpers", () => {
     expect(restoredJoinery.cabinetHeightMm).toBe(420);
     expect(restoredJoinery.cabinetDepthMm).toBe(350);
     expect(restoredJoinery.cabinetHeightFromFloorMm).toBe(180);
+    expect(restoredJoinery.cabinetSectionWidthsMm).toEqual([600, 600, 600]);
+    expect(restoredJoinery.cabinetShelfHeightsBySectionMm).toEqual([[210], [210, 320]]);
     expect(restoredJoinery.clientPreferenceNotes).toBe("Matte beige finish with push-to-open profile");
   });
 });

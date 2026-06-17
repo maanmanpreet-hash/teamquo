@@ -76,18 +76,6 @@ function decodeWallNotes(notes: string | null | undefined) {
   return { obstructionStatus: "unknown", obstructionNotes: notes };
 }
 
-function formatQuoteStatus(status: string | null | undefined) {
-  const labels: Record<string, string> = {
-    quoted: "Draft",
-    booked: "Sent",
-    commenced: "Accepted",
-    completed: "Completed",
-    cancelled: "Rejected",
-  };
-
-  return labels[status || "quoted"] || "Draft";
-}
-
 /**
  * Generate customer-facing quote HTML for PDF export.
  */
@@ -97,7 +85,7 @@ export function generateQuoteHTML(
   claddingVariants: Map<number, CladdingVariant>,
   products: Map<number, Product> = new Map(),
   companyName: string = CUSTOMER_FACING_COMPANY_NAME,
-  logoUrl: string = "/skywall-logo.png",
+  logoUrl: string = "/skywall-brand.png",
   walls: Map<number, WallSummary> = new Map()
 ): string {
   const quoteNumber = formatQuoteNumber(job);
@@ -229,6 +217,17 @@ export function generateQuoteHTML(
             ? `Recorded wall features: ${decodedWallNotes.obstructionNotes || "Obstructions present"}.`
             : "Openings/obstructions to be confirmed before commencement.";
 
+      const wallMetaRow = `
+        <tr>
+          <td></td>
+          <td>
+            <strong>${escapeHtml(wallName)}</strong><br />
+            <span><strong>Wall dimensions:</strong> ${escapeHtml(wallDimensions)}</span>
+          </td>
+          <td></td>
+        </tr>
+      `;
+
       const productRows = items
         .map((item, index) => {
           const product = item.productId ? products.get(item.productId) : undefined;
@@ -255,7 +254,6 @@ export function generateQuoteHTML(
                 ${notes.length ? `<ul class="line-notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join("")}</ul>` : ""}
               </td>
               <td>${escapeHtml(formatProductDimensions(item, product))}</td>
-              <td>Included</td>
             </tr>
           `;
         })
@@ -265,16 +263,14 @@ export function generateQuoteHTML(
         <section class="wall-section">
           <div class="wall-heading">
             <div>
-              <h2>${escapeHtml(wallName)}</h2>
-              <p><strong>Wall dimensions:</strong> ${escapeHtml(wallDimensions)}</p>
               <p>${escapeHtml(obstructionLine)}</p>
             </div>
           </div>
           <table>
             <thead>
-              <tr><th>#</th><th>Products included</th><th>Product size</th><th>Status</th></tr>
+              <tr><th>#</th><th>Products included</th><th>Product size</th></tr>
             </thead>
-            <tbody>${productRows}</tbody>
+            <tbody>${wallMetaRow}${productRows}</tbody>
           </table>
         </section>
       `;
@@ -283,17 +279,20 @@ export function generateQuoteHTML(
 
   const terms = QUOTE_TERMS.map(term => `<li>${escapeHtml(term)}</li>`).join("");
 
-  const safeNotes = job.notes
-    ? `<section class="notes"><h2>Additional Notes</h2><p>${escapeHtml(job.notes).replace(/\n/g, "<br />")}</p></section>`
+  const cleanedJobNotes =
+    typeof job.notes === "string" && job.notes.trim() === "Local preview example. Safe to delete."
+      ? ""
+      : (job.notes || "");
+
+  const safeNotes = cleanedJobNotes
+    ? `<section class="notes"><p>${escapeHtml(cleanedJobNotes).replace(/\n/g, "<br />")}</p></section>`
     : "";
 
-  const safeLogoUrl = escapeHtml(logoUrl || "/skywall-logo.png");
+  const safeLogoUrl = escapeHtml(logoUrl || "/skywall-brand.png");
   const quoteDate = job.createdAt ? new Date(job.createdAt) : new Date();
   const quoteDateLabel = Number.isNaN(quoteDate.getTime())
     ? new Date().toLocaleDateString()
     : quoteDate.toLocaleDateString();
-  const quoteStatusLabel = formatQuoteStatus(job.status);
-
   return `<!doctype html>
 <html>
 <head>
@@ -304,12 +303,11 @@ export function generateQuoteHTML(
     .page { max-width: 940px; margin: 0 auto; }
     .header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 3px solid #14213d; padding-bottom: 18px; margin-bottom: 24px; }
     .brand-block { display: flex; gap: 14px; align-items: flex-start; }
-    .brand-logo { width: 190px; max-height: 66px; object-fit: contain; object-position: left top; }
-    .brand-name { margin-top: 4px; font-size: 15px; color: #334155; }
+    .brand-logo { width: 320px; max-height: 78px; object-fit: contain; object-position: left top; }
     .company-details { margin-top: 10px; font-size: 12px; line-height: 1.5; color: #475569; }
     .quote-box { text-align: right; font-size: 13px; line-height: 1.6; color: #334155; }
     .quote-number { font-size: 20px; font-weight: 700; color: #14213d; }
-    .client { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 18px 0 26px; }
+    .client { margin: 18px 0 26px; }
     .panel { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; }
     h1 { font-size: 22px; margin: 0 0 8px; color: #14213d; }
     h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: #475569; margin: 0 0 10px; }
@@ -323,7 +321,6 @@ export function generateQuoteHTML(
     tr:last-child td { border-bottom: 0; }
     th:nth-child(1), td:nth-child(1) { width: 38px; text-align: center; }
     th:nth-child(3), td:nth-child(3) { width: 170px; }
-    th:nth-child(4), td:nth-child(4) { width: 82px; text-align: center; }
     .line-notes { margin: 6px 0 0; padding-left: 18px; color: #475569; font-size: 11px; line-height: 1.4; }
     .total { display: flex; justify-content: flex-end; margin-top: 22px; }
     .total-card { min-width: 280px; border: 2px solid #14213d; border-radius: 10px; padding: 16px; text-align: right; }
@@ -341,7 +338,6 @@ export function generateQuoteHTML(
         <div class="brand-block">
           <img src="${safeLogoUrl}" alt="Skywall Cabinets" class="brand-logo" />
         </div>
-        <div class="brand-name">${escapeHtml(companyName)}</div>
         <div class="company-details">
           ABN: ${escapeHtml(COMPANY_CONTACT_DETAILS.abn)}<br />
           ${escapeHtml(COMPANY_CONTACT_DETAILS.address)}<br />
@@ -352,7 +348,6 @@ export function generateQuoteHTML(
       <div class="quote-box">
         <div class="quote-number">${quoteNumber}</div>
         <div>Date: ${quoteDateLabel}</div>
-        <div>Status: ${escapeHtml(quoteStatusLabel)}</div>
       </div>
     </header>
 
@@ -364,15 +359,9 @@ export function generateQuoteHTML(
         ${job.clientEmail ? `<p>${escapeHtml(job.clientEmail)}</p>` : ""}
         ${job.clientAddress ? `<p>${escapeHtml(job.clientAddress)}</p>` : ""}
       </div>
-      <div class="panel">
-        <h2>Quote Summary</h2>
-        <p>Supply and install quote for the listed walls and selected Skywall Cabinets works.</p>
-        <p>Final measurements, join layout, and site conditions to be confirmed before commencement.</p>
-      </div>
     </section>
 
     <section>
-      <h1>Supply and Install Scope</h1>
       ${wallSections}
     </section>
 

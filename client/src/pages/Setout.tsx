@@ -7,98 +7,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ElevationCanvasPage } from "@/components/elevation/ElevationCanvasPage";
 import { createPdfPreview } from "@/lib/pdf";
 import { trpc } from "@/lib/trpc";
-import { formatQuoteNumber } from "@shared/quote";
-import { calculateTvBackdropSetout } from "@shared/tvSetout";
-import { generateTvBackdropSetoutHtml, type TvBackdropSetoutDocument } from "@shared/tvSetoutDocument";
-
-type SetoutDocumentRecord = TvBackdropSetoutDocument & { id: string; selectorLabel: string };
-
-function parseItemDetails(value: unknown): Record<string, any> {
-  if (typeof value !== "string" || !value.trim()) return {};
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function safeNumber(value: unknown) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function buildSetoutDocuments(job: any, walls: any[]): SetoutDocumentRecord[] {
-  return walls.flatMap(wall => {
-    const floatingCabinet = (wall.products || []).find((product: any) => product.itemType === "floating_cabinet");
-    const floatingCabinetBottomAfflMm = safeNumber(floatingCabinet?.cabinetHeightFromFloorMm);
-    const floatingCabinetHeightMm = safeNumber(floatingCabinet?.cabinetHeightMm);
-    const cabinetTopFromCabinet =
-      floatingCabinetBottomAfflMm !== undefined && floatingCabinetHeightMm !== undefined
-        ? floatingCabinetBottomAfflMm + floatingCabinetHeightMm
-        : undefined;
-
-    let backdropIndex = 0;
-    return (wall.products || []).flatMap((product: any) => {
-      if (product.itemType !== "tv_backdrop") return [];
-      backdropIndex += 1;
-
-      const details = parseItemDetails(product.itemDetails);
-      const tvSizeInches = safeNumber(details.tvSizeInches);
-      const backdropWidthMm = safeNumber(details.backdropWidthMm ?? details.backdrop_width_mm);
-      const backdropHeightMm = safeNumber(details.backdropHeightMm ?? details.backdrop_height_mm);
-      const tvBottomAfflMm = safeNumber(details.tvBottomAfflMm ?? details.tv_bottom_affl_mm);
-      const cabinetBottomAfflMm =
-        floatingCabinetBottomAfflMm ??
-        safeNumber(details.cabinetBottomAfflMm ?? details.cabinet_bottom_affl_mm ?? details.heightFromFloorMm);
-      const cabinetHeightMm =
-        floatingCabinetHeightMm ??
-        safeNumber(details.cabinetHeightMm ?? details.cabinet_height_mm ?? details.heightMm);
-      const cabinetTopAfflMm =
-        cabinetTopFromCabinet ??
-        safeNumber(details.cabinetTopAfflMm ?? details.cabinet_top_affl_mm);
-      const cabinetToTvGapMm = safeNumber(details.cabinetToTvGapMm ?? details.cabinet_to_tv_gap_mm);
-
-      if (!tvSizeInches || !backdropWidthMm || !backdropHeightMm || !wall.wallWidthMm || !wall.wallHeightMm) {
-        return [];
-      }
-
-      try {
-        const setout = calculateTvBackdropSetout({
-          wallWidthMm: wall.wallWidthMm,
-          wallHeightMm: wall.wallHeightMm,
-          tvSizeInches,
-          backdropWidthMm,
-          backdropHeightMm,
-          tvBottomAfflMm,
-          cabinetBottomAfflMm,
-          cabinetHeightMm,
-          cabinetTopAfflMm,
-          cabinetToTvGapMm,
-        });
-
-        return [
-          {
-            id: `${wall.id}-${product.id}`,
-            selectorLabel: `${wall.wallName || "TV Wall"}${backdropIndex > 1 ? ` - TV Backdrop ${backdropIndex}` : ""}`,
-            quoteNumber: formatQuoteNumber(job),
-            clientName: job.clientName === "[Draft]" ? "Draft Quote" : job.clientName,
-            wallName: wall.wallName || "TV Wall",
-            generatedDateLabel: new Date().toLocaleDateString(),
-            cabinetWidthMm: safeNumber(floatingCabinet?.cabinetWidthMm),
-            cabinetHeightMm: setout.cabinetHeightMm,
-            cabinetHeightFromFloorMm: setout.cabinetBottomAfflMm,
-            setout,
-          } satisfies SetoutDocumentRecord,
-        ];
-      } catch {
-        return [];
-      }
-    });
-  });
-}
+import { buildElevationDocuments, type ElevationDocumentRecord } from "@shared/elevationJobDocuments";
+import { renderElevationDocumentHtml } from "@shared/elevationRenderer";
 
 export default function Setout() {
   const [location, navigate] = useLocation();
@@ -109,15 +22,12 @@ export default function Setout() {
   const { data: job, isLoading: jobLoading } = trpc.jobs.getById.useQuery({ id: jobId }, { enabled: jobId > 0 && Boolean(user) });
   const { data: walls, isLoading: wallsLoading } = trpc.walls.getByJobId.useQuery({ jobId }, { enabled: jobId > 0 && Boolean(user) });
 
-  const documents = useMemo(() => (job && walls ? buildSetoutDocuments(job, walls) : []), [job, walls]);
+  const documents = useMemo(() => (job && walls ? buildElevationDocuments(job, walls) : []), [job, walls]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
   const selectedDocument =
     documents.find(document => document.id === selectedDocumentId) ||
     documents[0];
-  const previewHtml = useMemo(
-    () => (selectedDocument ? generateTvBackdropSetoutHtml(selectedDocument) : ""),
-    [selectedDocument]
-  );
+  const elevationDocument = selectedDocument?.document ?? null;
 
   useEffect(() => {
     if (!documents[0]) return;
@@ -174,12 +84,12 @@ export default function Setout() {
     setDownloading(true);
     try {
       const token = createPdfPreview(
-        generateTvBackdropSetoutHtml(selectedDocument),
-        `${selectedDocument.quoteNumber}-${selectedDocument.wallName}-setout.pdf`,
+        renderElevationDocumentHtml(selectedDocument.document),
+        selectedDocument.fileName,
         `/setout/${jobId}`
       );
       navigate(`/print-preview/${token}`);
-      toast.success("Installer setout opened in preview");
+      toast.success("Elevation opened in preview");
     } catch (error: any) {
       toast.error(error?.message || "Failed to open setout preview");
     } finally {
@@ -227,15 +137,21 @@ export default function Setout() {
             <div className="p-6 text-sm text-slate-600">Job not found.</div>
           ) : documents.length === 0 || !selectedDocument ? (
             <div className="space-y-2 p-6 text-sm text-slate-600">
-              <p>No TV backdrop setout is ready for this job yet.</p>
-              <p>Save a TV backdrop on the selected wall with its current quote measurements and install inputs.</p>
+              <p>No elevation document is ready for this job yet.</p>
+              <p>Save a TV backdrop or floating cabinet with its current quote measurements and install inputs.</p>
             </div>
           ) : (
-            <iframe
-              title={`${selectedDocument.wallName} setout preview`}
-              srcDoc={previewHtml}
-              className="h-full w-full bg-white"
-            />
+            elevationDocument && (
+              <div className="h-full overflow-auto bg-slate-100 p-4">
+                <div className="mx-auto flex max-w-[1200px] flex-col gap-4">
+                  {elevationDocument.pages.map((page, pageIndex) => (
+                    <Card key={page.id} className="overflow-hidden border border-slate-200 bg-white p-0 shadow-sm">
+                      <ElevationCanvasPage document={elevationDocument} pageIndex={pageIndex} />
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )
           )}
       </Card>
     </div>

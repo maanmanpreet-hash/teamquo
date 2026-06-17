@@ -31,6 +31,4 @@ export const QUOTE_TERMS = [
   "Quote is provided as one supply-and-install total, not as itemised product, labour, or line pricing.",
   "Wall dimensions, products, product sizes, and quantities are shown to define the quoted scope only.",
   "Quote valid for 30 days from the quote date.",
-  "Final price is subject to site conditions, final measurements, access, substrate condition, and confirmed join/cut layout.",
-  "Electrical work, power point relocation, wall preparation, wall repair, painting, plastering, and structural work are excluded unless specifically stated in writing.",
 ];
