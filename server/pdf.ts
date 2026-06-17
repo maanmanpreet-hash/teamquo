@@ -3,12 +3,16 @@ import {
   CUSTOMER_FACING_COMPANY_NAME,
   QUOTE_TERMS,
   COMPANY_CONTACT_DETAILS,
+  decodeWallMeta,
   formatMoneyFromCents,
   formatQuoteNumber,
 } from "../shared/quote";
 import { parseMaterialMetadata } from "../shared/quoteCalculations";
+import path from "path";
+import { pathToFileURL } from "url";
 
 type WallSummary = Pick<Wall, "id" | "wallName" | "wallType" | "wallWidthMm" | "wallHeightMm" | "notes">;
+const PLACEHOLDER_EMAILS = new Set(["test@example.com", "example@example.com", "placeholder@example.com"]);
 
 function parseItemDetails(value: unknown): Record<string, any> {
   if (typeof value !== "string" || !value.trim()) return {};
@@ -47,6 +51,10 @@ function isCompatibleItemDetails(itemType: JobItem["itemType"], details: Record<
     return ["fixingMethod", "acousticFixingMethod", "glueTubes", "screws"].some(key => key in details);
   }
 
+  if (itemType === "custom_item") {
+    return ["customItemType", "customItemLabel"].some(key => key in details);
+  }
+
   return false;
 }
 
@@ -55,25 +63,19 @@ function getTypedItemDetails(item: JobItem) {
   return isCompatibleItemDetails(item.itemType, details) ? details : {};
 }
 
-function decodeWallNotes(notes: string | null | undefined) {
-  if (!notes) return { obstructionStatus: "unknown", obstructionNotes: "" };
+export function isRealCustomerEmail(email: unknown) {
+  if (typeof email !== "string") return false;
+  const trimmed = email.trim().toLowerCase();
+  if (!trimmed) return false;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return false;
+  if (PLACEHOLDER_EMAILS.has(trimmed)) return false;
+  if (trimmed.includes("test@") || trimmed.startsWith("test+") || trimmed.includes("example.") || trimmed.includes("placeholder")) return false;
+  return true;
+}
 
-  try {
-    const parsed = JSON.parse(notes);
-    if (
-      parsed &&
-      ["unknown", "none", "present"].includes(parsed.obstructionStatus)
-    ) {
-      return {
-        obstructionStatus: parsed.obstructionStatus as "unknown" | "none" | "present",
-        obstructionNotes: String(parsed.obstructionNotes || ""),
-      };
-    }
-  } catch {
-    return { obstructionStatus: "unknown", obstructionNotes: notes };
-  }
-
-  return { obstructionStatus: "unknown", obstructionNotes: notes };
+export function getCustomerQuoteLogoUrlForPdf() {
+  const logoPath = path.resolve(process.cwd(), "client/public/skywall-brand.png");
+  return pathToFileURL(logoPath).href;
 }
 
 /**
@@ -108,6 +110,7 @@ export function generateQuoteHTML(
     tv_backdrop: "TV Backdrop",
     side_tower: "Side Tower",
     shelving: "Shelving",
+    custom_item: "Custom Item",
   };
 
   const formatWallDimensions = (item: JobItem, wall?: WallSummary) => {
@@ -155,44 +158,12 @@ export function generateQuoteHTML(
     return "Selected product";
   };
 
-  const itemCustomerNotes = (item: JobItem, product?: Product, wall?: WallSummary) => {
-    const notes: string[] = [];
-    const metadata = parseMaterialMetadata(product?.description);
-    const decodedWallNotes = decodeWallNotes(wall?.notes);
+  const itemCustomerNotes = (item: JobItem) => {
     const itemDetails = getTypedItemDetails(item);
-
-    if (["cladding", "acoustic_panel", "marble_sheet", "tv_backdrop"].includes(item.itemType)) {
-      notes.push("Final join layout and cut positions are subject to site measurement confirmation.");
+    const notes: string[] = [];
+    if (typeof itemDetails.clientPreferenceNotes === "string" && itemDetails.clientPreferenceNotes.trim()) {
+      notes.push(itemDetails.clientPreferenceNotes.trim());
     }
-
-    if (["floating_cabinet", "side_tower", "shelving"].includes(item.itemType)) {
-      notes.push("Custom dimensions and final finish details are subject to site measurement confirmation.");
-      if (typeof itemDetails.clientPreferenceNotes === "string" && itemDetails.clientPreferenceNotes.trim()) {
-        notes.push(`Recorded preference: ${itemDetails.clientPreferenceNotes.trim()}.`);
-      }
-    }
-
-    if (item.itemType === "tv_backdrop") {
-      const tvBottom = safeNumber(itemDetails.tvBottomAfflMm);
-      if (tvBottom !== undefined) {
-        notes.push(`TV install setout is recorded with TV bottom at ${tvBottom}mm AFFL for installer confirmation.`);
-      }
-    }
-
-    if (metadata.orientationRule) {
-      notes.push(`Install orientation: ${metadata.orientationRule}.`);
-    }
-
-    if (decodedWallNotes.obstructionStatus === "present") {
-      notes.push(
-        decodedWallNotes.obstructionNotes
-          ? `Noted wall features: ${decodedWallNotes.obstructionNotes}. Final cut layout to be confirmed on site.`
-          : "Wall features/openings are present. Final cut layout to be confirmed on site."
-      );
-    } else if (decodedWallNotes.obstructionStatus === "unknown") {
-      notes.push("Openings, power points, recesses, and other wall features to be confirmed before commencement.");
-    }
-
     return Array.from(new Set(notes));
   };
 
@@ -204,38 +175,38 @@ export function generateQuoteHTML(
     return groups;
   }, new Map<number, JobItem[]>());
 
-  const wallSections = Array.from(groupedItems.entries())
+  const wallTotals: number[] = [];
+
+  const wallRows = Array.from(groupedItems.entries())
     .map(([wallId, items], wallIndex) => {
       const wall = wallId ? walls.get(wallId) : undefined;
       const wallName = wall?.wallName || `Wall ${wallIndex + 1}`;
       const wallDimensions = formatWallDimensions(items[0], wall);
-      const decodedWallNotes = decodeWallNotes(wall?.notes);
-      const obstructionLine =
-        decodedWallNotes.obstructionStatus === "none"
-          ? "No known obstructions recorded at quoting stage."
-          : decodedWallNotes.obstructionStatus === "present"
-            ? `Recorded wall features: ${decodedWallNotes.obstructionNotes || "Obstructions present"}.`
-            : "Openings/obstructions to be confirmed before commencement.";
+      const decodedWallNotes = decodeWallMeta(wall?.notes);
+      const obstructionLine = decodedWallNotes.obstructionNotes?.trim();
+      const wallTotal =
+        decodedWallNotes.supplyInstallPrice ??
+        (groupedItems.size === 1 ? job.totalEstimate ?? 0 : null);
 
-      const wallMetaRow = `
-        <tr>
-          <td></td>
-          <td>
-            <strong>${escapeHtml(wallName)}</strong><br />
-            <span><strong>Wall dimensions:</strong> ${escapeHtml(wallDimensions)}</span>
-          </td>
-          <td></td>
-        </tr>
-      `;
+      if (wallTotal === null) {
+        throw new Error(`Manual Supply & Install price is required for ${wallName} before generating the customer quote.`);
+      }
 
-      const productRows = items
-        .map((item, index) => {
+      wallTotals.push(wallTotal);
+
+      const productItems = items
+        .map(item => {
           const product = item.productId ? products.get(item.productId) : undefined;
           const variant = item.claddingVariantId
             ? claddingVariants.get(item.claddingVariantId)
             : undefined;
+          const itemDetails = getTypedItemDetails(item);
           const productName =
-            product?.name || variant?.name || itemTypeLabels[item.itemType];
+            product?.name ||
+            variant?.name ||
+            (typeof itemDetails.customItemLabel === "string" && itemDetails.customItemLabel.trim()
+              ? itemDetails.customItemLabel.trim()
+              : itemTypeLabels[item.itemType]);
           const productDesign = product?.design || variant?.design;
           const description = [
             itemTypeLabels[item.itemType],
@@ -244,91 +215,97 @@ export function generateQuoteHTML(
           ]
             .filter(Boolean)
             .join(" - ");
-          const notes = itemCustomerNotes(item, product, wall);
+          const notes = itemCustomerNotes(item);
 
           return `
-            <tr>
-              <td>${index + 1}</td>
-              <td>
-                ${escapeHtml(description)}
-                ${notes.length ? `<ul class="line-notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join("")}</ul>` : ""}
-              </td>
-              <td>${escapeHtml(formatProductDimensions(item, product))}</td>
-            </tr>
+            <li>
+              ${escapeHtml(description)}
+              ${notes.length ? `<ul class="line-notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join("")}</ul>` : ""}
+            </li>
           `;
         })
         .join("");
 
       return `
-        <section class="wall-section">
-          <div class="wall-heading">
-            <div>
-              <p>${escapeHtml(obstructionLine)}</p>
-            </div>
-          </div>
-          <table>
-            <thead>
-              <tr><th>#</th><th>Products included</th><th>Product size</th></tr>
-            </thead>
-            <tbody>${wallMetaRow}${productRows}</tbody>
-          </table>
-        </section>
+        <tr class="quote-items-row">
+          <td class="quote-items-main">
+            <h2>WALL ${wallIndex + 1} - ${escapeHtml(wallName.toUpperCase())} - ${escapeHtml(wallDimensions)}</h2>
+            <p class="included-products-label"><strong>Included products:</strong></p>
+            <ul class="included-products">${productItems}</ul>
+            ${obstructionLine ? `<p>${escapeHtml(obstructionLine)}</p>` : ""}
+          </td>
+          <td class="quote-items-price">
+            <div class="quote-items-price-value">${escapeHtml(formatMoneyFromCents(wallTotal))}</div>
+          </td>
+        </tr>
       `;
     })
     .join("");
+  const supplyInstallTotal = wallTotals.reduce((sum, wallTotal) => sum + wallTotal, 0);
 
   const terms = QUOTE_TERMS.map(term => `<li>${escapeHtml(term)}</li>`).join("");
-
-  const cleanedJobNotes =
-    typeof job.notes === "string" && job.notes.trim() === "Local preview example. Safe to delete."
-      ? ""
-      : (job.notes || "");
-
-  const safeNotes = cleanedJobNotes
-    ? `<section class="notes"><p>${escapeHtml(cleanedJobNotes).replace(/\n/g, "<br />")}</p></section>`
-    : "";
 
   const safeLogoUrl = escapeHtml(logoUrl || "/skywall-brand.png");
   const quoteDate = job.createdAt ? new Date(job.createdAt) : new Date();
   const quoteDateLabel = Number.isNaN(quoteDate.getTime())
     ? new Date().toLocaleDateString()
     : quoteDate.toLocaleDateString();
+  const customerLines = [
+    job.clientName?.trim() ? `<p><strong>${escapeHtml(job.clientName.trim())}</strong></p>` : "",
+    job.clientPhone?.trim() ? `<p>${escapeHtml(job.clientPhone.trim())}</p>` : "",
+    isRealCustomerEmail(job.clientEmail) ? `<p>${escapeHtml(job.clientEmail!.trim())}</p>` : "",
+    job.clientAddress?.trim() ? `<p>${escapeHtml(job.clientAddress.trim())}</p>` : "",
+  ]
+    .filter(Boolean)
+    .join("");
   return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
   <title>${quoteNumber} - ${escapeHtml(job.clientName)}</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 28px; color: #172033; background: #fff; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: #172033; background: #fff; }
     .page { max-width: 940px; margin: 0 auto; }
-    .header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 3px solid #14213d; padding-bottom: 18px; margin-bottom: 24px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; border-bottom: 2px solid #d7deea; padding-bottom: 16px; margin-bottom: 20px; }
     .brand-block { display: flex; gap: 14px; align-items: flex-start; }
-    .brand-logo { width: 320px; max-height: 78px; object-fit: contain; object-position: left top; }
-    .company-details { margin-top: 10px; font-size: 12px; line-height: 1.5; color: #475569; }
-    .quote-box { text-align: right; font-size: 13px; line-height: 1.6; color: #334155; }
-    .quote-number { font-size: 20px; font-weight: 700; color: #14213d; }
-    .client { margin: 18px 0 26px; }
-    .panel { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; }
+    .brand-logo { width: 300px; max-height: 72px; object-fit: contain; object-position: left top; }
+    .company-details { margin-top: 8px; font-size: 11px; line-height: 1.5; color: #5a667a; }
+    .quote-box { min-width: 170px; text-align: right; font-size: 12px; line-height: 1.6; color: #4a5568; }
+    .quote-number { font-size: 20px; font-weight: 700; color: #14213d; margin-bottom: 2px; }
+    .client { margin: 0 0 20px; }
+    .panel { background: #fbfcfe; border: 1px solid #dfe5ef; border-radius: 8px; padding: 14px 16px; }
     h1 { font-size: 22px; margin: 0 0 8px; color: #14213d; }
-    h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: #475569; margin: 0 0 10px; }
+    h2 { font-size: 14px; letter-spacing: .04em; color: #14213d; margin: 0 0 8px; }
     p { margin: 4px 0; }
-    .wall-section { margin-top: 20px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
-    .wall-heading { background: #f8fafc; padding: 14px 16px; border-bottom: 1px solid #e2e8f0; }
-    .wall-heading h2 { color: #14213d; margin-bottom: 6px; }
-    table { width: 100%; border-collapse: collapse; }
-    th { background: #14213d; color: #fff; text-align: left; padding: 10px; font-size: 12px; }
-    td { border-bottom: 1px solid #e2e8f0; padding: 10px; font-size: 13px; vertical-align: top; }
-    tr:last-child td { border-bottom: 0; }
-    th:nth-child(1), td:nth-child(1) { width: 38px; text-align: center; }
-    th:nth-child(3), td:nth-child(3) { width: 170px; }
-    .line-notes { margin: 6px 0 0; padding-left: 18px; color: #475569; font-size: 11px; line-height: 1.4; }
-    .total { display: flex; justify-content: flex-end; margin-top: 22px; }
-    .total-card { min-width: 280px; border: 2px solid #14213d; border-radius: 10px; padding: 16px; text-align: right; }
-    .total-label { font-size: 13px; color: #475569; }
-    .total-amount { font-size: 28px; font-weight: 800; color: #14213d; }
-    .terms, .notes { margin-top: 26px; background: #f8fafc; border-radius: 10px; padding: 14px 18px; border: 1px solid #e2e8f0; font-size: 12px; line-height: 1.55; }
-    .terms ul { margin: 0; padding-left: 18px; }
-    .footer { margin-top: 28px; border-top: 1px solid #e2e8f0; padding-top: 14px; font-size: 11px; color: #64748b; text-align: center; }
+    .quote-items-wrap { margin-top: 0; }
+    .quote-items { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; border: 1px solid #dfe5ef; border-radius: 8px; overflow: hidden; }
+    .quote-items thead th { background: #f7f9fc; color: #324055; text-align: left; padding: 11px 14px 14px; font-size: 12px; font-weight: 700; border-bottom: 1px solid #dfe5ef; }
+    .quote-items thead th:last-child { text-align: right; width: 22%; }
+    .quote-items-row td { background: #fcfdff; padding: 0; vertical-align: top; border-top: 1px solid #e7ecf3; }
+    .quote-items-row:first-child td { border-top: 0; }
+    .quote-items-row + .quote-items-row td { border-top: 10px solid #f7f9fc; }
+    .quote-items-main { width: 78%; padding: 18px 16px 16px; }
+    .quote-items-price { width: 22%; padding: 18px 16px 16px; border-left: 1px solid #e1e7f0; text-align: right; }
+    .quote-items-row:first-child .quote-items-main,
+    .quote-items-row:first-child .quote-items-price { padding-top: 20px; }
+    .quote-items-row + .quote-items-row .quote-items-main,
+    .quote-items-row + .quote-items-row .quote-items-price { padding-top: 22px; }
+    .quote-items-main h2 { font-size: 13px; font-weight: 700; letter-spacing: .03em; margin-bottom: 6px; }
+    .quote-items-price-value { font-size: 12px; font-weight: 400; color: #172033; white-space: nowrap; line-height: 1.4; }
+    .included-products-label { margin-top: 0; font-size: 12px; color: #334155; }
+    .included-products { margin: 8px 0 12px; padding-left: 16px; }
+    .included-products li { margin: 4px 0; font-size: 12px; line-height: 1.4; color: #172033; }
+    .quote-items-main p:last-child { margin: 8px 0 0; font-size: 12px; color: #4b5563; }
+    .line-notes { margin: 4px 0 0; padding-left: 16px; color: #64748b; font-size: 10px; line-height: 1.4; }
+    .total { display: flex; justify-content: flex-end; margin-top: 18px; }
+    .total-card { min-width: 250px; border: 1px solid #cfd8e6; border-radius: 8px; padding: 12px 16px; text-align: right; background: #fbfcfe; }
+    .total-label { font-size: 12px; font-weight: 700; color: #5f6c80; margin-bottom: 4px; }
+    .total-amount { font-size: 24px; font-weight: 800; color: #14213d; line-height: 1.15; }
+    .terms, .notes { margin-top: 20px; background: #fbfcfe; border-radius: 8px; padding: 12px 16px; border: 1px solid #dfe5ef; font-size: 11px; line-height: 1.45; }
+    .terms h2 { font-size: 12px; margin-bottom: 8px; }
+    .terms ul { margin: 0; padding-left: 16px; }
+    .terms li { margin: 3px 0; }
+    .footer { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 10px; color: #64748b; text-align: center; }
   </style>
 </head>
 <body>
@@ -354,26 +331,32 @@ export function generateQuoteHTML(
     <section class="client">
       <div class="panel">
         <h2>Customer</h2>
-        <p><strong>${escapeHtml(job.clientName)}</strong></p>
-        ${job.clientPhone ? `<p>${escapeHtml(job.clientPhone)}</p>` : ""}
-        ${job.clientEmail ? `<p>${escapeHtml(job.clientEmail)}</p>` : ""}
-        ${job.clientAddress ? `<p>${escapeHtml(job.clientAddress)}</p>` : ""}
+        ${customerLines}
       </div>
     </section>
 
-    <section>
-      ${wallSections}
+    <section class="quote-items-wrap">
+      <table class="quote-items">
+        <thead>
+          <tr>
+            <th>Items</th>
+            <th>Price</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${wallRows}
+        </tbody>
+      </table>
     </section>
 
     <section class="total">
       <div class="total-card">
-        <div class="total-label">Supply and Install Total Estimate</div>
-        <div class="total-amount">${formatMoneyFromCents(job.totalEstimate)}</div>
+        <div class="total-label">Supply and Install Total</div>
+        <div class="total-amount">${formatMoneyFromCents(supplyInstallTotal)}</div>
       </div>
     </section>
 
     <section class="terms"><h2>Quote Terms</h2><ul>${terms}</ul></section>
-    ${safeNotes}
     <footer class="footer">Thank you for considering Skywall Cabinets.</footer>
   </div>
 </body>

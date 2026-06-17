@@ -58,15 +58,17 @@ export function mapQuoteWallsForMaterialSummary(walls: QuoteFormWallForMaterials
     wallName: wall.wallName,
     wallWidthMm: wall.wallWidthMm,
     wallHeightMm: wall.wallHeightMm,
-    products: wall.products.map<ProductSelectionForMaterials>(product => ({
-      productType: toQuoteProductType(product.productType),
-      productName: product.productName,
-      quantity: product.quantity,
-      unitCostCents: product.unitPrice,
-      acousticFixingMethod: toAcousticFixingMethod(product.acousticFixingMethod),
-      tvSizeInches: product.tvSizeInches,
-      includeTvBracket: product.includeTvBracket,
-    })),
+    products: wall.products
+      .filter(product => product.productType !== "custom_item")
+      .map<ProductSelectionForMaterials>(product => ({
+        productType: toQuoteProductType(product.productType),
+        productName: product.productName,
+        quantity: product.quantity,
+        unitCostCents: product.unitPrice,
+        acousticFixingMethod: toAcousticFixingMethod(product.acousticFixingMethod),
+        tvSizeInches: product.tvSizeInches,
+        includeTvBracket: product.includeTvBracket,
+      })),
   }));
 }
 

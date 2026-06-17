@@ -128,14 +128,17 @@ export default function Jobs() {
     const fileName = `${formatQuoteNumber(job)}-${job?.clientName || "quote"}.pdf`;
 
     if (generatePDFMutation.error) {
-      toast.error(generatePDFMutation.error.message || "Failed to generate PDF");
+      toast.error(generatePDFMutation.error.message || "Failed to generate PDF preview");
       setDownloadingJobId(null);
       return;
     }
 
     if (!generatePDFMutation.data) return;
 
-    const token = createPdfPreview(generatePDFMutation.data.html, fileName, "/jobs");
+    const token = createPdfPreview(generatePDFMutation.data.html, fileName, "/jobs", {
+      kind: "customer-quote",
+      jobId: downloadingJobId,
+    });
     navigate(`/print-preview/${token}`);
     toast.success("PDF opened in preview");
     setDownloadingJobId(null);

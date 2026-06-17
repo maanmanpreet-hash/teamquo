@@ -4,6 +4,8 @@ export type PdfPreviewPayload = {
   html: string;
   filename: string;
   backPath?: string;
+  kind?: "customer-quote" | "generic";
+  jobId?: number;
 };
 
 function normaliseQuoteHtml(html: string) {
@@ -53,12 +55,19 @@ ${autoPrint ? `<script>
 </html>`;
 }
 
-export function createPdfPreview(html: string, filename: string, backPath?: string) {
+export function createPdfPreview(
+  html: string,
+  filename: string,
+  backPath?: string,
+  options?: { kind?: "customer-quote" | "generic"; jobId?: number }
+) {
   const token = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const payload: PdfPreviewPayload = {
     html: normaliseQuoteHtml(html),
     filename: safePdfFilename(filename),
     backPath,
+    kind: options?.kind || "generic",
+    jobId: options?.jobId,
   };
   sessionStorage.setItem(`${PDF_PREVIEW_STORAGE_PREFIX}${token}`, JSON.stringify(payload));
   return token;
@@ -77,4 +86,22 @@ export function readPdfPreview(token: string) {
 
 export function clearPdfPreview(token: string) {
   sessionStorage.removeItem(`${PDF_PREVIEW_STORAGE_PREFIX}${token}`);
+}
+
+export function downloadBase64Pdf(base64: string, filename: string) {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = safePdfFilename(filename);
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  window.URL.revokeObjectURL(url);
 }

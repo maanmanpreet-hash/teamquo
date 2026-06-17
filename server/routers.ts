@@ -9,7 +9,8 @@ import {
 } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
-import { generateQuoteHTML } from "./pdf";
+import { generateQuoteHTML, getCustomerQuoteLogoUrlForPdf } from "./pdf";
+import { renderCustomerQuotePdfBuffer } from "./customerQuotePdf";
 import { generateJobPackHtml } from "./jobPack";
 import { buildJobMaterialSummary } from "./jobMaterials";
 import { formatQuoteNumber } from "../shared/quote";
@@ -26,6 +27,7 @@ const supportedItemTypes = [
   "tv_backdrop",
   "side_tower",
   "shelving",
+  "custom_item",
 ] as const;
 
 const now = () => new Date();
@@ -507,6 +509,35 @@ export const appRouter = router({
       const wallMap = new Map(wallRows.map(wall => [wall.id, wall]));
       const html = generateQuoteHTML(job as any, items as any, variantMap as any, productMap as any, undefined, undefined, wallMap as any);
       return { html, jobId: job.id, clientName: job.clientName, quoteNumber: formatQuoteNumber(job as any) };
+    }),
+    generatePDFFile: protectedProcedure.input(z.object({ jobId: z.number() })).query(async ({ input, ctx }) => {
+      const job = await assertOwnsJob(input.jobId, ctx.user.id);
+      const previewMode = await isPreviewMode();
+      const items = previewMode ? previewJobItems.filter(item => item.jobId === input.jobId) : await db.getJobItemsByJobId(input.jobId);
+      if (!items.length) throw new Error("Cannot generate PDF until the quote has at least one saved product.");
+      const variants = previewMode ? previewCladdingVariants : await db.getAllCladdingVariants();
+      const products = previewMode ? previewProducts : await db.getAllProducts();
+      const wallRows = previewMode ? previewWalls.filter(wall => wall.jobId === input.jobId) : await db.getWallsByJobId(input.jobId);
+      const variantMap = new Map(variants.map(v => [v.id, v]));
+      const productMap = new Map(products.map(product => [product.id, product]));
+      const wallMap = new Map(wallRows.map(wall => [wall.id, wall]));
+      const quoteNumber = formatQuoteNumber(job as any);
+      const fileName = `${quoteNumber}-${(job.clientName || "quote").replace(/[\\/:*?"<>|]+/g, "-")}.pdf`;
+      const html = generateQuoteHTML(
+        job as any,
+        items as any,
+        variantMap as any,
+        productMap as any,
+        undefined,
+        getCustomerQuoteLogoUrlForPdf(),
+        wallMap as any
+      );
+      const pdfBuffer = await renderCustomerQuotePdfBuffer(html, fileName);
+      return {
+        base64: pdfBuffer.toString("base64"),
+        fileName,
+        sizeBytes: pdfBuffer.byteLength,
+      };
     }),
     generateJobPack: protectedProcedure.input(z.object({ jobId: z.number() })).query(async ({ input, ctx }) => {
       const job = await assertOwnsJob(input.jobId, ctx.user.id);

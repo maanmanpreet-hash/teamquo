@@ -3,9 +3,17 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyItemDetailsToProduct,
   buildItemDetails,
+} from "../client/src/lib/quote/itemDetails";
+import {
+  getWallAssociatedCost,
+  hasManualWallSupplyInstallPrice,
+} from "../client/src/lib/quote/wallNotes";
+import {
   getResumeJobIdFromLocation,
+} from "../client/src/lib/quote/resumeQuote";
+import {
   resolveCatalogProductTypeId,
-} from "../client/src/pages/QuoteForm";
+} from "../client/src/lib/quote/productTypeHelpers";
 
 describe("quote form persistence helpers", () => {
   it("reads resume job id from query string and path", () => {
@@ -143,5 +151,47 @@ describe("quote form persistence helpers", () => {
     expect(restoredJoinery.cabinetSectionWidthsMm).toEqual([600, 600, 600]);
     expect(restoredJoinery.cabinetShelfHeightsBySectionMm).toEqual([[210], [210, 320]]);
     expect(restoredJoinery.clientPreferenceNotes).toBe("Matte beige finish with push-to-open profile");
+  });
+
+  it("round-trips custom item details through itemDetails", () => {
+    const itemDetails = buildItemDetails({
+      id: "custom-1",
+      productType: "custom_item",
+      productId: "",
+      productName: "LEDs",
+      quantity: 1,
+      unitPrice: 0,
+      customItemType: "LEDs",
+    });
+
+    const restored = applyItemDetailsToProduct(
+      {
+        id: "custom-1",
+        productType: "custom_item",
+        productId: "",
+        productName: "Custom Item",
+        quantity: 1,
+        unitPrice: 0,
+      },
+      itemDetails
+    );
+
+    expect(restored.customItemType).toBe("LEDs");
+    expect(restored.productName).toBe("LEDs");
+    expect(restored.itemDetails).toBe(itemDetails);
+  });
+
+  it("keeps associated cost separate from manual wall pricing", () => {
+    expect(
+      getWallAssociatedCost({
+        products: [
+          { quantity: 2, unitPrice: 12500 },
+          { quantity: 1, unitPrice: 45000 },
+        ],
+      } as any)
+    ).toBe(70000);
+
+    expect(hasManualWallSupplyInstallPrice({ supplyInstallPrice: 0 } as any)).toBe(false);
+    expect(hasManualWallSupplyInstallPrice({ supplyInstallPrice: 205500 } as any)).toBe(true);
   });
 });

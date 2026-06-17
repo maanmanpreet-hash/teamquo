@@ -178,12 +178,17 @@ function DashboardLayoutContent({
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
               {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Navigation
-                  </span>
-                </div>
-              ) : null}
+  <button
+    type="button"
+    onClick={() => setLocation("/")}
+    className="flex min-w-0 items-center gap-2 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    aria-label="Go to home"
+  >
+    <span className="font-semibold tracking-tight truncate">
+      Team QUO
+    </span>
+  </button>
+) : null}
             </div>
           </SidebarHeader>
 

@@ -163,16 +163,17 @@ export default function Dashboard() {
     const fileName = `${formatQuoteNumber(job)}-supply-install-${safeFilePart(job?.clientName)}.pdf`;
 
     if (pdfQuery.data) {
-      const token = createPdfPreview(pdfQuery.data.html, fileName, "/dashboard");
+      const token = createPdfPreview(pdfQuery.data.html, fileName, "/dashboard", {
+        kind: "customer-quote",
+        jobId: downloadingJobId,
+      });
       navigate(`/print-preview/${token}`);
       toast.success("Supply-and-install quote opened in preview");
       setDownloadingJobId(null);
     }
 
     if (pdfQuery.error) {
-      const token = createPdfPreview(fallbackPdfHtml(job), fileName, "/dashboard");
-      navigate(`/print-preview/${token}`);
-      toast.success("Fallback supply-and-install quote opened in preview");
+      toast.error(pdfQuery.error.message || "Failed to generate supply-and-install quote preview");
       setDownloadingJobId(null);
     }
   }, [downloadingJobId, navigate, pdfQuery.data, pdfQuery.error, jobs]);

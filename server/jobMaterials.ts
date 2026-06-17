@@ -37,10 +37,11 @@ function mapJobToMaterialWalls(
     wallName: wall.wallName || "Wall",
     wallWidthMm: wall.wallWidthMm || 0,
     wallHeightMm: wall.wallHeightMm || 0,
-    products: items.map(item => {
+    products: items.flatMap(item => {
+      if (item.itemType === "custom_item") return [];
       const product = item.productId ? products.get(item.productId) : undefined;
       const itemDetails = parseItemDetails(item.itemDetails);
-      return {
+      return [{
         productType: item.itemType,
         productName: product?.name || item.itemType,
         quantity: item.quantityRequired || 1,
@@ -48,7 +49,7 @@ function mapJobToMaterialWalls(
         includeTvBracket: Boolean(itemDetails.includeTvBracket),
         tvSizeInches: safeNumber(itemDetails.tvSizeInches),
         acousticFixingMethod: parseAcousticFixingMethod(itemDetails.fixingMethod) ?? parseAcousticFixingMethod(itemDetails.acousticFixingMethod),
-      };
+      }];
     }),
   }));
 }
