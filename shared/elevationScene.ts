@@ -90,6 +90,9 @@ export interface ElevationRailMark {
   targetYmm: number;
   witnessXmm: number;
   guideEndXmm?: number;
+  side?: "left" | "right";
+  role?: "datum" | "tv" | "cabinet" | "anchor" | "sheet";
+  priority?: number;
 }
 
 export interface ElevationVerticalDimension {
