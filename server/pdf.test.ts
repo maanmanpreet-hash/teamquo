@@ -200,6 +200,12 @@ describe("quote pdf html", () => {
     expect(html).not.toContain("test@example.com");
     expect(html).not.toContain("$2520.00");
     expect(html).not.toContain("$990.00");
+    expect(html).not.toContain("Internal material cost");
+    expect(html).not.toContain("Material cost estimate");
+    expect(html).not.toContain("Product cost");
+    expect(html).not.toContain("Margin");
+    expect(html).not.toContain("Markup");
+    expect(html).not.toContain("Labour breakdown");
   });
 
   it("keeps a single-wall quote on the same wall-level pricing model", () => {

@@ -12,8 +12,31 @@ import {
 import { shouldResetQuoteFormForResumeChange } from "../client/src/lib/quote/resumeQuote";
 import { getBackdropDimensionsFromCatalogProduct, calculateTvBackdrop } from "../client/src/lib/quote/tvBackdropForm";
 import { decodeWallNotes, encodeWallNotes } from "../client/src/lib/quote/wallNotes";
+import { calculateTvBackdropSetout } from "../shared/tvSetout";
 
 describe("quote form helper modules", () => {
+  it("decodes empty wall notes as a clear no-obstruction default", () => {
+    expect(decodeWallNotes("")).toEqual({
+      obstructionStatus: "none",
+      obstructionNotes: "",
+      supplyInstallPrice: null,
+    });
+  });
+
+  it("encodes and decodes a no-obstruction wall note cleanly", () => {
+    const encoded = encodeWallNotes({
+      obstructionStatus: "none",
+      obstructionNotes: "",
+      supplyInstallPrice: 0,
+    });
+
+    expect(decodeWallNotes(encoded)).toEqual({
+      obstructionStatus: "none",
+      obstructionNotes: "",
+      supplyInstallPrice: 0,
+    });
+  });
+
   it("encodes and decodes wall notes without losing supply/install metadata", () => {
     const encoded = encodeWallNotes({
       obstructionStatus: "present",
@@ -25,6 +48,14 @@ describe("quote form helper modules", () => {
       obstructionStatus: "present",
       obstructionNotes: "Power point to confirm",
       supplyInstallPrice: 245000,
+    });
+  });
+
+  it("falls back safely when wall notes contain invalid json", () => {
+    expect(decodeWallNotes("{bad-json")).toEqual({
+      obstructionStatus: "unknown",
+      obstructionNotes: "{bad-json",
+      supplyInstallPrice: null,
     });
   });
 
@@ -59,6 +90,10 @@ describe("quote form helper modules", () => {
   });
 
   it("parses itemDetails safely and checks product compatibility", () => {
+    expect(parseItemDetails(JSON.stringify({ productType: "tv_backdrop", tvSizeInches: 75 }))).toEqual({
+      productType: "tv_backdrop",
+      tvSizeInches: 75,
+    });
     expect(parseItemDetails("{bad json")).toEqual({});
     expect(
       isCompatibleItemDetails("tv_backdrop", {
@@ -73,7 +108,25 @@ describe("quote form helper modules", () => {
     ).toBe(true);
     expect(
       isCompatibleItemDetails("floating_cabinet", {
+        widthMm: 2100,
+        sectionWidthsMm: [700, 700, 700],
+      })
+    ).toBe(true);
+    expect(
+      isCompatibleItemDetails("acoustic_panel", {
+        fixingMethod: "screws_and_glue",
+        glueTubes: 4,
+      })
+    ).toBe(true);
+    expect(
+      isCompatibleItemDetails("floating_cabinet", {
         randomField: 123,
+      })
+    ).toBe(false);
+    expect(
+      isCompatibleItemDetails("tv_backdrop", {
+        productType: "floating_cabinet",
+        widthMm: 1800,
       })
     ).toBe(false);
   });
@@ -97,5 +150,27 @@ describe("quote form helper modules", () => {
     const calculated = calculateTvBackdrop(75);
     expect(calculated.backdropWidthMm).toBe(calculated.tvWidthMm + 200);
     expect(calculated.backdropHeightMm).toBe(calculated.tvHeightMm + 200);
+  });
+
+  it("supports a typical floating-unit plus gap tv setout scenario", () => {
+    const backdrop = calculateTvBackdrop(75);
+    const setout = calculateTvBackdropSetout({
+      wallWidthMm: 3800,
+      wallHeightMm: 2600,
+      tvSizeInches: 75,
+      backdropWidthMm: backdrop.backdropWidthMm,
+      backdropHeightMm: backdrop.backdropHeightMm,
+      cabinetBottomAfflMm: 200,
+      cabinetHeightMm: 450,
+      cabinetToTvGapMm: 250,
+    });
+
+    expect(setout.tvBottomAfflMm).toBe(900);
+    expect(setout.cabinetTopAfflMm).toBe(650);
+    expect(setout.actualCabinetToTvGapMm).toBe(250);
+    expect(setout.tvBottomDerivedFromCabinetGap).toBe(true);
+    expect(setout.tvBottomSource).toBe("cabinet_bottom_and_height");
+    expect(setout.backdropWidthMm).toBe(backdrop.backdropWidthMm);
+    expect(setout.backdropHeightMm).toBe(backdrop.backdropHeightMm);
   });
 });
