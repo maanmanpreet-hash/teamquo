@@ -14,6 +14,9 @@ import { pathToFileURL } from "url";
 type WallSummary = Pick<Wall, "id" | "wallName" | "wallType" | "wallWidthMm" | "wallHeightMm" | "notes">;
 const PLACEHOLDER_EMAILS = new Set(["test@example.com", "example@example.com", "placeholder@example.com"]);
 
+// Guardrail: `itemDetails` is an implicit JSON schema shared with the quote
+// form and persistence layer. Keep customer-PDF parsing tolerant and localised
+// here rather than spreading ad-hoc JSON field access around this renderer.
 function parseItemDetails(value: unknown): Record<string, any> {
   if (typeof value !== "string" || !value.trim()) return {};
   try {
@@ -80,6 +83,9 @@ export function getCustomerQuoteLogoUrlForPdf() {
 
 /**
  * Generate customer-facing quote HTML for PDF export.
+ *
+ * Guardrail: this renderer is customer-facing only. Do not expose internal
+ * material cost, product-level pricing, labour, margin, or markup here.
  */
 export function generateQuoteHTML(
   job: Job,
@@ -184,6 +190,9 @@ export function generateQuoteHTML(
       const wallDimensions = formatWallDimensions(items[0], wall);
       const decodedWallNotes = decodeWallMeta(wall?.notes);
       const obstructionLine = decodedWallNotes.obstructionNotes?.trim();
+      // Guardrail: wall notes carry the manual customer-facing Supply & Install
+      // price. Falling back to `job.totalEstimate` is legacy compatibility for
+      // older single-wall drafts only, because `totalEstimate` is ambiguous.
       const wallTotal =
         decodedWallNotes.supplyInstallPrice ??
         (groupedItems.size === 1 ? job.totalEstimate ?? 0 : null);
@@ -241,6 +250,8 @@ export function generateQuoteHTML(
       `;
     })
     .join("");
+  // Guardrail: customer quote total must remain the sum of manual wall-level
+  // Supply & Install prices. Do not substitute internal material-cost totals.
   const supplyInstallTotal = wallTotals.reduce((sum, wallTotal) => sum + wallTotal, 0);
 
   const terms = QUOTE_TERMS.map(term => `<li>${escapeHtml(term)}</li>`).join("");

@@ -336,7 +336,13 @@ function buildJobInput(input: z.infer<typeof jobInputSchema>, userId: number) {
     appointmentTime: input.appointmentTime || null,
     referenceImageUrl: input.referenceImageUrl || null,
     operatorName: input.operatorName || null,
+    // Guardrail: `totalEstimate` is a legacy/ambiguous persisted field name.
+    // In Team QUO quote workflow it should represent the customer-facing total
+    // derived from manual wall Supply & Install prices, not internal material cost.
     totalEstimate: input.totalEstimate,
+    // Guardrail: `notes` is an overloaded legacy metadata field. Quote-level
+    // structured data such as customer add-ons should be encoded/decoded through
+    // shared helpers instead of ad-hoc string manipulation.
     notes: input.notes || null,
     status: "quoted" as const,
   };
@@ -507,6 +513,9 @@ export const appRouter = router({
       const variantMap = new Map(variants.map(v => [v.id, v]));
       const productMap = new Map(products.map(product => [product.id, product]));
       const wallMap = new Map(wallRows.map(wall => [wall.id, wall]));
+      // Guardrail: generateQuoteHTML is customer-facing. Internal material cost,
+      // product-level pricing, labour, margin, and markup must not leak through
+      // this route even though internal calculation data exists elsewhere.
       const html = generateQuoteHTML(job as any, items as any, variantMap as any, productMap as any, undefined, undefined, wallMap as any);
       return { html, jobId: job.id, clientName: job.clientName, quoteNumber: formatQuoteNumber(job as any) };
     }),
@@ -523,6 +532,8 @@ export const appRouter = router({
       const wallMap = new Map(wallRows.map(wall => [wall.id, wall]));
       const quoteNumber = formatQuoteNumber(job as any);
       const fileName = `${quoteNumber}-${(job.clientName || "quote").replace(/[\\/:*?"<>|]+/g, "-")}.pdf`;
+      // Guardrail: this is the downloadable customer quote path, so the same
+      // customer-facing pricing restrictions apply here as in preview HTML.
       const html = generateQuoteHTML(
         job as any,
         items as any,

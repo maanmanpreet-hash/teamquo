@@ -110,7 +110,11 @@ function mapSavedWallsToFormWalls(
 ): WallWithProducts[] {
   return savedWalls.map((wall: any) => {
     const decodedNotes = decodeWallNotes(wall.notes);
-    // Guardrail: older drafts stored a single quote-level totalEstimate value.
+    // Guardrail: `totalEstimate` is a legacy/ambiguous persisted field name.
+    // In the current workflow, customer-facing pricing comes from the manual
+    // per-wall Supply & Install values, not from internal material-cost math.
+    //
+    // Older drafts stored a single quote-level totalEstimate value.
     // We only use it as a fallback when restoring a one-wall quote and otherwise
     // preserve the per-wall manual Supply & Install pricing model.
     const fallbackSupplyInstallPrice =
@@ -163,6 +167,9 @@ function mapSavedWallsToFormWalls(
           cabinetHeightFromFloorMm: item.cabinetHeightFromFloorMm,
         };
 
+        // Guardrail: `itemDetails` is an implicit JSON schema shared across save,
+        // resume, and document generation. Keep JSON parsing/merging centralized
+        // in the known helpers rather than adding ad-hoc parsing in this page.
         return applyItemDetailsToProduct(baseProduct, item.itemDetails);
       }),
     };
@@ -170,6 +177,9 @@ function mapSavedWallsToFormWalls(
 }
 
 export default function QuoteForm() {
+  // Guardrail for future refactors: this page still combines workflow state and
+  // UI rendering. Extract additional pure helpers first before attempting to
+  // split the component tree so pricing/save-resume behaviour stays stable.
   const { user } = useAuth();
   const [location, navigate] = useLocation();
   const utils = trpc.useUtils();
@@ -255,6 +265,9 @@ export default function QuoteForm() {
   };
 
   const applySavedJobToForm = (job: any) => {
+    // Guardrail: quote-level `notes` currently carries structured metadata such
+    // as customer add-ons. Treat it as a legacy container and parse only through
+    // shared helpers so save/resume stays stable.
     const quoteMeta = decodeQuoteMeta(job.notes);
     setClientName(job.clientName === "[Draft]" ? "" : job.clientName || "");
     setClientEmail(job.clientEmail || "");
@@ -848,6 +861,9 @@ export default function QuoteForm() {
         appointmentTime: appointmentTime || null,
         referenceImageUrl: referenceImageUrl || null,
         operatorName: getSelectedOperatorName() || null,
+        // Guardrail: `totalEstimate` remains the stored field name, but in this
+        // workflow it carries the customer-facing total derived from manual wall
+        // Supply & Install prices. Do not repurpose it for internal material cost.
         totalEstimate: calculateTotal(),
         notes: encodeQuoteMeta({ customerAddOns }),
       };
@@ -876,7 +892,12 @@ export default function QuoteForm() {
             ...(product.cabinetHeightFromFloorMm != null ? { cabinetHeightFromFloorMm: product.cabinetHeightFromFloorMm } : {}),
             quantityRequired: product.quantity,
             unitPrice: product.unitPrice,
+            // Guardrail: this item-level cost data supports internal calculations
+            // and operator review only. Customer-facing quote output must not show
+            // internal material cost, product-level pricing, labour, margin, or markup.
             totalPrice: product.quantity * product.unitPrice,
+            // Guardrail: `itemDetails` is an implicit JSON schema. Serialize it
+            // through the typed helpers only so save/resume/PDF remain aligned.
             itemDetails: buildItemDetails(product),
           })),
         })),

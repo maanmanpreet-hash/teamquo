@@ -137,7 +137,12 @@ export const jobs = mysqlTable("jobs", {
     .default("quoting")
     .notNull(),
   stageStatus: varchar("stage_status", { length: 100 }).default("in_progress"),
+  // Guardrail: legacy/ambiguous field name. In current quote workflow this is
+  // used as a stored total for the customer-facing manual Supply & Install price,
+  // not as the internal material cost total.
   totalEstimate: int("total_estimate"),
+  // Guardrail: legacy metadata field. Quote-level structured JSON such as
+  // customer add-ons may be stored here via shared helpers.
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -177,7 +182,10 @@ export const jobItems = mysqlTable("job_items", {
   unitPrice: int("unit_price"), // Price per unit in cents
   totalPrice: int("total_price"), // Total price for this item in cents
   manualPriceOverride: int("manual_price_override"), // Manual override price in cents (if user entered custom price)
-  itemDetails: text("item_details"), // Internal JSON details such as TV size and fixing method. Not shown to customer.
+  // Guardrail: implicit JSON schema for product-specific internal details such
+  // as TV size and fixing method. Parse/serialize through known helpers only.
+  // This data is not customer-facing quote content.
+  itemDetails: text("item_details"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -197,7 +205,9 @@ export const walls = mysqlTable("walls", {
   wallName: varchar("wall_name", { length: 255 }), // e.g., "Living Room", "Garage", "Master Bedroom"
   wallWidthMm: int("wall_width_mm"), // Wall width in millimeters
   wallHeightMm: int("wall_height_mm"), // Wall height in millimeters
-  notes: text("notes"), // Wall-specific notes
+  // Guardrail: wall-level metadata container. This currently carries both wall
+  // obstruction notes and the manual customer-facing Supply & Install price.
+  notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
