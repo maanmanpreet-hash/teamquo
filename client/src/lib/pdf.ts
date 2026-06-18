@@ -8,7 +8,33 @@ export type PdfPreviewPayload = {
   jobId?: number;
 };
 
+function isFullHtmlDocument(html: string) {
+  return /<html[\s>]/i.test(html) || /<!doctype\s+html/i.test(html);
+}
+
+function absolutizeRootRelativeImageSrc(html: string) {
+  return html.replace(/(<img\b[^>]*\bsrc=["'])(\/[^"']*)(["'][^>]*>)/gi, (_, prefix: string, src: string, suffix: string) => {
+    return `${prefix}${window.location.origin}${src}${suffix}`;
+  });
+}
+
+function buildAutoPrintScript(pdfFilename: string) {
+  return `<script>
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      document.title = ${JSON.stringify(pdfFilename)};
+      window.focus();
+      window.print();
+    }, 250);
+  });
+<\/script>`;
+}
+
 function normaliseQuoteHtml(html: string) {
+  if (isFullHtmlDocument(html)) {
+    return absolutizeRootRelativeImageSrc(html);
+  }
+
   const wrapper = document.createElement("div");
   wrapper.innerHTML = html;
 
@@ -28,6 +54,13 @@ function safePdfFilename(filename: string) {
 }
 
 export function buildPrintHtml(content: string, pdfFilename: string, autoPrint = false) {
+  if (isFullHtmlDocument(content)) {
+    if (!autoPrint) return content;
+    return content.includes("</body>")
+      ? content.replace("</body>", `${buildAutoPrintScript(pdfFilename)}</body>`)
+      : `${content}${buildAutoPrintScript(pdfFilename)}`;
+  }
+
   return `<!doctype html>
 <html>
 <head>
@@ -42,15 +75,7 @@ export function buildPrintHtml(content: string, pdfFilename: string, autoPrint =
 </head>
 <body>
 ${content}
-${autoPrint ? `<script>
-  window.addEventListener('load', function () {
-    setTimeout(function () {
-      document.title = ${JSON.stringify(pdfFilename)};
-      window.focus();
-      window.print();
-    }, 250);
-  });
-<\/script>` : ""}
+${autoPrint ? buildAutoPrintScript(pdfFilename) : ""}
 </body>
 </html>`;
 }

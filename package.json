@@ -8,7 +8,7 @@
     "predev": "node scripts/patch-quoteform-save-payload.mjs",
     "dev": "cross-env NODE_ENV=development tsx watch server/_core/index.ts",
     "prebuild": "node scripts/patch-quoteform-save-payload.mjs",
-    "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build": "node scripts/build.mjs",
     "precheck": "node scripts/patch-quoteform-save-payload.mjs",
     "check": "tsc --noEmit",
     "format": "prettier --write .",

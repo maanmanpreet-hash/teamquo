@@ -1,5 +1,8 @@
 import type { ElevationDocument, ElevationPage } from "../elevationScene";
-import type { TvBackdropSetout } from "../tvSetout";
+import {
+  buildTvBackdropInstallerSummary,
+  type TvBackdropSetout,
+} from "../tvSetout";
 import {
   createDocument,
   createHorizontalDimension,
@@ -275,6 +278,7 @@ function buildWallSceneObjects(
 export function createTvWallInstallerElevationDocument(input: TvBackdropSetoutDocumentInput): ElevationDocument {
   const { setout } = input;
   const scene = buildTvWallScene(input);
+  const installerSummary = buildTvBackdropInstallerSummary(setout);
   const cabinetTopAfflMm =
     setout.cabinetTopAfflMm ??
     (setout.cabinetBottomAfflMm !== undefined && setout.cabinetHeightMm !== undefined
@@ -302,53 +306,21 @@ export function createTvWallInstallerElevationDocument(input: TvBackdropSetoutDo
           showInternalObjectWidths: false,
           showCabinetDividers: false,
         }),
+        infoRows: [
+          ...installerSummary.rows,
+          ...installerSummary.notes.map((note: string, index: number) => ({
+            label: `CHECK ${index + 1}`,
+            value: note,
+          })),
+        ],
         railMarks: [
           createRailMark({
-            id: "floor",
-            label: "Floor (AFFL)",
-            valueMm: 0,
-            targetYmm: 0,
-            witnessXmm: scene.wallWidthMm,
-          }),
-          ...(setout.cabinetBottomAfflMm !== undefined
-            ? [createRailMark({
-                id: "cabinet-bottom",
-                label: "Cabinet bottom",
-                valueMm: setout.cabinetBottomAfflMm,
-                targetYmm: setout.cabinetBottomAfflMm,
-                witnessXmm: scene.cabinetLeftMm ?? scene.backdropLeftMm,
-              })]
-            : []),
-          ...(cabinetTopAfflMm !== undefined
-            ? [createRailMark({
-                id: "cabinet-top",
-                label: "Cabinet top",
-                valueMm: cabinetTopAfflMm,
-                targetYmm: cabinetTopAfflMm,
-                witnessXmm: scene.cabinetLeftMm ?? scene.backdropLeftMm,
-              })]
-            : []),
-          createRailMark({
-            id: "backdrop-bottom",
-            label: "Backdrop bottom",
-            valueMm: scene.backdropBottomAfflMm,
-            targetYmm: scene.backdropBottomAfflMm,
-            witnessXmm: scene.backdropLeftMm,
-          }),
-          createRailMark({
-            id: "tv-bottom",
-            label: "TV bottom",
-            valueMm: scene.tvBottomAfflMm,
-            targetYmm: scene.tvBottomAfflMm,
-            witnessXmm: scene.tvLeftMm,
-          }),
-          createRailMark({
-            id: "tv-top",
-            label: "TV top",
-            valueMm: scene.tvTopAfflMm,
-            targetYmm: scene.tvTopAfflMm,
-            witnessXmm: scene.tvLeftMm,
-            guideEndXmm: scene.tvLeftMm,
+            id: "wall-top",
+            label: "Wall top",
+            valueMm: scene.wallHeightMm,
+            targetYmm: scene.wallHeightMm,
+            witnessXmm: 0,
+            guideEndXmm: scene.backdropLeftMm,
           }),
           createRailMark({
             id: "backdrop-top",
@@ -358,18 +330,115 @@ export function createTvWallInstallerElevationDocument(input: TvBackdropSetoutDo
             witnessXmm: scene.backdropLeftMm,
             guideEndXmm: scene.backdropLeftMm,
           }),
+          createRailMark({
+            id: "tv-top",
+            label: "TV top AFFL",
+            valueMm: scene.tvTopAfflMm,
+            targetYmm: scene.tvTopAfflMm,
+            witnessXmm: scene.tvLeftMm,
+            guideEndXmm: scene.tvLeftMm,
+          }),
+          createRailMark({
+            id: "tv-bottom",
+            label: "TV bottom AFFL",
+            valueMm: scene.tvBottomAfflMm,
+            targetYmm: scene.tvBottomAfflMm,
+            witnessXmm: scene.tvLeftMm,
+            guideEndXmm: scene.tvLeftMm,
+          }),
+          createRailMark({
+            id: "backdrop-bottom",
+            label: "Backdrop bottom",
+            valueMm: scene.backdropBottomAfflMm,
+            targetYmm: scene.backdropBottomAfflMm,
+            witnessXmm: scene.backdropLeftMm,
+            guideEndXmm: scene.backdropLeftMm,
+          }),
+          ...(cabinetTopAfflMm !== undefined
+            ? [createRailMark({
+                id: "cabinet-top",
+                label: "Cabinet top",
+                valueMm: cabinetTopAfflMm,
+                targetYmm: cabinetTopAfflMm,
+                witnessXmm: scene.cabinetLeftMm ?? scene.backdropLeftMm,
+                guideEndXmm: scene.cabinetLeftMm ?? scene.backdropLeftMm,
+              })]
+            : []),
+          createRailMark({
+            id: "floor",
+            label: "Floor (AFFL)",
+            valueMm: 0,
+            targetYmm: 0,
+            witnessXmm: scene.wallWidthMm,
+            guideEndXmm: scene.backdropLeftMm,
+          }),
+          ...(setout.cabinetBottomAfflMm !== undefined
+            ? [createRailMark({
+                id: "cabinet-bottom",
+                label: "Cabinet bottom",
+                valueMm: setout.cabinetBottomAfflMm,
+                targetYmm: setout.cabinetBottomAfflMm,
+                witnessXmm: scene.cabinetLeftMm ?? scene.backdropLeftMm,
+                guideEndXmm: scene.cabinetLeftMm ?? scene.backdropLeftMm,
+              })]
+            : []),
         ],
         verticalDimensions: [],
-        horizontalDimensions: [],
+        horizontalDimensions: [
+          createHorizontalDimension({
+            id: "wall-width-install",
+            label: "Wall width",
+            valueMm: scene.wallWidthMm,
+            leftXmm: 0,
+            rightXmm: scene.wallWidthMm,
+            witnessYmm: 0,
+            row: 0,
+            align: "start",
+          }),
+          createHorizontalDimension({
+            id: "backdrop-width-install",
+            label: "Backdrop width",
+            valueMm: scene.backdropWidthMm,
+            leftXmm: scene.backdropLeftMm,
+            rightXmm: scene.backdropRightMm,
+            witnessYmm: 0,
+            row: 1,
+            align: "center",
+          }),
+          createHorizontalDimension({
+            id: "tv-width-install",
+            label: "TV width",
+            valueMm: scene.tvWidthMm,
+            leftXmm: scene.tvLeftMm,
+            rightXmm: scene.tvRightMm,
+            witnessYmm: 0,
+            row: 2,
+            align: "center",
+          }),
+          ...(scene.cabinetLeftMm !== undefined && scene.cabinetRightMm !== undefined && scene.cabinetWidthMm !== undefined
+            ? [createHorizontalDimension({
+                id: "cabinet-width-install",
+                label: "Cabinet width",
+                valueMm: scene.cabinetWidthMm,
+                leftXmm: scene.cabinetLeftMm,
+                rightXmm: scene.cabinetRightMm,
+                witnessYmm: 0,
+                row: 3,
+                align: "center",
+              })]
+            : []),
+        ],
         markList: createMarkList({
           title: "MARK FROM FLOOR",
           rows: [
+            { label: "Wall top", valueMm: scene.wallHeightMm },
+            { label: "Backdrop top", valueMm: scene.backdropTopAfflMm },
+            { label: "TV top AFFL", valueMm: scene.tvTopAfflMm },
+            { label: "TV bottom AFFL", valueMm: scene.tvBottomAfflMm },
+            { label: "Backdrop bottom", valueMm: scene.backdropBottomAfflMm },
             ...(setout.cabinetBottomAfflMm !== undefined ? [{ label: "Cabinet bottom", valueMm: setout.cabinetBottomAfflMm }] : []),
             ...(cabinetTopAfflMm !== undefined ? [{ label: "Cabinet top", valueMm: cabinetTopAfflMm }] : []),
-            { label: "Backdrop bottom", valueMm: scene.backdropBottomAfflMm },
-            { label: "TV bottom", valueMm: scene.tvBottomAfflMm },
-            { label: "TV top", valueMm: scene.tvTopAfflMm },
-            { label: "Backdrop top", valueMm: scene.backdropTopAfflMm },
+            { label: "Floor", valueMm: 0 },
           ],
         }),
       }),

@@ -4,36 +4,22 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft,
-  CheckCircle2,
-  ClipboardList,
   FileWarning,
   Loader2,
-  Pencil,
-  Plus,
   Ruler,
-  Save,
-  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/_core/hooks/useAuth";
-import { MaterialSummaryCard } from "@/components/quote/MaterialSummaryCard";
+import { QuoteClientStep } from "@/components/quote/QuoteClientStep";
+import { QuoteReviewStep } from "@/components/quote/QuoteReviewStep";
+import { QuoteStepNav } from "@/components/quote/QuoteStepNav";
+import { QuoteWallsStep } from "@/components/quote/QuoteWallsStep";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { hasCustomerIdentifier, getCustomerIdentifierError } from "@/lib/customerIdentity";
 import {
   formatDateInput,
-  formatMetres,
-  formatMoney,
 } from "@/lib/quote/formatters";
 import {
   applyItemDetailsToProduct,
@@ -44,9 +30,7 @@ import {
   parseShelfHeightsBySection,
 } from "@/lib/quote/itemDetails";
 import {
-  formatProductHeading,
   panelTypes,
-  productTypeLabels,
   resolveCatalogProductTypeId,
 } from "@/lib/quote/productTypeHelpers";
 import { buildQuoteFormMaterialSummary } from "@/lib/quoteMaterialSummary";
@@ -65,12 +49,10 @@ import type {
   WallWithProducts,
   WorkflowStep,
 } from "@/lib/quote/types";
-import { customItemOptions } from "@/lib/quote/types";
 import {
   decodeWallNotes,
   encodeWallNotes,
   getManualWallSupplyInstallPrice,
-  getWallAssociatedCost,
   hasManualWallSupplyInstallPrice,
 } from "@/lib/quote/wallNotes";
 import { trpc } from "@/lib/trpc";
@@ -84,16 +66,10 @@ import {
   calculatePanelRequirement,
   parseMaterialMetadata,
 } from "@shared/quoteCalculations";
-
-const workflowSteps: Array<{ id: WorkflowStep; title: string; icon: typeof ClipboardList }> = [
-  { id: "client", title: "Client", icon: ClipboardList },
-  { id: "walls", title: "Walls", icon: Ruler },
-  { id: "review", title: "Review", icon: Save },
-];
-
-function formatIncludedProductsSummary(products: WallProduct[]) {
-  return products.map(product => formatProductHeading(product)).join(", ");
-}
+import {
+  DEFAULT_CABINET_TO_TV_GAP_MM,
+  DEFAULT_FLOATING_CABINET_BOTTOM_AFFL_MM,
+} from "@shared/tvSetout";
 
 function fileToBase64(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -174,6 +150,10 @@ function mapSavedWallsToFormWalls(
       }),
     };
   });
+}
+
+function parseMillimetresInput(value: string) {
+  return Number(value.replace(/,/g, "").trim());
 }
 
 export default function QuoteForm() {
@@ -392,7 +372,7 @@ export default function QuoteForm() {
     const cabinetBottomAfflMm =
       floatingCabinet.cabinetHeightFromFloorMm !== undefined
         ? floatingCabinet.cabinetHeightFromFloorMm
-        : undefined;
+        : DEFAULT_FLOATING_CABINET_BOTTOM_AFFL_MM;
     const cabinetHeightMm =
       floatingCabinet.cabinetHeightMm !== undefined ? floatingCabinet.cabinetHeightMm : undefined;
     const cabinetTopAfflMm =
@@ -403,6 +383,7 @@ export default function QuoteForm() {
     setTempCabinetHeightFromFloor(cabinetBottomAfflMm !== undefined ? String(cabinetBottomAfflMm) : "");
     setTempCabinetHeight(cabinetHeightMm !== undefined ? String(cabinetHeightMm) : "");
     setTempCabinetTopAfflMm(cabinetTopAfflMm !== undefined ? String(cabinetTopAfflMm) : "");
+    setTempCabinetToTvGapMm(currentValue => currentValue || String(DEFAULT_CABINET_TO_TV_GAP_MM));
   };
 
   const openProductPicker = (wallId: string) => {
@@ -465,7 +446,7 @@ export default function QuoteForm() {
         const cabinetBottomAfflMm =
           floatingCabinet.cabinetHeightFromFloorMm !== undefined
             ? floatingCabinet.cabinetHeightFromFloorMm
-            : product.cabinetHeightFromFloorMm;
+            : product.cabinetHeightFromFloorMm ?? DEFAULT_FLOATING_CABINET_BOTTOM_AFFL_MM;
         const cabinetHeightMm =
           floatingCabinet.cabinetHeightMm !== undefined ? floatingCabinet.cabinetHeightMm : product.cabinetHeightMm;
         const cabinetTopAfflMm =
@@ -534,10 +515,10 @@ export default function QuoteForm() {
       return;
     }
 
-    const wallWidthMm = Math.round(Number(tempWallWidth) * 1000);
-    const wallHeightMm = Math.round(Number(tempWallHeight) * 1000);
+    const wallWidthMm = Math.round(parseMillimetresInput(tempWallWidth));
+    const wallHeightMm = Math.round(parseMillimetresInput(tempWallHeight));
     if (!Number.isFinite(wallWidthMm) || !Number.isFinite(wallHeightMm) || wallWidthMm <= 0 || wallHeightMm <= 0) {
-      toast.error("Wall dimensions must be valid positive numbers");
+      toast.error("Wall dimensions must be valid positive millimetre values");
       return;
     }
 
@@ -675,6 +656,8 @@ export default function QuoteForm() {
       const cabinetBottomAfflMm =
         floatingCabinet?.cabinetHeightFromFloorMm !== undefined
           ? floatingCabinet.cabinetHeightFromFloorMm
+          : floatingCabinet?.cabinetHeightMm !== undefined
+            ? DEFAULT_FLOATING_CABINET_BOTTOM_AFFL_MM
           : tempCabinetHeightFromFloor !== ""
             ? Number(tempCabinetHeightFromFloor)
             : undefined;
@@ -690,26 +673,16 @@ export default function QuoteForm() {
           : tempCabinetTopAfflMm
             ? Number(tempCabinetTopAfflMm)
             : undefined;
-      const cabinetToTvGapMm = tempCabinetToTvGapMm ? Number(tempCabinetToTvGapMm) : undefined;
+      const cabinetToTvGapMm =
+        floatingCabinet && !tempCabinetToTvGapMm
+          ? DEFAULT_CABINET_TO_TV_GAP_MM
+          : tempCabinetToTvGapMm
+            ? Number(tempCabinetToTvGapMm)
+            : undefined;
       const hasFloatingCabinet =
-        cabinetBottomAfflMm !== undefined &&
-        Number.isFinite(cabinetBottomAfflMm) &&
         cabinetHeightMm !== undefined &&
         Number.isFinite(cabinetHeightMm) &&
         cabinetHeightMm > 0;
-      const hasPreferredCabinetInputs =
-        cabinetBottomAfflMm !== undefined &&
-        Number.isFinite(cabinetBottomAfflMm) &&
-        cabinetBottomAfflMm >= 0 &&
-        Number.isFinite(cabinetHeightMm) &&
-        cabinetHeightMm! > 0 &&
-        Number.isFinite(cabinetToTvGapMm) &&
-        cabinetToTvGapMm! > 0;
-      const hasSecondaryCabinetInputs =
-        Number.isFinite(cabinetTopAfflMm) &&
-        cabinetTopAfflMm! >= 0 &&
-        Number.isFinite(cabinetToTvGapMm) &&
-        cabinetToTvGapMm! > 0;
       if (!Number.isFinite(tvSizeInches) || tvSizeInches <= 0) {
         toast.error("Enter TV size in inches before adding TV Backdrop");
         return;
@@ -718,12 +691,16 @@ export default function QuoteForm() {
         toast.error("Selected marble sheet variant is missing standard dimensions");
         return;
       }
-      if (hasFloatingCabinet && (!Number.isFinite(cabinetToTvGapMm) || cabinetToTvGapMm! <= 0)) {
-        toast.error("Enter cabinet to TV gap before adding TV Backdrop");
+      if (floatingCabinet && (!Number.isFinite(cabinetHeightMm) || cabinetHeightMm! <= 0)) {
+        toast.error("Enter floating cabinet height before adding TV Backdrop");
         return;
       }
-      if (!hasFloatingCabinet && (!tvBottomAfflMm || tvBottomAfflMm < 0)) {
-        toast.error("Enter TV bottom AFFL before adding TV Backdrop");
+      if (tempTvBottomAfflMm && (!Number.isFinite(tvBottomAfflMm) || tvBottomAfflMm! < 0)) {
+        toast.error("Enter a valid TV bottom AFFL before adding TV Backdrop");
+        return;
+      }
+      if (hasFloatingCabinet && (!Number.isFinite(cabinetToTvGapMm) || cabinetToTvGapMm! <= 0)) {
+        toast.error("Enter a valid cabinet to TV gap before adding TV Backdrop");
         return;
       }
       newProduct = {
@@ -791,7 +768,7 @@ export default function QuoteForm() {
               ...currentWall,
               products: editingProductId
                 ? currentWall.products.map(product => (product.id === editingProductId ? newProduct : product))
-                : [...currentWall.products, newProduct],
+                : [newProduct, ...currentWall.products],
             }
           : currentWall
       )
@@ -936,57 +913,41 @@ export default function QuoteForm() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-3 md:p-6">
+    <div className="min-h-screen bg-gray-50 px-3 pb-3 pt-14 md:p-6 md:pt-20">
       <div className="mx-auto max-w-5xl space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
             <Button onClick={() => navigate("/jobs")} disabled={formBusy} variant="ghost" size="icon" className="h-9 w-9">
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-2xl font-bold text-gray-900">Quote</h1>
               <p className="text-xs text-gray-600">Client &gt; Walls &gt; Review</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             {resumeJobId && (
-              <Button onClick={() => navigate(`/setout/${resumeJobId}`)} variant="outline" disabled={formBusy} className="h-9">
+              <Button onClick={() => navigate(`/setout/${resumeJobId}`)} variant="outline" disabled={formBusy} className="h-9 w-full sm:w-auto">
                 <Ruler className="mr-2 h-4 w-4" />
                 View Setout
               </Button>
             )}
-            <Button onClick={() => handleSaveDraft(false)} variant="outline" disabled={formBusy || !hasClientDetails} className="h-9">
+            <Button onClick={() => handleSaveDraft(false)} variant="outline" disabled={formBusy || !hasClientDetails} className="h-9 w-full sm:w-auto">
               {saveInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save Draft
             </Button>
           </div>
         </div>
 
-        <Card className="p-2">
-          <div className="grid grid-cols-3 gap-2">
-            {workflowSteps.map((step, index) => {
-              const Icon = step.icon;
-              const active = currentStep === step.id;
-              const complete = step.id === "client" ? hasClientDetails : step.id === "walls" ? hasWalls && hasProducts : workflowReady;
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  disabled={formBusy}
-                  onClick={() => goToStep(step.id)}
-                  className={`rounded-md border px-2 py-2 text-left text-sm transition ${
-                    active ? "border-blue-500 bg-blue-50" : complete ? "border-green-300 bg-green-50" : "border-gray-200 bg-white"
-                  } ${formBusy ? "cursor-not-allowed opacity-60" : ""}`}
-                >
-                  <div className="flex items-center gap-2">
-                    {complete ? <CheckCircle2 className="h-4 w-4 text-green-700" /> : <Icon className="h-4 w-4 text-blue-700" />}
-                    <span className="font-semibold">{index + 1}. {step.title}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </Card>
+        <QuoteStepNav
+          currentStep={currentStep}
+          formBusy={formBusy}
+          hasClientDetails={hasClientDetails}
+          hasWalls={hasWalls}
+          hasProducts={hasProducts}
+          workflowReady={workflowReady}
+          onStepChange={goToStep}
+        />
 
         {manualReviewItems.length > 0 && currentStep === "review" && (
           <Card className="border-amber-300 bg-amber-50 p-3">
@@ -1007,526 +968,109 @@ export default function QuoteForm() {
         )}
 
         {currentStep === "client" && (
-          <Card className="space-y-4 p-4">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div>
-                <Label htmlFor="clientName">Client Name</Label>
-                <Input id="clientName" value={clientName} onChange={e => setClientName(e.target.value)} placeholder="John Smith" className="mt-1 h-10" />
-              </div>
-              <div>
-                <Label htmlFor="clientPhone">Phone</Label>
-                <Input id="clientPhone" value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="0412 345 678" className="mt-1 h-10" />
-              </div>
-              <div>
-                <Label htmlFor="clientAddress">Address</Label>
-                <Input id="clientAddress" value={clientAddress} onChange={e => setClientAddress(e.target.value)} placeholder="123 Main St" className="mt-1 h-10" />
-              </div>
-              <div>
-                <Label htmlFor="suburb">Suburb</Label>
-                <Select value={suburb} onValueChange={setSuburb}>
-                  <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Select suburb" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Kalkallo">Kalkallo</SelectItem>
-                    <SelectItem value="Donnybrook">Donnybrook</SelectItem>
-                    <SelectItem value="Mickleham">Mickleham</SelectItem>
-                    <SelectItem value="Craigieburn">Craigieburn</SelectItem>
-                    <SelectItem value="Beveridge">Beveridge</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="clientEmail">Email</Label>
-                <Input id="clientEmail" type="email" value={clientEmail} onChange={e => setClientEmail(e.target.value)} placeholder="john@example.com" className="mt-1 h-10" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label htmlFor="appointmentDate">Date</Label>
-                  <Input id="appointmentDate" type="date" value={appointmentDate} onChange={e => setAppointmentDate(e.target.value)} className="mt-1 h-10" />
-                </div>
-                <div>
-                  <Label htmlFor="appointmentTime">Time</Label>
-                  <Select value={appointmentTime} onValueChange={setAppointmentTime}>
-                    <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Time" /></SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 48 }).map((_, i) => {
-                        const hour = Math.floor(i / 2);
-                        const minute = (i % 2) * 30;
-                        const time = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
-                        return <SelectItem key={time} value={time}>{time}</SelectItem>;
-                      })}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t pt-3">
-              <Label>Reference Image</Label>
-              <Input type="file" accept="image/*" onChange={handleImageUpload} disabled={isUploadingImage} className="mt-1 h-10" />
-              {referenceImagePreview && (
-                <div className="relative mt-2 inline-block">
-                  <img src={referenceImagePreview} alt="Reference" className="max-h-32 rounded border-2 border-gray-200" />
-                  <button
-                    type="button"
-                    disabled={formBusy}
-                    onClick={() => {
-                      setReferenceImageUrl("");
-                      setReferenceImagePreview(null);
-                    }}
-                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    x
-                  </button>
-                </div>
-              )}
-            </div>
-
-              <Button onClick={() => goToStep("walls")} disabled={!hasClientDetails || formBusy} className="h-10 w-full">
-              Continue
-            </Button>
-          </Card>
+          <QuoteClientStep
+            clientName={clientName}
+            clientPhone={clientPhone}
+            clientAddress={clientAddress}
+            suburb={suburb}
+            clientEmail={clientEmail}
+            appointmentDate={appointmentDate}
+            appointmentTime={appointmentTime}
+            referenceImagePreview={referenceImagePreview}
+            hasClientDetails={hasClientDetails}
+            formBusy={formBusy}
+            isUploadingImage={isUploadingImage}
+            onClientNameChange={setClientName}
+            onClientPhoneChange={setClientPhone}
+            onClientAddressChange={setClientAddress}
+            onSuburbChange={setSuburb}
+            onClientEmailChange={setClientEmail}
+            onAppointmentDateChange={setAppointmentDate}
+            onAppointmentTimeChange={setAppointmentTime}
+            onImageUpload={handleImageUpload}
+            onClearReferenceImage={() => {
+              setReferenceImageUrl("");
+              setReferenceImagePreview(null);
+            }}
+            onContinue={() => goToStep("walls")}
+          />
         )}
-
         {currentStep === "walls" && (
-          <div className="space-y-4">
-            <Card className="space-y-3 p-4">
-              <h2 className="text-base font-semibold">Add Wall</h2>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
-                <div>
-                  <Label>Type</Label>
-                  <Select value={tempWallType} onValueChange={value => setTempWallType(value as "regular" | "garage" | "custom")}>
-                    <SelectTrigger className="mt-1 h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="custom">TV Wall</SelectItem>
-                      <SelectItem value="regular">Hallway Wall</SelectItem>
-                      <SelectItem value="garage">Garage Wall</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="wallName">Wall Name *</Label>
-                  <Input id="wallName" value={tempWallName} onChange={e => setTempWallName(e.target.value)} placeholder="Living Room" className="mt-1 h-10" />
-                </div>
-                <div>
-                  <Label htmlFor="wallWidth">Width m *</Label>
-                  <Input id="wallWidth" type="number" step="0.01" value={tempWallWidth} onChange={e => setTempWallWidth(e.target.value)} placeholder="3.80" className="mt-1 h-10" />
-                </div>
-                <div>
-                  <Label htmlFor="wallHeight">Height m *</Label>
-                  <Input id="wallHeight" type="number" step="0.01" value={tempWallHeight} onChange={e => setTempWallHeight(e.target.value)} placeholder="2.60" className="mt-1 h-10" />
-                </div>
-              </div>
-              <Button onClick={handleAddWall} disabled={formBusy} className="h-10 w-full md:w-auto"><Plus className="mr-2 h-4 w-4" />Add Wall</Button>
-            </Card>
-
-            {wallsWithProducts.map(wall => {
-              const isProductPickerOpen = activeProductWallId === wall.id;
-
-              return (
-                <Card key={wall.id} className="space-y-3 p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="font-semibold">{wall.wallName}</h3>
-                      <p className="text-sm text-gray-600">{formatMetres(wall.wallWidthMm)} x {formatMetres(wall.wallHeightMm)}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {!isProductPickerOpen && (
-                        <Button onClick={() => openProductPicker(wall.id)} disabled={formBusy} variant="outline" size="sm" className="h-8">
-                          <Plus className="mr-1 h-3 w-3" />Product
-                        </Button>
-                      )}
-                      <Button onClick={() => handleDeleteWall(wall.id)} disabled={formBusy} variant="ghost" size="sm" className="text-red-600 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 p-3 text-sm text-slate-600">
-                    Select the products and scope for this wall first. You’ll set the final manual Supply & Install price in the review step after the associated cost is calculated.
-                  </div>
-
-                  {wall.products.length > 0 && (
-                    <div className="space-y-2 border-t pt-3">
-                      {wall.products.map(product => (
-                        <div key={product.id} className="rounded-lg bg-gray-50 p-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-medium">{formatProductHeading(product)}</p>
-                              <p className="text-sm text-gray-600">Qty {product.quantity} x {formatMoney(product.unitPrice)} = {formatMoney(product.quantity * product.unitPrice)}</p>
-                              {product.productType === "tv_backdrop" && product.catalogProductName && (
-                                <p className="text-xs text-gray-600">Marble sheet: {product.catalogProductName}</p>
-                              )}
-                              {product.productType === "tv_backdrop" && product.tvSizeInches && <p className="text-xs text-gray-600">TV size: {product.tvSizeInches}&quot;</p>}
-                              {product.productType === "tv_backdrop" && product.backdropWidthMm && product.backdropHeightMm && (
-                                <p className="text-xs text-gray-600">
-                                  Backdrop: {product.backdropWidthMm} x {product.backdropHeightMm} mm
-                                </p>
-                              )}
-                              {product.productType === "tv_backdrop" && product.tvBottomAfflMm && (
-                                <p className="text-xs text-gray-600">TV bottom AFFL: {product.tvBottomAfflMm} mm</p>
-                              )}
-                              {product.productType === "tv_backdrop" && product.cabinetHeightFromFloorMm !== undefined && product.cabinetHeightMm && (
-                                <p className="text-xs text-gray-600">
-                                  Cabinet bottom AFFL: {product.cabinetHeightFromFloorMm} mm, height: {product.cabinetHeightMm} mm
-                                </p>
-                              )}
-                              {["floating_cabinet", "side_tower", "shelving"].includes(product.productType) &&
-                                product.cabinetWidthMm &&
-                                product.cabinetHeightMm &&
-                                product.cabinetDepthMm && (
-                                  <p className="text-xs text-gray-600">
-                                    Size: {product.cabinetWidthMm} W x {product.cabinetHeightMm} H x {product.cabinetDepthMm} D mm
-                                  </p>
-                                )}
-                              {["floating_cabinet", "side_tower", "shelving"].includes(product.productType) &&
-                                product.cabinetHeightFromFloorMm !== undefined && (
-                                  <p className="text-xs text-gray-600">
-                                    From floor: {product.cabinetHeightFromFloorMm} mm
-                                  </p>
-                                )}
-                              {["floating_cabinet", "side_tower", "shelving"].includes(product.productType) &&
-                                product.cabinetSectionWidthsMm?.length && (
-                                  <p className="text-xs text-gray-600">
-                                    Sections: {formatPositiveNumberList(product.cabinetSectionWidthsMm)} mm
-                                  </p>
-                                )}
-                              {["floating_cabinet", "side_tower", "shelving"].includes(product.productType) &&
-                                product.cabinetShelfHeightsBySectionMm?.length && (
-                                  <p className="text-xs text-gray-600">
-                                    Shelves by section: {formatShelfHeightsBySection(product.cabinetShelfHeightsBySectionMm)} mm
-                                  </p>
-                                )}
-                              {product.productType === "floating_cabinet" && product.clientPreferenceNotes && (
-                                <p className="text-xs text-gray-600">Client preference: {product.clientPreferenceNotes}</p>
-                              )}
-                              {product.productType === "tv_backdrop" && product.cabinetTopAfflMm && product.cabinetToTvGapMm && (
-                                <p className="text-xs text-gray-600">
-                                  Cabinet top AFFL: {product.cabinetTopAfflMm} mm, gap: {product.cabinetToTvGapMm} mm
-                                </p>
-                              )}
-                              {product.productType === "tv_backdrop" && product.includeTvBracket && <p className="text-xs text-gray-600">TV bracket: included internally</p>}
-                              {product.productType === "acoustic_panel" && product.acousticFixingMethod && product.acousticFixingMethod !== "none" && <p className="text-xs text-gray-600">Fixing: {product.acousticFixingMethod.replace(/_/g, " ")}</p>}
-                              {product.manualReviewRequired && <p className="text-xs font-semibold text-amber-700">Manual review required</p>}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                onClick={() => openProductEditor(wall.id, product)}
-                                disabled={formBusy}
-                                variant="ghost"
-                                size="sm"
-                                className="text-gray-600"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button onClick={() => handleRemoveProduct(wall.id, product.id)} disabled={formBusy} variant="ghost" size="sm" className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {wall.products.length === 0 && !isProductPickerOpen && (
-                    <div className="rounded-lg border border-dashed p-3 text-sm text-gray-500">
-                      No products added yet. Use Product to add one to this wall.
-                    </div>
-                  )}
-
-                  {isProductPickerOpen && (
-                    <div className="space-y-3 rounded-lg border bg-blue-50/40 p-3">
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                        <div>
-                          <Label>Product Type *</Label>
-                          <Select
-                            value={tempProductType || ""}
-                            onValueChange={value => handleProductTypeChange(value as ProductTypeSlug)}
-                          >
-                            <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Select type" /></SelectTrigger>
-                            <SelectContent>
-                              {Object.entries(productTypeLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {tempProductType && !["floating_cabinet", "custom_item"].includes(tempProductType) && (
-                          <div>
-                            <Label>{tempProductType === "tv_backdrop" ? "Marble Sheet Variant *" : "Product *"}</Label>
-                            <Select value={tempProductId} onValueChange={setTempProductId}>
-                              <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Select product" /></SelectTrigger>
-                              <SelectContent>
-                                {productsByType?.map((product: any) => {
-                                  const metadata = parseMaterialMetadata(product.description);
-                                  return (
-                                    <SelectItem key={product.id} value={product.id.toString()}>
-                                      {product.name} - {formatMoney(product.pricePerUnit)}{metadata.wastagePercent !== undefined ? ` - ${metadata.wastagePercent}% wastage` : ""}
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-                        {tempProductType === "custom_item" && (
-                          <div>
-                            <Label>Custom Item *</Label>
-                            <Select value={tempCustomItemType} onValueChange={value => setTempCustomItemType(value as CustomItemOption)}>
-                              <SelectTrigger className="mt-1 h-10"><SelectValue placeholder="Select custom item" /></SelectTrigger>
-                              <SelectContent>
-                                {customItemOptions.map(option => (
-                                  <SelectItem key={option} value={option}>
-                                    {option}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-                        <div className="flex items-end gap-2">
-                          <Button onClick={() => handleAddProductToWall(wall.id)} disabled={formBusy} className="h-10 flex-1">
-                            {editingProductId ? <Save className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}
-                            {editingProductId ? "Save" : "Add"}
-                          </Button>
-                          <Button onClick={closeProductPicker} disabled={formBusy} type="button" variant="outline" className="h-10">Cancel</Button>
-                        </div>
-                      </div>
-
-                      {(["floating_cabinet", "side_tower", "shelving"].includes(tempProductType || "")) && (
-                        <div className="space-y-3 rounded-lg border bg-white p-3">
-                          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                            <div>
-                              <Label htmlFor="customWidthMm">Width mm *</Label>
-                              <Input id="customWidthMm" type="number" value={tempCabinetWidth} onChange={e => setTempCabinetWidth(e.target.value)} placeholder="2100" className="mt-1 h-10" />
-                            </div>
-                            <div>
-                              <Label htmlFor="customHeightMm">Height mm *</Label>
-                              <Input id="customHeightMm" type="number" value={tempCabinetHeight} onChange={e => setTempCabinetHeight(e.target.value)} placeholder="450" className="mt-1 h-10" />
-                            </div>
-                            <div>
-                              <Label htmlFor="customDepthMm">Depth mm *</Label>
-                              <Input id="customDepthMm" type="number" value={tempCabinetDepth} onChange={e => setTempCabinetDepth(e.target.value)} placeholder="360" className="mt-1 h-10" />
-                            </div>
-                            <div>
-                              <Label htmlFor="customAfflMm">Bottom from floor mm</Label>
-                              <Input id="customAfflMm" type="number" value={tempCabinetHeightFromFloor} onChange={e => setTempCabinetHeightFromFloor(e.target.value)} placeholder="0" className="mt-1 h-10" />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                            <div>
-                              <Label htmlFor="cabinetSectionWidths">Section widths mm</Label>
-                              <Input
-                                id="cabinetSectionWidths"
-                                value={tempCabinetSectionWidths}
-                                onChange={e => setTempCabinetSectionWidths(e.target.value)}
-                                placeholder="700, 700, 700"
-                                className="mt-1 h-10"
-                              />
-                              <p className="mt-1 text-xs text-gray-500">
-                                Optional. Comma-separated widths that add up to the overall cabinet width.
-                              </p>
-                            </div>
-                            <div>
-                              <Label htmlFor="cabinetShelfHeights">Shelf heights by section mm</Label>
-                              <Input
-                                id="cabinetShelfHeights"
-                                value={tempCabinetShelfHeightsBySection}
-                                onChange={e => setTempCabinetShelfHeightsBySection(e.target.value)}
-                                placeholder="230 | 230, 460 |"
-                                className="mt-1 h-10"
-                              />
-                              <p className="mt-1 text-xs text-gray-500">
-                                Optional. Use `|` between sections and commas within each section.
-                              </p>
-                            </div>
-                          </div>
-                          {tempProductType === "floating_cabinet" && (
-                            <div>
-                              <Label htmlFor="floatingCabinetNotes">Client preference notes</Label>
-                              <textarea
-                                id="floatingCabinetNotes"
-                                value={tempClientPreferenceNotes}
-                                onChange={e => setTempClientPreferenceNotes(e.target.value)}
-                                placeholder="Optional finish, handle, profile, colour, or other client preference"
-                                className="mt-1 min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {tempProductType === "tv_backdrop" && (
-                        <div className="space-y-3 rounded-lg border bg-white p-3">
-                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                            <div>
-                              <Label>TV Size inches *</Label>
-                              <Input
-                                type="number"
-                                value={tempTvSizeInches}
-                                onChange={e => setTempTvSizeInches(e.target.value)}
-                                placeholder="75"
-                                className="mt-1 h-10"
-                              />
-                            </div>
-                            {!activeWallFloatingCabinet && (
-                              <div>
-                              <Label>TV Bottom AFFL mm *</Label>
-                              <Input
-                                type="number"
-                                value={tempTvBottomAfflMm}
-                                onChange={e => setTempTvBottomAfflMm(e.target.value)}
-                                placeholder="700"
-                                className="mt-1 h-10"
-                              />
-                              </div>
-                            )}
-                          </div>
-                          {selectedBackdropDimensions && (
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                              <div>
-                                <Label>Applied Sheet Width mm</Label>
-                                <Input
-                                  value={String(selectedBackdropDimensions.backdropWidthMm)}
-                                  readOnly
-                                  className="mt-1 h-10 bg-gray-50"
-                                />
-                              </div>
-                              <div>
-                                <Label>Applied Sheet Height mm</Label>
-                                <Input
-                                  value={String(selectedBackdropDimensions.backdropHeightMm)}
-                                  readOnly
-                                  className="mt-1 h-10 bg-gray-50"
-                                />
-                              </div>
-                            </div>
-                          )}
-                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                            <div>
-                              <Label>Cabinet to TV Gap mm</Label>
-                            <Input
-                              type="number"
-                              value={tempCabinetToTvGapMm}
-                              onChange={e => setTempCabinetToTvGapMm(e.target.value)}
-                              placeholder="250"
-                              className="mt-1 h-10"
-                            />
-                          </div>
-                          </div>
-                          <label className="flex items-center gap-2 text-sm text-gray-700">
-                            <input
-                              type="checkbox"
-                              checked={tempIncludeTvBracket}
-                              onChange={event => setTempIncludeTvBracket(event.target.checked)}
-                              className="h-4 w-4 rounded border-gray-300"
-                            />
-                            TV Bracket
-                          </label>
-                        </div>
-                      )}
-
-                      {tempProductType === "acoustic_panel" && (
-                        <div className="rounded-lg border bg-white p-3">
-                          <Label>Fixing Method</Label>
-                          <Select value={tempAcousticFixingMethod} onValueChange={value => setTempAcousticFixingMethod(value as AcousticFixingMethod)}>
-                            <SelectTrigger className="mt-1 h-10"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">None</SelectItem>
-                              <SelectItem value="screws">Screws</SelectItem>
-                              <SelectItem value="glue">Glue</SelectItem>
-                              <SelectItem value="screws_and_glue">Screws + Glue</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-
-            <Button onClick={() => goToStep("review")} disabled={!reviewReady || formBusy} className="h-10 w-full">Review Quote</Button>
-          </div>
+          <QuoteWallsStep
+            tempWallType={tempWallType}
+            tempWallName={tempWallName}
+            tempWallWidth={tempWallWidth}
+            tempWallHeight={tempWallHeight}
+            formBusy={formBusy}
+            wallsWithProducts={wallsWithProducts}
+            activeProductWallId={activeProductWallId}
+            editingProductId={editingProductId}
+            tempProductType={tempProductType}
+            tempProductId={tempProductId}
+            tempCustomItemType={tempCustomItemType}
+            productsByType={productsByType}
+            activeWallFloatingCabinet={activeWallFloatingCabinet}
+            selectedBackdropDimensions={selectedBackdropDimensions}
+            tempCabinetWidth={tempCabinetWidth}
+            tempCabinetHeight={tempCabinetHeight}
+            tempCabinetDepth={tempCabinetDepth}
+            tempCabinetHeightFromFloor={tempCabinetHeightFromFloor}
+            tempCabinetSectionWidths={tempCabinetSectionWidths}
+            tempCabinetShelfHeightsBySection={tempCabinetShelfHeightsBySection}
+            tempClientPreferenceNotes={tempClientPreferenceNotes}
+            tempTvSizeInches={tempTvSizeInches}
+            tempTvBottomAfflMm={tempTvBottomAfflMm}
+            tempCabinetToTvGapMm={tempCabinetToTvGapMm}
+            tempIncludeTvBracket={tempIncludeTvBracket}
+            tempAcousticFixingMethod={tempAcousticFixingMethod}
+            reviewReady={reviewReady}
+            onTempWallTypeChange={setTempWallType}
+            onTempWallNameChange={setTempWallName}
+            onTempWallWidthChange={setTempWallWidth}
+            onTempWallHeightChange={setTempWallHeight}
+            onAddWall={handleAddWall}
+            onOpenProductPicker={openProductPicker}
+            onDeleteWall={handleDeleteWall}
+            onEditProduct={openProductEditor}
+            onRemoveProduct={handleRemoveProduct}
+            onProductTypeChange={handleProductTypeChange}
+            onProductIdChange={setTempProductId}
+            onCustomItemTypeChange={value => setTempCustomItemType(value)}
+            onSubmitProduct={handleAddProductToWall}
+            onCloseProductPicker={closeProductPicker}
+            onTempCabinetWidthChange={setTempCabinetWidth}
+            onTempCabinetHeightChange={setTempCabinetHeight}
+            onTempCabinetDepthChange={setTempCabinetDepth}
+            onTempCabinetHeightFromFloorChange={setTempCabinetHeightFromFloor}
+            onTempCabinetSectionWidthsChange={setTempCabinetSectionWidths}
+            onTempCabinetShelfHeightsBySectionChange={setTempCabinetShelfHeightsBySection}
+            onTempClientPreferenceNotesChange={setTempClientPreferenceNotes}
+            onTempTvSizeInchesChange={setTempTvSizeInches}
+            onTempTvBottomAfflMmChange={setTempTvBottomAfflMm}
+            onTempCabinetToTvGapMmChange={setTempCabinetToTvGapMm}
+            onTempIncludeTvBracketChange={setTempIncludeTvBracket}
+            onTempAcousticFixingMethodChange={setTempAcousticFixingMethod}
+            onReview={() => goToStep("review")}
+          />
         )}
 
         {currentStep === "review" && (
-          <div className="space-y-4">
-            <Card className="space-y-4 p-4">
-              <h2 className="text-lg font-semibold">Review & Finalise Quote</h2>
-              <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
-                <div>Client: <span className="font-medium">{clientName || "Not provided"}</span></div>
-                <div>Phone: <span className="font-medium">{clientPhone || "Not provided"}</span></div>
-                <div>Email: <span className="font-medium">{clientEmail || "Not provided"}</span></div>
-                <div>Address: <span className="font-medium">{clientAddress || "Not provided"}</span></div>
-                <div>Suburb: <span className="font-medium">{suburb || "Not provided"}</span></div>
-              </div>
-
-              <div className="space-y-3">
-                {wallsWithProducts.map(wall => (
-                  <div key={wall.id} className="rounded-lg border p-3">
-                    <h4 className="font-semibold">{wall.wallName} ({formatMetres(wall.wallWidthMm)} x {formatMetres(wall.wallHeightMm)})</h4>
-                    <div className="mt-3 space-y-2 text-sm">
-                      <div>
-                        <p className="font-medium text-slate-900">Included products</p>
-                        <p className="text-slate-600">{formatIncludedProductsSummary(wall.products)}</p>
-                      </div>
-                      <div>
-                        <p className="font-medium text-slate-900">Associated cost</p>
-                        <p className="text-slate-600">{formatMoney(getWallAssociatedCost(wall))}</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[1fr,220px] md:items-end">
-                      <div className="text-sm text-gray-600">
-                        Enter the final customer-facing Supply & Install price after reviewing the wall scope and associated cost.
-                      </div>
-                      <div>
-                        <Label>Manual Supply & Install Price</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={wall.supplyInstallPrice ? (wall.supplyInstallPrice / 100).toFixed(2) : ""}
-                          onChange={e => updateWallSupplyInstallPrice(wall.id, e.target.value)}
-                          placeholder={(getWallAssociatedCost(wall) / 100).toFixed(2)}
-                          className="mt-1 h-10"
-                        />
-                      </div>
-                    </div>
-                    {!hasManualWallSupplyInstallPrice(wall) ? (
-                      <p className="mt-3 text-sm font-medium text-amber-700">
-                        Manual Supply & Install price still required before generating the customer quote.
-                      </p>
-                    ) : (
-                      <div className="mt-3 text-right text-sm font-semibold">
-                        Final wall price: {formatMoney(wall.supplyInstallPrice)}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {manualReviewItems.length > 0 && (
-                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                  <p className="font-medium">Manual review flags</p>
-                  <ul className="mt-1 list-disc pl-5">
-                    {manualReviewItems.map(({ wall, product }) => <li key={`${wall.id}-${product.id}`}>{wall.wallName} - {formatProductHeading(product)}</li>)}
-                  </ul>
-                </div>
-              )}
-
-              <div className="text-right"><p className="text-2xl font-bold">Supply and Install Total Estimate: {formatMoney(calculateTotal())}</p></div>
-                          <Button onClick={() => handleSaveDraft(true, "jobs")} className="h-10 w-full" disabled={saveInProgress || !workflowReady}>
-                            {saveInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Save Quote
-                          </Button>
-                          <Button
-                            onClick={() => handleSaveDraft(true, "setout")}
-                            variant="outline"
-                            className="h-10 w-full"
-                            disabled={saveInProgress || !workflowReady}
-                          >
-                            {saveInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Save + View Setout
-                          </Button>
-            </Card>
-
-            <MaterialSummaryCard summary={materialSummary} />
-          </div>
+          <QuoteReviewStep
+            clientName={clientName}
+            clientPhone={clientPhone}
+            clientEmail={clientEmail}
+            clientAddress={clientAddress}
+            suburb={suburb}
+            wallsWithProducts={wallsWithProducts}
+            manualReviewItems={manualReviewItems}
+            saveInProgress={saveInProgress}
+            workflowReady={workflowReady}
+            calculateTotal={calculateTotal}
+            materialSummary={materialSummary}
+            onUpdateWallSupplyInstallPrice={updateWallSupplyInstallPrice}
+            onSaveQuote={() => handleSaveDraft(true, "jobs")}
+            onSaveAndViewSetout={() => handleSaveDraft(true, "setout")}
+          />
         )}
       </div>
     </div>

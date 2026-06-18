@@ -341,9 +341,10 @@ function createTvInstallerAfflPagePlan(page: ElevationPage, document: ElevationD
   const canvasHeight = 794;
   const sheetMargin = 28;
   const titleBandHeight = 56;
-  const leftColumnWidth = 170;
+  const leftColumnWidth = 198;
+  const summaryWidth = 324;
   const drawingLeft = sheetMargin + leftColumnWidth;
-  const drawingRight = canvasWidth - sheetMargin - 28;
+  const drawingRight = canvasWidth - sheetMargin - summaryWidth;
   const drawingTop = sheetMargin + titleBandHeight + 16;
   const floorY = canvasHeight - sheetMargin - 178;
   const drawingBottom = floorY;
@@ -376,7 +377,52 @@ function createTvInstallerAfflPagePlan(page: ElevationPage, document: ElevationD
   pushText(shapes, canvasWidth - sheetMargin - 180, sheetMargin + 12, document.metaRightTop || "Scale to fit A4 landscape", { fontSize: 11, fontWeight: 700, fill: "#334155", width: 180, align: "right" });
   pushText(shapes, canvasWidth - sheetMargin - 180, sheetMargin + 30, document.metaRightBottom || "", { fontSize: 11, fill: "#475569", width: 180, align: "right" });
   pushText(shapes, sheetMargin + 18, drawingTop + 4, "INSTALL HEIGHTS", { fontSize: 15, fontWeight: 700, fill: "#0f172a" });
-  pushText(shapes, sheetMargin + 18, drawingTop + 24, "Mark these levels from floor before fixing backdrop.", { fontSize: 10, fill: "#64748b", width: leftColumnWidth - 20 });
+  pushText(shapes, sheetMargin + 18, drawingTop + 24, "Mark these AFFL levels from floor before fixing backdrop or cabinet elements.", { fontSize: 10, fill: "#475569", width: leftColumnWidth - 20 });
+
+  if (page.infoRows?.length) {
+    const summaryX = drawingRight + 16;
+    const summaryY = drawingTop - 4;
+    const summaryHeight = Math.min(286, 42 + page.infoRows.length * 18);
+    const summaryLabelWidth = 116;
+    const summaryValueWidth = summaryWidth - 36 - summaryLabelWidth;
+    shapes.push({
+      kind: "rect",
+      x: summaryX,
+      y: summaryY,
+      width: summaryWidth - 16,
+      height: summaryHeight,
+      fill: "#f8fafc",
+      stroke: "#cbd5e1",
+      strokeWidth: 1.2,
+      radius: 8,
+    });
+    pushText(shapes, summaryX + 12, summaryY + 18, "SETOUT SUMMARY", {
+      fontSize: 12,
+      fontWeight: 700,
+      fill: "#0f172a",
+    });
+    page.infoRows.forEach((row, index) => {
+      const rowY = summaryY + 38 + index * 18;
+      shapes.push({
+        kind: "line",
+        points: [summaryX + 12, rowY + 10, summaryX + summaryWidth - 28, rowY + 10],
+        stroke: "#e2e8f0",
+        strokeWidth: 1,
+      });
+      pushText(shapes, summaryX + 12, rowY, `${row.label}:`, {
+        fontSize: 10,
+        fontWeight: 700,
+        fill: "#334155",
+        width: summaryLabelWidth,
+      });
+      pushText(shapes, summaryX + 12 + summaryLabelWidth, rowY, row.value, {
+        fontSize: 10,
+        fontWeight: row.label.startsWith("CHECK") ? 700 : 500,
+        fill: row.label.startsWith("CHECK") ? "#991b1b" : "#0f172a",
+        width: summaryValueWidth,
+      });
+    });
+  }
 
   page.objects
     .filter(object => object.kind !== "text" || !["centre-line-label", "wall-top-label"].includes(object.id))
@@ -387,19 +433,14 @@ function createTvInstallerAfflPagePlan(page: ElevationPage, document: ElevationD
   if (page.railMarks?.length) {
     const railX = drawingLeft - 36;
     const leftLabelX = sheetMargin + 14;
-    const rightGuideX = drawingRight - 8;
-    const rightLabelX = rightGuideX + 14;
     const topY = drawingTop + 82;
     const bottomY = floorY - 12;
     const sortedMarks = [...page.railMarks]
       .map(mark => ({ mark, targetY: toPageY(bounds, mark.targetYmm) }))
       .sort((left, right) => left.targetY - right.targetY);
-    const leftMarks = sortedMarks.filter(entry => ["backdrop-top", "backdrop-bottom", "floor"].includes(entry.mark.id));
-    const rightMarks = sortedMarks.filter(entry => !["backdrop-top", "backdrop-bottom", "floor"].includes(entry.mark.id));
-    const leftDistributedYs = distributeRailLabelYs(leftMarks.map(entry => entry.targetY), topY, bottomY, 52);
-
-    leftMarks.forEach((entry, index) => {
-      const labelY = leftDistributedYs[index];
+    const distributedYs = distributeRailLabelYs(sortedMarks.map(entry => entry.targetY), topY, bottomY, 42);
+    sortedMarks.forEach((entry, index) => {
+      const labelY = distributedYs[index];
       const targetY = entry.targetY;
       const guideEndX = entry.mark.guideEndXmm !== undefined
         ? toPageX(bounds, entry.mark.guideEndXmm)
@@ -408,7 +449,7 @@ function createTvInstallerAfflPagePlan(page: ElevationPage, document: ElevationD
 
       shapes.push(
         { kind: "line", points: [railX - 6, targetY, railX + 10, targetY], stroke: "#334155", strokeWidth: 1.5 },
-        { kind: "line", points: [railX + 10, targetY, guideEndX, targetY], stroke: "#94a3b8", strokeWidth: 1.2, strokeOpacity: 0.95 },
+        { kind: "line", points: [railX + 10, targetY, guideEndX, targetY], stroke: "#64748b", strokeWidth: 1.25, strokeOpacity: 0.95 },
         { kind: "circle", x: railX, y: targetY, radius: 3.6, fill: "#1d4ed8" }
       );
       shapes.push({
@@ -420,45 +461,45 @@ function createTvInstallerAfflPagePlan(page: ElevationPage, document: ElevationD
         fill: "#ffffff",
       });
       pushText(shapes, leftLabelX, labelY - 13, entry.mark.label, {
-        fontSize: 10,
+        fontSize: 10.5,
         fontWeight: 700,
         fill: "#0f172a",
         width: labelBoxWidth - 10,
         align: "right",
       });
       pushText(shapes, leftLabelX, labelY + 3, formatMm(entry.mark.valueMm), {
-        fontSize: 12,
+        fontSize: 12.5,
         fontWeight: 700,
         fill: "#1d4ed8",
         width: labelBoxWidth - 10,
         align: "right",
       });
     });
+  }
 
-    rightMarks.forEach(entry => {
-      const targetY = entry.targetY;
-      const label = entry.mark.label.replace(" bottom", "").replace(" top", "") === "TV" ? entry.mark.label : entry.mark.label;
-      const guideStartX = entry.mark.guideEndXmm !== undefined
-        ? toPageX(bounds, entry.mark.guideEndXmm)
-        : toPageX(bounds, entry.mark.witnessXmm);
-      shapes.push(
-        { kind: "line", points: [guideStartX, targetY, rightGuideX, targetY], stroke: "#64748b", strokeWidth: 1.2, strokeOpacity: 0.95 },
-        { kind: "line", points: [rightGuideX - 8, targetY, rightGuideX + 8, targetY], stroke: "#334155", strokeWidth: 1.4 },
-        { kind: "circle", x: rightGuideX, y: targetY, radius: 3.6, fill: "#1d4ed8" }
-      );
-      pushText(shapes, rightLabelX, targetY - 13, entry.mark.label, {
-        fontSize: 10,
+  if (page.horizontalDimensions?.length) {
+    const boxTop = canvasHeight - sheetMargin - 164;
+    const width = canvasWidth - sheetMargin * 2;
+    shapes.push({
+      kind: "rect",
+      x: sheetMargin,
+      y: boxTop,
+      width,
+      height: 48,
+      fill: "#ffffff",
+      stroke: "#cbd5e1",
+      strokeWidth: 1,
+    });
+    pushText(shapes, sheetMargin + 18, boxTop + 16, "WIDTH CHECKS", { fontSize: 12, fontWeight: 700, fill: "#0f172a" });
+    page.horizontalDimensions.forEach((dimension, index) => {
+      const columnWidth = (width - 36) / page.horizontalDimensions!.length;
+      const columnX = sheetMargin + 18 + index * columnWidth;
+      pushText(shapes, columnX, boxTop + 34, `${dimension.label}: ${formatMm(dimension.valueMm)}`, {
+        fontSize: 10.5,
         fontWeight: 700,
-        fill: "#0f172a",
-        width: 120,
-        align: "left",
-      });
-      pushText(shapes, rightLabelX, targetY + 3, formatMm(entry.mark.valueMm), {
-        fontSize: 12,
-        fontWeight: 700,
-        fill: "#1d4ed8",
-        width: 120,
-        align: "left",
+        fill: "#1f2937",
+        width: columnWidth - 8,
+        align: index === 0 ? "left" : "center",
       });
     });
   }

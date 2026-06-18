@@ -25,7 +25,7 @@ describe("generateTvBackdropSetoutHtml", () => {
     expect(html).toContain("MARK FROM FLOOR");
     expect(html).toContain("Cabinet bottom");
     expect(html).toContain("0 mm");
-    expect(html).toContain("TV bottom");
+    expect(html).toContain("TV bottom AFFL");
     expect(html).toContain("700 mm");
     expect(html).toContain("Backdrop");
     expect(html).not.toContain("Widths");
