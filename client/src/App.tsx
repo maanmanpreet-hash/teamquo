@@ -3,7 +3,6 @@ import { Loader2 } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
-import { AppBrandMark } from "./components/AppBrandMark";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { QuotePageDraftSafety } from "./components/QuotePageDraftSafety";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -51,7 +50,6 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
-          <AppBrandMark />
           <QuotePageDraftSafety />
           <Toaster />
           <Router />

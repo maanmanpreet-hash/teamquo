@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import fs from "fs";
+import path from "path";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
@@ -192,6 +194,48 @@ describe("Jobs Procedures", () => {
         itemDetails: JSON.stringify({ tvSizeInches: 75, includeTvBracket: true }),
       })
     );
+  });
+
+  it("should persist preview-mode quotes to disk", async () => {
+    const previewStorePath = path.join(process.cwd(), ".preview-quotes.test.json");
+    fs.rmSync(previewStorePath, { force: true });
+    process.env.PREVIEW_STORE_PATH = previewStorePath;
+
+    const ctx = createAuthContext(178);
+    const caller = appRouter.createCaller(ctx);
+
+    const saved = await caller.jobs.saveQuote({
+      clientName: "Persistent Client",
+      totalEstimate: 123400,
+      walls: [
+        {
+          wallType: "custom",
+          wallName: "Persistent Wall",
+          wallWidthMm: 3200,
+          wallHeightMm: 2400,
+          products: [
+            {
+              itemType: "mirror",
+              productId: 401,
+              quantityRequired: 1,
+              unitPrice: 35000,
+              totalPrice: 35000,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(saved?.id).toBeTruthy();
+    expect(fs.existsSync(previewStorePath)).toBe(true);
+
+    const persisted = JSON.parse(fs.readFileSync(previewStorePath, "utf8"));
+    expect(persisted.jobs.some((job: any) => job.id === saved?.id && job.clientName === "Persistent Client")).toBe(true);
+    expect(persisted.walls.some((wall: any) => wall.jobId === saved?.id && wall.wallName === "Persistent Wall")).toBe(true);
+    expect(persisted.jobItems.some((item: any) => item.jobId === saved?.id && item.itemType === "mirror")).toBe(true);
+
+    fs.rmSync(previewStorePath, { force: true });
+    delete process.env.PREVIEW_STORE_PATH;
   });
 
   it("should persist client details and tv backdrop details through save and reload", async () => {
@@ -395,12 +439,65 @@ describe("Job Items Procedures", () => {
     const ctx = createAuthContext(1);
     const caller = appRouter.createCaller(ctx);
 
-    const result = await caller.jobItems.generateMaterialList({ jobId: 9001 });
+    const saved = await caller.jobs.saveQuote({
+      clientName: "Example Test Client",
+      clientAddress: "123 Preview Street",
+      operatorName: "Manpreet",
+      totalEstimate: 52500,
+      walls: [
+        {
+          wallType: "custom",
+          wallName: "Living Room TV Wall",
+          wallWidthMm: 3800,
+          wallHeightMm: 2600,
+          notes: JSON.stringify({ obstructionStatus: "none", obstructionNotes: "" }),
+          products: [
+            {
+              itemType: "acoustic_panel",
+              productId: 201,
+              wallWidthMm: 3800,
+              wallHeightMm: 2600,
+              quantityRequired: 7,
+              unitPrice: 7500,
+              totalPrice: 52500,
+              itemDetails: JSON.stringify({ fixingMethod: "none" }),
+            },
+            {
+              itemType: "tv_backdrop",
+              productId: 301,
+              wallWidthMm: 3800,
+              wallHeightMm: 2600,
+              quantityRequired: 1,
+              unitPrice: 8000,
+              totalPrice: 8000,
+              itemDetails: JSON.stringify({
+                productType: "tv_backdrop",
+                tvSizeInches: 86,
+                tvWidthMm: 1900,
+                tvHeightMm: 1069,
+                backdropWidthMm: 2420,
+                backdropHeightMm: 1220,
+                tvBottomAfflMm: 700,
+                cabinetTopAfflMm: 450,
+                cabinetToTvGapMm: 250,
+                includeTvBracket: true,
+              }),
+            },
+          ],
+        },
+      ],
+    });
 
-    expect(result.quoteNumber).toBe("Q-2026-9001");
-    expect(result.html).toContain("Internal Material List");
+    const result = await caller.jobItems.generateMaterialList({ jobId: saved.id });
+
+    expect(result.quoteNumber).toBe(`Q-2026-${String(saved.id).padStart(4, "0")}`);
+    expect(result.html).toContain("Material List");
     expect(result.html).toContain("Example Test Client");
     expect(result.html).toContain("PVC Marble Sheet 1220x3x2900mm");
+    expect(result.html).not.toContain("Consolidated Totals");
+    expect(result.html).not.toContain("Reference Material Cost");
+    expect(result.html).not.toContain("Internal shopping list only.");
+    expect(result.html).not.toContain("$");
   });
 });
 

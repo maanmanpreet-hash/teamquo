@@ -55,7 +55,9 @@ describe("buildElevationDocuments", () => {
     expect(documents).toHaveLength(2);
     expect(documents[0].selectorLabel).toContain("TV Installer Setout");
     expect(documents[0].document.pages).toHaveLength(2);
-    expect(documents[0].document.pages[0].markList?.title).toBe("MARK FROM FLOOR");
+    expect(documents[0].document.pages[0].markList).toBeUndefined();
+    expect(documents[0].document.pages[0].horizontalDimensions).toEqual([]);
+    expect(documents[0].document.pages[0].infoRows).toBeUndefined();
     expect(documents[0].document.pages[0].objects.some(object => object.id === "cabinet-divider-0")).toBe(false);
     expect(documents[0].document.pages[1].objects.some(object => object.id === "cabinet-divider-0")).toBe(true);
     expect(documents[0].document.pages[1].objects.some(object => object.id === "cabinet-divider-1")).toBe(true);

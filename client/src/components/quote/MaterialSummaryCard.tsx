@@ -11,7 +11,6 @@ export function MaterialSummaryCard({ summary }: { summary: QuoteMaterialSummary
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="font-semibold text-gray-900">Internal Material Summary</h3>
-          <p className="text-xs text-gray-600">Reference only. Not shown on the customer quote.</p>
         </div>
         <div className="text-right">
           <p className="text-xs text-gray-600">Reference Material Cost</p>

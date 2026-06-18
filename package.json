@@ -9,6 +9,7 @@
     "dev": "cross-env NODE_ENV=development tsx watch server/_core/index.ts",
     "prebuild": "node scripts/patch-quoteform-save-payload.mjs",
     "build": "node scripts/build.mjs",
+    "start": "cross-env NODE_ENV=production node dist/index.js",
     "precheck": "node scripts/patch-quoteform-save-payload.mjs",
     "check": "tsc --noEmit",
     "format": "prettier --write .",

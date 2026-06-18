@@ -75,11 +75,6 @@ export default function PdfPreview() {
         </Button>
         <div className="min-w-0 flex-1 text-center">
           <p className="truncate text-sm font-medium text-slate-900">{payload.filename}</p>
-          <p className="text-xs text-slate-500">
-            {isCustomerQuotePreview
-              ? "Preview the quote here, then download the clean customer PDF."
-              : "Preview and print without opening a popup window."}
-          </p>
         </div>
         {isCustomerQuotePreview ? (
           <Button onClick={() => setDownloadRequested(true)} disabled={downloadRequested} className="h-10">

@@ -11,11 +11,12 @@ import { z } from "zod";
 import * as db from "./db";
 import { generateQuoteHTML, getCustomerQuoteLogoUrlForPdf } from "./pdf";
 import { renderCustomerQuotePdfBuffer } from "./customerQuotePdf";
-import { generateJobPackHtml } from "./jobPack";
 import { buildJobMaterialSummary } from "./jobMaterials";
 import { formatQuoteNumber } from "../shared/quote";
 import { getMasterProductCatalog } from "./masterProductList";
 import { generateInternalMaterialListHtml } from "../shared/materialListHtml";
+import fs from "fs";
+import path from "path";
 
 const supportedItemTypes = [
   "cladding",
@@ -54,123 +55,72 @@ const previewOperators: any[] = [
   { id: 2, name: "Test Installer", isActive: 1, createdAt: now(), updatedAt: now() },
 ];
 
-let nextJobId = 9002;
-let nextWallId = 8002;
-let nextItemId = 7002;
+let nextJobId = 9001;
+let nextWallId = 8001;
+let nextItemId = 7001;
 
-const previewJobs: any[] = [
-  {
-    id: 9001,
-    userId: 1,
-    operatorName: "Manpreet",
-    clientName: "Example Test Client",
-    clientEmail: "test@example.com",
-    clientPhone: "0412 345 678",
-    clientAddress: "123 Preview Street",
-    suburb: "Kalkallo",
-    appointmentDate: null,
-    appointmentTime: "10:00",
-    referenceImageUrl: null,
-    status: "quoted",
-    stage: "quoting",
-    stageStatus: "in_progress",
-    totalEstimate: 52500,
-    notes: "Local preview example. Safe to delete.",
-    createdAt: now(),
-    updatedAt: now(),
-  },
-];
+const previewJobs: any[] = [];
 
-const previewWalls: any[] = [
-  {
-    id: 8001,
-    jobId: 9001,
-    wallType: "custom",
-    wallName: "Living Room TV Wall",
-    wallWidthMm: 3800,
-    wallHeightMm: 2600,
-    notes: null,
-    createdAt: now(),
-    updatedAt: now(),
-  },
-];
+const previewWalls: any[] = [];
 
-const previewJobItems: any[] = [
-  {
-    id: 7001,
-    jobId: 9001,
-    wallId: 8001,
-    itemType: "acoustic_panel",
-    productId: 201,
-    claddingVariantId: null,
-    wallWidthMm: 3800,
-    wallHeightMm: 2600,
-    cabinetWidthMm: null,
-    cabinetHeightMm: null,
-    cabinetDepthMm: null,
-    cabinetHeightFromFloorMm: null,
-    quantityRequired: 7,
-    unitPrice: 7500,
-    totalPrice: 52500,
-    manualPriceOverride: null,
-    itemDetails: JSON.stringify({ fixingMethod: "none" }),
-    createdAt: now(),
-    updatedAt: now(),
-  },
-  {
-    id: 7002,
-    jobId: 9001,
-    wallId: 8001,
-    itemType: "floating_cabinet",
-    productId: null,
-    claddingVariantId: null,
-    wallWidthMm: 3800,
-    wallHeightMm: 2600,
-    cabinetWidthMm: 2100,
-    cabinetHeightMm: 450,
-    cabinetDepthMm: 360,
-    cabinetHeightFromFloorMm: 0,
-    quantityRequired: 1,
-    unitPrice: 145000,
-    totalPrice: 145000,
-    manualPriceOverride: null,
-    itemDetails: JSON.stringify({ widthMm: 2100, heightMm: 450, depthMm: 360, heightFromFloorMm: 0 }),
-    createdAt: now(),
-    updatedAt: now(),
-  },
-  {
-    id: 7003,
-    jobId: 9001,
-    wallId: 8001,
-    itemType: "tv_backdrop",
-    productId: 301,
-    claddingVariantId: null,
-    wallWidthMm: 3800,
-    wallHeightMm: 2600,
-    cabinetWidthMm: null,
-    cabinetHeightMm: null,
-    cabinetDepthMm: null,
-    cabinetHeightFromFloorMm: null,
-    quantityRequired: 1,
-    unitPrice: 8000,
-    totalPrice: 8000,
-    manualPriceOverride: null,
-    itemDetails: JSON.stringify({
-      productType: "tv_backdrop",
-      tvSizeInches: 86,
-      tvWidthMm: 1900,
-      tvHeightMm: 1069,
-      backdropWidthMm: 2420,
-      backdropHeightMm: 1220,
-      tvBottomAfflMm: 700,
-      cabinetTopAfflMm: 450,
-      cabinetToTvGapMm: 250,
-      includeTvBracket: true,
-    }),
-    createdAt: now(),
-    updatedAt: now(),
-  },
-];
+const previewJobItems: any[] = [];
+
+let previewStoreLoaded = false;
+
+function getPreviewStorePath() {
+  return process.env.PREVIEW_STORE_PATH || path.resolve(import.meta.dirname, "..", ".preview-quotes.json");
+}
+
+function loadPreviewStore() {
+  const previewStorePath = getPreviewStorePath();
+  if (previewStoreLoaded && previewStorePath === (loadPreviewStore as any).loadedPath) return;
+
+  previewStoreLoaded = true;
+  (loadPreviewStore as any).loadedPath = previewStorePath;
+  nextJobId = 9001;
+  nextWallId = 8001;
+  nextItemId = 7001;
+  previewJobs.splice(0, previewJobs.length);
+  previewWalls.splice(0, previewWalls.length);
+  previewJobItems.splice(0, previewJobItems.length);
+
+  if (!fs.existsSync(previewStorePath)) return;
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(previewStorePath, "utf8"));
+    nextJobId = Number.isFinite(parsed?.nextJobId) ? Math.max(1, Math.round(parsed.nextJobId)) : nextJobId;
+    nextWallId = Number.isFinite(parsed?.nextWallId) ? Math.max(1, Math.round(parsed.nextWallId)) : nextWallId;
+    nextItemId = Number.isFinite(parsed?.nextItemId) ? Math.max(1, Math.round(parsed.nextItemId)) : nextItemId;
+    if (Array.isArray(parsed?.jobs)) previewJobs.push(...parsed.jobs);
+    if (Array.isArray(parsed?.walls)) previewWalls.push(...parsed.walls);
+    if (Array.isArray(parsed?.jobItems)) previewJobItems.push(...parsed.jobItems);
+  } catch (error) {
+    console.warn("[Preview Store] Failed to load preview quotes:", error);
+  }
+}
+
+function persistPreviewStore() {
+  try {
+    fs.writeFileSync(
+      getPreviewStorePath(),
+      JSON.stringify(
+        {
+          nextJobId,
+          nextWallId,
+          nextItemId,
+          jobs: previewJobs,
+          walls: previewWalls,
+          jobItems: previewJobItems,
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+  } catch (error) {
+    console.warn("[Preview Store] Failed to persist preview quotes:", error);
+  }
+}
 
 const previewVolumeDiscounts: any[] = [
   { id: 1, productTypeId: 1, minQuantity: 1, discountPercent: 0, createdAt: now(), updatedAt: now() },
@@ -214,6 +164,7 @@ function mergeItemDetailsIntoWallProducts(wallRows: any[], items: any[]) {
 
 async function assertOwnsJob(jobId: number, userId: number) {
   if (await isPreviewMode()) {
+    loadPreviewStore();
     const job = previewJobs.find(job => job.id === jobId);
     if (!job || job.userId !== userId) throw new Error("Unauthorized");
     return job;
@@ -227,6 +178,7 @@ async function assertOwnsJob(jobId: number, userId: number) {
 
 async function assertOwnsWall(wallId: number, userId: number) {
   if (await isPreviewMode()) {
+    loadPreviewStore();
     const wall = previewWalls.find(wall => wall.id === wallId);
     if (!wall) throw new Error("Wall not found");
     await assertOwnsJob(wall.jobId, userId);
@@ -240,6 +192,7 @@ async function assertOwnsWall(wallId: number, userId: number) {
 
 async function assertOwnsJobItem(itemId: number, userId: number) {
   if (await isPreviewMode()) {
+    loadPreviewStore();
     const item = previewJobItems.find(item => item.id === itemId);
     if (!item) throw new Error("Job item not found");
     await assertOwnsJob(item.jobId, userId);
@@ -382,11 +335,15 @@ export const appRouter = router({
 
   jobs: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      if (await isPreviewMode()) return previewJobs.filter(job => job.userId === ctx.user.id);
+      if (await isPreviewMode()) {
+        loadPreviewStore();
+        return previewJobs.filter(job => job.userId === ctx.user.id);
+      }
       return db.getJobsByUserId(ctx.user.id);
     }),
     getById: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input, ctx }) => {
       if (await isPreviewMode()) {
+        loadPreviewStore();
         const job = previewJobs.find(job => job.id === input.id);
         if (job && job.userId !== ctx.user.id) throw new Error("Unauthorized");
         return job;
@@ -397,8 +354,10 @@ export const appRouter = router({
     }),
     create: protectedProcedure.input(jobInputSchema).mutation(async ({ input, ctx }) => {
       if (await isPreviewMode()) {
+        loadPreviewStore();
         const job = { id: nextJobId++, ...buildJobInput(input, ctx.user.id), stage: "quoting", stageStatus: "in_progress", createdAt: now(), updatedAt: now() };
         previewJobs.unshift(job);
+        persistPreviewStore();
         return job;
       }
       return db.createJob(buildJobInput(input, ctx.user.id));
@@ -407,6 +366,7 @@ export const appRouter = router({
       const job = await assertOwnsJob(input.id, ctx.user.id);
       if (await isPreviewMode()) {
         Object.assign(job, { status: input.status, updatedAt: now() });
+        persistPreviewStore();
         return job;
       }
       return db.updateJobStatus(input.id, input.status);
@@ -421,7 +381,9 @@ export const appRouter = router({
         }).filter(([, value]) => value !== undefined)
       );
       if (await isPreviewMode()) {
+        loadPreviewStore();
         Object.assign(job, updateData, { updatedAt: now() });
+        persistPreviewStore();
         return job;
       }
       return db.updateJob(id, updateData);
@@ -435,6 +397,7 @@ export const appRouter = router({
       const jobInput = buildJobInput(input, ctx.user.id);
 
       if (previewMode) {
+        loadPreviewStore();
         const existingJob = input.id ? previewJobs.find(job => job.id === input.id) : undefined;
         const jobId = existingJob?.id ?? nextJobId++;
         const savedJob = existingJob
@@ -474,6 +437,7 @@ export const appRouter = router({
           }
         }
 
+        persistPreviewStore();
         return savedJob;
       }
 
@@ -486,10 +450,12 @@ export const appRouter = router({
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
       await assertOwnsJob(input.id, ctx.user.id);
       if (await isPreviewMode()) {
+        loadPreviewStore();
         for (let i = previewJobItems.length - 1; i >= 0; i--) if (previewJobItems[i].jobId === input.id) previewJobItems.splice(i, 1);
         for (let i = previewWalls.length - 1; i >= 0; i--) if (previewWalls[i].jobId === input.id) previewWalls.splice(i, 1);
         const index = previewJobs.findIndex(job => job.id === input.id);
         if (index >= 0) previewJobs.splice(index, 1);
+        persistPreviewStore();
         return true;
       }
       return db.deleteJobWithContents(input.id);
@@ -499,7 +465,10 @@ export const appRouter = router({
   jobItems: router({
     getByJobId: protectedProcedure.input(z.object({ jobId: z.number() })).query(async ({ input, ctx }) => {
       await assertOwnsJob(input.jobId, ctx.user.id);
-      if (await isPreviewMode()) return previewJobItems.filter(item => item.jobId === input.jobId);
+      if (await isPreviewMode()) {
+        loadPreviewStore();
+        return previewJobItems.filter(item => item.jobId === input.jobId);
+      }
       return db.getJobItemsByJobId(input.jobId);
     }),
     generatePDF: protectedProcedure.input(z.object({ jobId: z.number() })).query(async ({ input, ctx }) => {
@@ -550,18 +519,6 @@ export const appRouter = router({
         sizeBytes: pdfBuffer.byteLength,
       };
     }),
-    generateJobPack: protectedProcedure.input(z.object({ jobId: z.number() })).query(async ({ input, ctx }) => {
-      const job = await assertOwnsJob(input.jobId, ctx.user.id);
-      const previewMode = await isPreviewMode();
-      const items = previewMode ? previewJobItems.filter(item => item.jobId === input.jobId) : await db.getJobItemsByJobId(input.jobId);
-      if (!items.length) throw new Error("Cannot generate job pack until the quote has at least one saved product.");
-      const products = previewMode ? previewProducts : await db.getAllProducts();
-      const wallRows = previewMode ? previewWalls.filter(wall => wall.jobId === input.jobId) : await db.getWallsByJobId(input.jobId);
-      const productMap = new Map(products.map(product => [product.id, product]));
-      const wallMap = new Map(wallRows.map(wall => [wall.id, wall]));
-      const html = generateJobPackHtml(job as any, items as any, productMap as any, wallMap as any);
-      return { html, jobId: job.id, clientName: job.clientName, quoteNumber: formatQuoteNumber(job as any) };
-    }),
     generateMaterialList: protectedProcedure.input(z.object({ jobId: z.number() })).query(async ({ input, ctx }) => {
       const job = await assertOwnsJob(input.jobId, ctx.user.id);
       const previewMode = await isPreviewMode();
@@ -589,8 +546,10 @@ export const appRouter = router({
       }
       const { jobId, ...itemData } = input;
       if (await isPreviewMode()) {
+        loadPreviewStore();
         const item = { id: nextItemId++, jobId, ...itemData, createdAt: now(), updatedAt: now() };
         previewJobItems.push(item);
+        persistPreviewStore();
         return item;
       }
       return db.createJobItem({ jobId, ...itemData });
@@ -600,6 +559,7 @@ export const appRouter = router({
       const { id, ...updates } = input;
       if (await isPreviewMode()) {
         Object.assign(item, updates, { updatedAt: now() });
+        persistPreviewStore();
         return item;
       }
       return db.updateJobItem(id, updates);
@@ -607,8 +567,10 @@ export const appRouter = router({
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
       await assertOwnsJobItem(input.id, ctx.user.id);
       if (await isPreviewMode()) {
+        loadPreviewStore();
         const index = previewJobItems.findIndex(item => item.id === input.id);
         if (index >= 0) previewJobItems.splice(index, 1);
+        persistPreviewStore();
         return true;
       }
       return db.deleteJobItem(input.id);
@@ -616,7 +578,9 @@ export const appRouter = router({
     deleteByJobId: protectedProcedure.input(z.object({ jobId: z.number() })).mutation(async ({ input, ctx }) => {
       await assertOwnsJob(input.jobId, ctx.user.id);
       if (await isPreviewMode()) {
+        loadPreviewStore();
         for (let i = previewJobItems.length - 1; i >= 0; i--) if (previewJobItems[i].jobId === input.jobId) previewJobItems.splice(i, 1);
+        persistPreviewStore();
         return true;
       }
       return db.deleteJobItemsByJobId(input.jobId);
@@ -735,15 +699,20 @@ export const appRouter = router({
     create: protectedProcedure.input(z.object({ jobId: z.number(), wallType: z.enum(["regular", "garage", "custom"]).default("regular"), wallName: z.string().optional(), wallWidthMm: z.number().int().positive().optional(), wallHeightMm: z.number().int().positive().optional(), notes: z.string().optional() })).mutation(async ({ input, ctx }) => {
       await assertOwnsJob(input.jobId, ctx.user.id);
       if (await isPreviewMode()) {
+        loadPreviewStore();
         const wall = { id: nextWallId++, ...input, createdAt: now(), updatedAt: now() };
         previewWalls.push(wall);
+        persistPreviewStore();
         return wall;
       }
       return db.createWall(input);
     }),
     getByJobId: protectedProcedure.input(z.object({ jobId: z.number() })).query(async ({ input, ctx }) => {
       await assertOwnsJob(input.jobId, ctx.user.id);
-      if (await isPreviewMode()) return previewGetWallsWithItemsByJobId(input.jobId);
+      if (await isPreviewMode()) {
+        loadPreviewStore();
+        return previewGetWallsWithItemsByJobId(input.jobId);
+      }
       const wallRows = await db.getWallsWithItemsByJobId(input.jobId);
       const items = await db.getJobItemsByJobId(input.jobId);
       return mergeItemDetailsIntoWallProducts(wallRows, items);
@@ -751,7 +720,9 @@ export const appRouter = router({
     deleteByJobId: protectedProcedure.input(z.object({ jobId: z.number() })).mutation(async ({ input, ctx }) => {
       await assertOwnsJob(input.jobId, ctx.user.id);
       if (await isPreviewMode()) {
+        loadPreviewStore();
         for (let i = previewWalls.length - 1; i >= 0; i--) if (previewWalls[i].jobId === input.jobId) previewWalls.splice(i, 1);
+        persistPreviewStore();
         return true;
       }
       return db.deleteWallsByJobId(input.jobId);
@@ -761,6 +732,7 @@ export const appRouter = router({
       const { id, ...updates } = input;
       if (await isPreviewMode()) {
         Object.assign(wall, updates, { updatedAt: now() });
+        persistPreviewStore();
         return wall;
       }
       return db.updateWall(id, updates);
@@ -768,9 +740,11 @@ export const appRouter = router({
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
       await assertOwnsWall(input.id, ctx.user.id);
       if (await isPreviewMode()) {
+        loadPreviewStore();
         for (let i = previewJobItems.length - 1; i >= 0; i--) if (previewJobItems[i].wallId === input.id) previewJobItems.splice(i, 1);
         const index = previewWalls.findIndex(wall => wall.id === input.id);
         if (index >= 0) previewWalls.splice(index, 1);
+        persistPreviewStore();
         return true;
       }
       return db.deleteWall(input.id);

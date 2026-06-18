@@ -81,17 +81,12 @@
 - [x] Implement wall-specific product selection
 - [x] Test multi-wall quote creation
 
-## Phase 5: PDF Download Fix + Job Pack with Drawings
+## Phase 5: PDF Download Fix
 - [x] Fix PDF download so files appear in Downloads folder
 - [x] Ensure proper MIME type for PDF blobs
 - [x] Add .pdf extension validation
 - [x] Use requestAnimationFrame for reliable downloads
-- [ ] Implement job pack generation with wall drawings
-- [ ] Add wall measurements to drawings
-- [ ] Include product specifications in job pack
-- [ ] Add operator reference guide to job pack
 - [ ] Test PDF generation and download
-- [ ] Verify drawings render correctly
 
 ## Phase 6: Dashboard Redesign (Monday.com Inspired)
 - [x] Implement kanban-style board view with 4 columns

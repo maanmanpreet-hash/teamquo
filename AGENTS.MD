@@ -31,3 +31,9 @@ Do not expose internal material costs, product-level prices, quantities, labour,
 Do not redesign or alter the customer-facing quote unless explicitly requested.
 
 Detailed workflow rule: docs/QUOTE_WORKFLOW.md
+
+# UI copy preference
+
+Keep in-app copy minimal.
+
+Do not add explanatory comments, scope notes, warning paragraphs, helper text, or similar narrative copy in the app unless explicitly requested.

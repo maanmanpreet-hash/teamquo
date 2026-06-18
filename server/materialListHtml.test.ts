@@ -4,7 +4,7 @@ import { buildQuoteMaterialSummary } from "../shared/materialIntelligence";
 import { generateInternalMaterialListHtml } from "../shared/materialListHtml";
 
 describe("internal material list html", () => {
-  it("renders job header, wall materials, totals and reference material cost", () => {
+  it("renders a locked shopping list with one flat material table and no pricing", () => {
     const summary = buildQuoteMaterialSummary([
       {
         wallName: "TV Wall",
@@ -26,16 +26,21 @@ describe("internal material list html", () => {
       summary,
     });
 
-    expect(html).toContain("Internal Material List");
+    expect(html).toContain("Material List");
     expect(html).toContain("Quote: Q-2026-0001");
     expect(html).toContain("Customer: Test Client");
     expect(html).toContain("Address: 1 Test Street");
     expect(html).toContain("Date: 11/06/2026");
-    expect(html).toContain("TV Wall");
     expect(html).toContain("PVC Marble Sheet 1220x3x2900mm");
     expect(html).toContain("6mm MDF Sheet 1220x2440mm");
     expect(html).toContain("TV Bracket");
-    expect(html).toContain("Reference Material Cost: $250.74");
+    expect(html).not.toContain("TV Wall");
+    expect(html).not.toContain("Consolidated Totals");
+    expect(html).not.toContain("Reference Material Cost");
+    expect(html).not.toContain("Unit Cost");
+    expect(html).not.toContain("Reference Cost");
+    expect(html).not.toContain("Internal shopping list only.");
+    expect(html).not.toContain("$");
   });
 
   it("escapes customer supplied header fields", () => {

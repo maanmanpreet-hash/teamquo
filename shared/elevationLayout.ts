@@ -341,12 +341,11 @@ function createTvInstallerAfflPagePlan(page: ElevationPage, document: ElevationD
   const canvasHeight = 794;
   const sheetMargin = 28;
   const titleBandHeight = 56;
-  const leftColumnWidth = 198;
-  const summaryWidth = 324;
+  const leftColumnWidth = 208;
   const drawingLeft = sheetMargin + leftColumnWidth;
-  const drawingRight = canvasWidth - sheetMargin - summaryWidth;
+  const drawingRight = canvasWidth - sheetMargin - 36;
   const drawingTop = sheetMargin + titleBandHeight + 16;
-  const floorY = canvasHeight - sheetMargin - 178;
+  const floorY = canvasHeight - sheetMargin - 22;
   const drawingBottom = floorY;
   const scale = Math.min(
     (drawingRight - drawingLeft) / page.sceneWidthMm,
@@ -377,52 +376,6 @@ function createTvInstallerAfflPagePlan(page: ElevationPage, document: ElevationD
   pushText(shapes, canvasWidth - sheetMargin - 180, sheetMargin + 12, document.metaRightTop || "Scale to fit A4 landscape", { fontSize: 11, fontWeight: 700, fill: "#334155", width: 180, align: "right" });
   pushText(shapes, canvasWidth - sheetMargin - 180, sheetMargin + 30, document.metaRightBottom || "", { fontSize: 11, fill: "#475569", width: 180, align: "right" });
   pushText(shapes, sheetMargin + 18, drawingTop + 4, "INSTALL HEIGHTS", { fontSize: 15, fontWeight: 700, fill: "#0f172a" });
-  pushText(shapes, sheetMargin + 18, drawingTop + 24, "Mark these AFFL levels from floor before fixing backdrop or cabinet elements.", { fontSize: 10, fill: "#475569", width: leftColumnWidth - 20 });
-
-  if (page.infoRows?.length) {
-    const summaryX = drawingRight + 16;
-    const summaryY = drawingTop - 4;
-    const summaryHeight = Math.min(286, 42 + page.infoRows.length * 18);
-    const summaryLabelWidth = 116;
-    const summaryValueWidth = summaryWidth - 36 - summaryLabelWidth;
-    shapes.push({
-      kind: "rect",
-      x: summaryX,
-      y: summaryY,
-      width: summaryWidth - 16,
-      height: summaryHeight,
-      fill: "#f8fafc",
-      stroke: "#cbd5e1",
-      strokeWidth: 1.2,
-      radius: 8,
-    });
-    pushText(shapes, summaryX + 12, summaryY + 18, "SETOUT SUMMARY", {
-      fontSize: 12,
-      fontWeight: 700,
-      fill: "#0f172a",
-    });
-    page.infoRows.forEach((row, index) => {
-      const rowY = summaryY + 38 + index * 18;
-      shapes.push({
-        kind: "line",
-        points: [summaryX + 12, rowY + 10, summaryX + summaryWidth - 28, rowY + 10],
-        stroke: "#e2e8f0",
-        strokeWidth: 1,
-      });
-      pushText(shapes, summaryX + 12, rowY, `${row.label}:`, {
-        fontSize: 10,
-        fontWeight: 700,
-        fill: "#334155",
-        width: summaryLabelWidth,
-      });
-      pushText(shapes, summaryX + 12 + summaryLabelWidth, rowY, row.value, {
-        fontSize: 10,
-        fontWeight: row.label.startsWith("CHECK") ? 700 : 500,
-        fill: row.label.startsWith("CHECK") ? "#991b1b" : "#0f172a",
-        width: summaryValueWidth,
-      });
-    });
-  }
 
   page.objects
     .filter(object => object.kind !== "text" || !["centre-line-label", "wall-top-label"].includes(object.id))
@@ -446,8 +399,12 @@ function createTvInstallerAfflPagePlan(page: ElevationPage, document: ElevationD
         ? toPageX(bounds, entry.mark.guideEndXmm)
         : toPageX(bounds, entry.mark.witnessXmm);
       const labelBoxWidth = leftColumnWidth - 20;
+      const labelAnchorX = leftLabelX + labelBoxWidth;
+      const elbowX = railX - 12;
 
       shapes.push(
+        { kind: "line", points: [labelAnchorX - 8, labelY, elbowX, labelY], stroke: "#94a3b8", strokeWidth: 1.1 },
+        { kind: "line", points: [elbowX, labelY, elbowX, targetY], stroke: "#94a3b8", strokeWidth: 1.1 },
         { kind: "line", points: [railX - 6, targetY, railX + 10, targetY], stroke: "#334155", strokeWidth: 1.5 },
         { kind: "line", points: [railX + 10, targetY, guideEndX, targetY], stroke: "#64748b", strokeWidth: 1.25, strokeOpacity: 0.95 },
         { kind: "circle", x: railX, y: targetY, radius: 3.6, fill: "#1d4ed8" }
@@ -474,59 +431,6 @@ function createTvInstallerAfflPagePlan(page: ElevationPage, document: ElevationD
         width: labelBoxWidth - 10,
         align: "right",
       });
-    });
-  }
-
-  if (page.horizontalDimensions?.length) {
-    const boxTop = canvasHeight - sheetMargin - 164;
-    const width = canvasWidth - sheetMargin * 2;
-    shapes.push({
-      kind: "rect",
-      x: sheetMargin,
-      y: boxTop,
-      width,
-      height: 48,
-      fill: "#ffffff",
-      stroke: "#cbd5e1",
-      strokeWidth: 1,
-    });
-    pushText(shapes, sheetMargin + 18, boxTop + 16, "WIDTH CHECKS", { fontSize: 12, fontWeight: 700, fill: "#0f172a" });
-    page.horizontalDimensions.forEach((dimension, index) => {
-      const columnWidth = (width - 36) / page.horizontalDimensions!.length;
-      const columnX = sheetMargin + 18 + index * columnWidth;
-      pushText(shapes, columnX, boxTop + 34, `${dimension.label}: ${formatMm(dimension.valueMm)}`, {
-        fontSize: 10.5,
-        fontWeight: 700,
-        fill: "#1f2937",
-        width: columnWidth - 8,
-        align: index === 0 ? "left" : "center",
-      });
-    });
-  }
-
-  if (page.markList) {
-    const boxTop = canvasHeight - sheetMargin - 108;
-    const width = canvasWidth - sheetMargin * 2;
-    shapes.push({
-      kind: "rect",
-      x: sheetMargin,
-      y: boxTop,
-      width,
-      height: 108,
-      fill: "#f8fafc",
-      stroke: "#cbd5e1",
-      strokeWidth: 1,
-    });
-    pushText(shapes, sheetMargin + 18, boxTop + 16, page.markList.title, { fontSize: 12, fontWeight: 700, fill: "#0f172a" });
-    const half = Math.ceil(page.markList.rows.length / 2);
-    page.markList.rows.forEach((row, index) => {
-      const column = index < half ? 0 : 1;
-      const rowIndex = column === 0 ? index : index - half;
-      const columnX = sheetMargin + 18 + column * ((width - 56) / 2);
-      const rowY = boxTop + 34 + rowIndex * 20;
-      shapes.push({ kind: "line", points: [columnX, rowY + 14, columnX + (width - 84) / 2, rowY + 14], stroke: "#dbe4ee", strokeWidth: 1 });
-      pushText(shapes, columnX + 2, rowY, `${row.label}:`, { fontSize: 11, fontWeight: 700, fill: "#334155" });
-      pushText(shapes, columnX + ((width - 84) / 2) - 92, rowY, formatMm(row.valueMm), { fontSize: 11, fontWeight: 700, fill: "#334155", width: 90, align: "right" });
     });
   }
 
