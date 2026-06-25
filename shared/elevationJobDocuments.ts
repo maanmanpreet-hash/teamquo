@@ -35,6 +35,10 @@ type JobLike = {
   clientName?: string | null;
 } & Record<string, unknown>;
 
+function getProducts(products: WallLike["products"]): WallProductLike[] {
+  return Array.isArray(products) ? products : [];
+}
+
 function parseItemDetails(value: unknown): Record<string, any> {
   if (typeof value !== "string" || !value.trim()) return {};
   try {
@@ -183,46 +187,55 @@ function buildCabinetElevationRecord(args: {
   const itemName = productIndex > 1 ? `${wall.wallName || "Wall"} ${productTypeLabel} ${productIndex}` : `${wall.wallName || "Wall"} ${productTypeLabel}`;
   const fileRoot = sanitizeFilePart(`${formatQuoteNumber(job as any)}-${itemName}-cabinet-elevation`);
 
-  return [
-    {
-      id: `${wall.id}-${product.id}-${product.itemType}`,
-      selectorLabel: `${itemName} - Cabinet Elevation`,
-      fileName: `${fileRoot}.pdf`,
-      emptyStateHint: "Save cabinet width, height, depth, and height-from-floor on the wall item to generate a cabinet elevation.",
-      document: createFloatingCabinetElevationDocument({
-        quoteNumber: formatQuoteNumber(job as any),
-        clientName: job.clientName === "[Draft]" ? "Draft Quote" : String(job.clientName || "Draft Quote"),
-        itemName,
-        widthMm,
-        heightMm,
-        depthMm,
-        heightFromFloorMm,
-        sections,
-      }),
-      documentType: "cabinet_production",
-    },
-  ];
+  try {
+    return [
+      {
+        id: `${wall.id}-${product.id}-${product.itemType}`,
+        selectorLabel: `${itemName} - Cabinet Elevation`,
+        fileName: `${fileRoot}.pdf`,
+        emptyStateHint: "Save cabinet width, height, depth, and height-from-floor on the wall item to generate a cabinet elevation.",
+        document: createFloatingCabinetElevationDocument({
+          quoteNumber: formatQuoteNumber(job as any),
+          clientName: job.clientName === "[Draft]" ? "Draft Quote" : String(job.clientName || "Draft Quote"),
+          itemName,
+          widthMm,
+          heightMm,
+          depthMm,
+          heightFromFloorMm,
+          sections,
+        }),
+        documentType: "cabinet_production",
+      },
+    ];
+  } catch {
+    return [];
+  }
 }
 
 export function buildElevationDocuments(job: JobLike, walls: WallLike[], generatedDateLabel = new Date().toLocaleDateString()) {
   const records = walls.flatMap(wall => {
-    const floatingCabinet = (wall.products || []).find(product => product.itemType === "floating_cabinet");
-    let backdropIndex = 0;
-    let cabinetIndex = 0;
+    try {
+      const products = getProducts(wall.products);
+      const floatingCabinet = products.find(product => product.itemType === "floating_cabinet");
+      let backdropIndex = 0;
+      let cabinetIndex = 0;
 
-    return (wall.products || []).flatMap(product => {
-      if (product.itemType === "tv_backdrop") {
-        backdropIndex += 1;
-        return buildTvSetoutRecord({ job, wall, product, backdropIndex, floatingCabinet, generatedDateLabel });
-      }
+      return products.flatMap(product => {
+        if (product.itemType === "tv_backdrop") {
+          backdropIndex += 1;
+          return buildTvSetoutRecord({ job, wall, product, backdropIndex, floatingCabinet, generatedDateLabel });
+        }
 
-      if (["floating_cabinet", "side_tower", "shelving"].includes(product.itemType)) {
-        cabinetIndex += 1;
-        return buildCabinetElevationRecord({ job, wall, product, productIndex: cabinetIndex });
-      }
+        if (["floating_cabinet", "side_tower", "shelving"].includes(product.itemType)) {
+          cabinetIndex += 1;
+          return buildCabinetElevationRecord({ job, wall, product, productIndex: cabinetIndex });
+        }
 
+        return [];
+      });
+    } catch {
       return [];
-    });
+    }
   });
 
   return records.sort((left, right) => {

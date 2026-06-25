@@ -65,4 +65,59 @@ describe("buildElevationDocuments", () => {
     expect(documents[1].selectorLabel).toContain("Floating Cabinet");
     expect(documents[1].document.pages).toHaveLength(2);
   });
+
+  it("skips malformed wall entries without breaking other setout documents", () => {
+    const documents = buildElevationDocuments(
+      {
+        id: 9002,
+        clientName: "Example Test Client",
+      },
+      [
+        {
+          id: 8002,
+          wallName: "Broken Joinery Wall",
+          wallWidthMm: 3800,
+          wallHeightMm: 2600,
+          products: [
+            {
+              id: 7004,
+              itemType: "floating_cabinet",
+              cabinetWidthMm: 2100,
+              cabinetHeightMm: 450,
+              cabinetDepthMm: 0,
+              itemDetails: JSON.stringify({
+                widthMm: 2100,
+                heightMm: 450,
+                depthMm: 0,
+              }),
+            },
+          ],
+        },
+        {
+          id: 8003,
+          wallName: "Living Room TV Wall",
+          wallWidthMm: 3600,
+          wallHeightMm: 2600,
+          products: [
+            {
+              id: 7005,
+              itemType: "tv_backdrop",
+              itemDetails: JSON.stringify({
+                tvSizeInches: 86,
+                backdropWidthMm: 2420,
+                backdropHeightMm: 1220,
+                cabinetBottomAfflMm: 0,
+                cabinetHeightMm: 450,
+                cabinetToTvGapMm: 250,
+              }),
+            },
+          ],
+        },
+      ],
+      "16/06/2026"
+    );
+
+    expect(documents).toHaveLength(1);
+    expect(documents[0].selectorLabel).toContain("TV Installer Setout");
+  });
 });
