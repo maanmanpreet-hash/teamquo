@@ -70,6 +70,11 @@ export default function DashboardLayout({
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-6">
+            <img
+              src="/skywall-brand.png"
+              alt="Skywall Cabinets"
+              className="h-auto w-full max-w-[260px] object-contain"
+            />
             <h1 className="text-2xl font-semibold tracking-tight text-center">
               Sign in to continue
             </h1>

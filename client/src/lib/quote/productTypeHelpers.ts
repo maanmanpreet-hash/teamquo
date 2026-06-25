@@ -1,5 +1,11 @@
 import type { ProductTypeSlug, WallProduct } from "./types";
 
+export const customMeasuredProductTypes: ProductTypeSlug[] = [
+  "floating_cabinet",
+  "side_tower",
+  "shelving",
+];
+
 export const productTypeSlugAliases: Record<ProductTypeSlug, string[]> = {
   cladding: ["cladding"],
   acoustic_panel: ["acoustic_panel", "acoustic-panels"],
@@ -40,6 +46,10 @@ export function formatProductHeading(product: Pick<WallProduct, "productType" | 
 
 export function panelTypes(productType: ProductTypeSlug) {
   return ["cladding", "acoustic_panel", "marble_sheet"].includes(productType);
+}
+
+export function usesCatalogProductSelection(productType: ProductTypeSlug) {
+  return !customMeasuredProductTypes.includes(productType) && productType !== "custom_item";
 }
 
 export function resolveCatalogProductTypeId(

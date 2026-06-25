@@ -13,6 +13,7 @@ import {
 } from "../client/src/lib/quote/resumeQuote";
 import {
   resolveCatalogProductTypeId,
+  usesCatalogProductSelection,
 } from "../client/src/lib/quote/productTypeHelpers";
 
 describe("quote form persistence helpers", () => {
@@ -46,6 +47,13 @@ describe("quote form persistence helpers", () => {
         { id: 7, slug: "tv-backdrop" },
       ])
     ).toBe(3);
+  });
+
+  it("treats custom joinery items as no-catalog products", () => {
+    expect(usesCatalogProductSelection("floating_cabinet")).toBe(false);
+    expect(usesCatalogProductSelection("side_tower")).toBe(false);
+    expect(usesCatalogProductSelection("shelving")).toBe(false);
+    expect(usesCatalogProductSelection("tv_backdrop")).toBe(true);
   });
 
   it("round-trips acoustic fixing details through itemDetails", () => {

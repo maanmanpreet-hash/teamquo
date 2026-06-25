@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatMoney } from "@/lib/quote/formatters";
-import { productTypeLabels } from "@/lib/quote/productTypeHelpers";
+import { productTypeLabels, usesCatalogProductSelection } from "@/lib/quote/productTypeHelpers";
 import type {
   AcousticFixingMethod,
   CustomItemOption,
@@ -119,7 +119,7 @@ export function ProductPicker({
             </SelectContent>
           </Select>
         </div>
-        {tempProductType && !["floating_cabinet", "custom_item"].includes(tempProductType) && (
+        {tempProductType && usesCatalogProductSelection(tempProductType) && (
           <div>
             <Label>{tempProductType === "tv_backdrop" ? "Marble Sheet Variant *" : "Product *"}</Label>
             <Select value={tempProductId} onValueChange={onProductIdChange}>

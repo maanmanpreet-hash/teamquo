@@ -42,6 +42,8 @@ import {
 import {
   panelTypes,
   resolveCatalogProductTypeId,
+  productTypeLabels,
+  usesCatalogProductSelection,
 } from "@/lib/quote/productTypeHelpers";
 import { buildQuoteFormMaterialSummary } from "@/lib/quoteMaterialSummary";
 import {
@@ -668,7 +670,7 @@ export default function QuoteForm() {
     const wall = wallsWithProducts.find(w => w.id === wallId);
     if (!wall) return;
 
-    const requiresCatalogSelection = !["floating_cabinet", "custom_item"].includes(tempProductType);
+    const requiresCatalogSelection = usesCatalogProductSelection(tempProductType);
     const selectedCatalogProduct = requiresCatalogSelection
       ? productsByType?.find((product: any) => product.id.toString() === tempProductId)
       : null;
@@ -676,7 +678,7 @@ export default function QuoteForm() {
     const foundProduct =
       (requiresCatalogSelection
         ? selectedCatalogProduct ?? fallbackTvBackdropProduct
-        : tempProductType === "custom_item"
+          : tempProductType === "custom_item"
           ? {
               id: 0,
               name: tempCustomItemType,
@@ -686,13 +688,13 @@ export default function QuoteForm() {
               heightMm: undefined,
             }
           : {
-            id: 0,
-            name: "Floating Cabinet - Custom",
-            pricePerUnit: 0,
-            description: "",
-            widthMm: undefined,
-            heightMm: undefined,
-          }) || null;
+              id: 0,
+              name: `${productTypeLabels[tempProductType]} - Custom`,
+              pricePerUnit: 0,
+              description: "",
+              widthMm: undefined,
+              heightMm: undefined,
+            }) || null;
     if (tempProductType === "custom_item" && !tempCustomItemType) {
       toast.error("Select a custom item before adding");
       return;

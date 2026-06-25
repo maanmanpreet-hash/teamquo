@@ -63,6 +63,6 @@ describe("buildElevationDocuments", () => {
     expect(documents[0].document.pages[1].objects.some(object => object.id === "cabinet-divider-1")).toBe(true);
     expect(documents[0].document.pages[1].title).toContain("Front Elevation");
     expect(documents[1].selectorLabel).toContain("Floating Cabinet");
-    expect(documents[1].document.pages).toHaveLength(2);
+    expect(documents[1].document.pages).toHaveLength(1);
   });
 });

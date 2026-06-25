@@ -4,7 +4,7 @@ import { createFloatingCabinetElevationDocument } from "../shared/elevationPrese
 import { renderElevationDocumentHtml } from "../shared/elevationRenderer";
 
 describe("floating cabinet elevation preset", () => {
-  it("renders front and internal production pages from the shared elevation engine", () => {
+  it("renders a single overall production page without internal 16 mm breakdown details", () => {
     const document = createFloatingCabinetElevationDocument({
       quoteNumber: "Q-2026-0002",
       clientName: "Sample Client",
@@ -22,14 +22,12 @@ describe("floating cabinet elevation preset", () => {
 
     const html = renderElevationDocumentHtml(document);
 
-    expect(document.pages).toHaveLength(2);
+    expect(document.pages).toHaveLength(1);
     expect(document.pages[0].title).toContain("Front");
-    expect(document.pages[1].title).toContain("Internal");
     expect(html).toContain("Production elevation");
     expect(html).toContain("Overall width");
-    expect(html).toContain("Section 1 width");
-    expect(html).toContain("Opening 1 width");
-    expect(html).toContain("16 mm");
+    expect(html).not.toContain("Opening 1 width");
+    expect(html).not.toContain("16 mm");
     expect(html).toContain("2100 mm");
     expect(html).toContain("450 mm");
     expect(html).toContain("360 mm");
