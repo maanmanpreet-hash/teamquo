@@ -101,8 +101,10 @@ function loadPreviewStore() {
 
 function persistPreviewStore() {
   try {
+    const previewStorePath = getPreviewStorePath();
+    const tempPath = `${previewStorePath}.tmp`;
     fs.writeFileSync(
-      getPreviewStorePath(),
+      tempPath,
       JSON.stringify(
         {
           nextJobId,
@@ -117,6 +119,8 @@ function persistPreviewStore() {
       ),
       "utf8"
     );
+    fs.rmSync(previewStorePath, { force: true });
+    fs.renameSync(tempPath, previewStorePath);
   } catch (error) {
     console.warn("[Preview Store] Failed to persist preview quotes:", error);
   }

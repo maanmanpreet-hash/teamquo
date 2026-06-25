@@ -7,6 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { validateRuntimeConfiguration } from "./runtimeConfig";
 import { serveStatic, setupVite } from "./vite";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -29,6 +30,8 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  validateRuntimeConfiguration(process.env);
+
   const app = express();
   const server = createServer(app);
   const isDevelopment = process.env.NODE_ENV !== "production";

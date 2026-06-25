@@ -21,15 +21,21 @@ const localDevUser = {
   updatedAt: new Date(),
 } as User;
 
+function shouldUsePreviewAuth(hostname: string | undefined) {
+  return (
+    ENV.localDevAuth ||
+    (!ENV.oAuthServerUrl &&
+      (hostname === "localhost" || hostname === "127.0.0.1"))
+  );
+}
+
 export async function createContext(
   opts: CreateExpressContextOptions
 ): Promise<TrpcContext> {
   let user: User | null = null;
-  // Local development auth bypass: when LOCAL_DEV_AUTH=true and not in production,
-  // short-circuit authentication and return a fixed local dev user. This is
-  // strictly for developer convenience and does not alter production behavior.
-  if (!ENV.isProduction && ENV.localDevAuth) {
-    console.log('[Auth] LOCAL_DEV_AUTH enabled');
+  // Local preview auth bypass for localhost runs when OAuth is unavailable.
+  if (shouldUsePreviewAuth(opts.req.hostname)) {
+    console.log("[Auth] Preview auth enabled");
     user = localDevUser;
   } else {
     try {

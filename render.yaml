@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: teamquo
+    runtime: node
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /

@@ -22,6 +22,16 @@ import {
   formatDateInput,
 } from "@/lib/quote/formatters";
 import {
+  clearLegacyQuoteDraftRecovery,
+  clearQuoteDraft,
+  clearQuoteDraftDirtyState,
+  hasMeaningfulQuoteDraft,
+  loadQuoteDraft,
+  markQuoteDraftDirty,
+  saveQuoteDraft,
+  type QuoteDraftSnapshot,
+} from "@/lib/quoteDraftStore";
+import {
   applyItemDetailsToProduct,
   buildItemDetails,
   formatPositiveNumberList,
@@ -35,12 +45,21 @@ import {
 } from "@/lib/quote/productTypeHelpers";
 import { buildQuoteFormMaterialSummary } from "@/lib/quoteMaterialSummary";
 import {
+  getOnsiteDraftIdFromQuoteLocation,
+  type OnsiteDraftRecord,
+} from "@/lib/onsite/onsiteDrafts";
+import {
+  getOnsiteDraft,
+  saveOnsiteDraft,
+} from "@/lib/onsite/onsiteDraftStore";
+import {
+  mapOnsiteDraftToQuoteSeed,
+} from "@/lib/onsite/mapOnsiteDraftToQuote";
+import {
   getResumeJobIdFromLocation,
   shouldResetQuoteFormForResumeChange,
 } from "@/lib/quote/resumeQuote";
-import {
-  getBackdropDimensionsFromCatalogProduct,
-} from "@/lib/quote/tvBackdropForm";
+import { getBackdropDimensionsFromCatalogProduct } from "@/lib/quote/tvBackdropForm";
 import type {
   AcousticFixingMethod,
   CustomItemOption,
@@ -165,6 +184,7 @@ export default function QuoteForm() {
   const utils = trpc.useUtils();
   const [currentStep, setCurrentStep] = useState<WorkflowStep>("client");
   const [resumeJobId, setResumeJobId] = useState<number | null>(null);
+  const [draftRecoveryReady, setDraftRecoveryReady] = useState(false);
 
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
@@ -244,6 +264,21 @@ export default function QuoteForm() {
     closeProductPicker();
   };
 
+  const applyQuoteDraftToForm = (draft: QuoteDraftSnapshot) => {
+    setCurrentStep(draft.currentStep);
+    setClientName(draft.clientName);
+    setClientEmail(draft.clientEmail);
+    setClientPhone(draft.clientPhone);
+    setClientAddress(draft.clientAddress);
+    setSuburb(draft.suburb);
+    setAppointmentDate(draft.appointmentDate);
+    setAppointmentTime(draft.appointmentTime);
+    setReferenceImageUrl(draft.referenceImageUrl);
+    setReferenceImagePreview(draft.referenceImageUrl || null);
+    setWallsWithProducts(draft.wallsWithProducts);
+    setCustomerAddOns(normaliseCustomerAddOns(draft.customerAddOns));
+  };
+
   const applySavedJobToForm = (job: any) => {
     // Guardrail: quote-level `notes` currently carries structured metadata such
     // as customer add-ons. Treat it as a legacy container and parse only through
@@ -261,16 +296,45 @@ export default function QuoteForm() {
     setCustomerAddOns(normaliseCustomerAddOns(quoteMeta.customerAddOns));
   };
 
+  const applyOnsiteDraftToForm = (record: OnsiteDraftRecord) => {
+    const seed = mapOnsiteDraftToQuoteSeed(record);
+    setCurrentStep(seed.currentStep);
+    setClientName(seed.clientName);
+    setClientPhone(seed.clientPhone);
+    setClientEmail(seed.clientEmail);
+    setClientAddress(seed.clientAddress);
+    setSuburb(seed.suburb);
+    setAppointmentDate(seed.appointmentDate);
+    setAppointmentTime(seed.appointmentTime);
+    setReferenceImageUrl(seed.referenceImageUrl);
+    setReferenceImagePreview(seed.referenceImageUrl || null);
+    setWallsWithProducts(seed.wallsWithProducts);
+    setCustomerAddOns(normaliseCustomerAddOns([]));
+  };
+
   useEffect(() => {
     const nextResumeJobId = getResumeJobIdFromLocation(location);
     if (shouldResetQuoteFormForResumeChange(resumeJobId, nextResumeJobId)) {
       resetQuoteForm();
     }
+    setDraftRecoveryReady(false);
     setResumeJobId(nextResumeJobId);
   }, [location]);
 
+  const recoveredQuoteDraft = useMemo(() => loadQuoteDraft(resumeJobId), [resumeJobId]);
+
   useEffect(() => {
-    if (!draftJob || !resumeJobId) return;
+    clearLegacyQuoteDraftRecovery();
+    if (resumeJobId !== null && (draftJobLoading || savedWallsLoading)) return;
+    if (recoveredQuoteDraft) {
+      applyQuoteDraftToForm(recoveredQuoteDraft);
+      markQuoteDraftDirty();
+    }
+    setDraftRecoveryReady(true);
+  }, [draftJobLoading, recoveredQuoteDraft, resumeJobId, savedWallsLoading]);
+
+  useEffect(() => {
+    if (!draftJob || !resumeJobId || recoveredQuoteDraft) return;
 
     applySavedJobToForm(draftJob);
 
@@ -280,12 +344,12 @@ export default function QuoteForm() {
     } else if (resumeJobId) {
       localStorage.removeItem("selectedOperator");
     }
-  }, [draftJob, operators, resumeJobId]);
+  }, [draftJob, operators, recoveredQuoteDraft, resumeJobId]);
 
   useEffect(() => {
-    if (!resumeJobId || savedWalls === undefined) return;
+    if (!resumeJobId || savedWalls === undefined || recoveredQuoteDraft) return;
     setWallsWithProducts(mapSavedWallsToFormWalls(savedWalls, draftJob?.totalEstimate));
-  }, [draftJob?.totalEstimate, resumeJobId, savedWalls]);
+  }, [draftJob?.totalEstimate, recoveredQuoteDraft, resumeJobId, savedWalls]);
 
   useEffect(() => {
     if (tempProductType !== "tv_backdrop") return;
@@ -337,6 +401,58 @@ export default function QuoteForm() {
     uploadImageMutation.isPending ||
     isUploadingImage;
   const formBusy = saveInProgress || isResumeLoading;
+
+  const quoteDraftSnapshot = useMemo<QuoteDraftSnapshot>(
+    () => ({
+      version: 1,
+      resumeJobId,
+      currentStep,
+      clientName,
+      clientEmail,
+      clientPhone,
+      clientAddress,
+      suburb,
+      appointmentDate,
+      appointmentTime,
+      referenceImageUrl,
+      wallsWithProducts,
+      customerAddOns,
+      updatedAt: new Date().toISOString(),
+    }),
+    [
+      appointmentDate,
+      appointmentTime,
+      clientAddress,
+      clientEmail,
+      clientName,
+      clientPhone,
+      currentStep,
+      customerAddOns,
+      referenceImageUrl,
+      resumeJobId,
+      suburb,
+      wallsWithProducts,
+    ]
+  );
+
+  useEffect(() => {
+    if (!draftRecoveryReady || isResumeLoading || saveInProgress) return;
+
+    if (!hasMeaningfulQuoteDraft(quoteDraftSnapshot)) {
+      clearQuoteDraft(resumeJobId);
+      clearQuoteDraftDirtyState();
+      return;
+    }
+
+    markQuoteDraftDirty();
+    const timeoutId = window.setTimeout(() => {
+      saveQuoteDraft(quoteDraftSnapshot);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [draftRecoveryReady, isResumeLoading, quoteDraftSnapshot, resumeJobId, saveInProgress]);
 
   const resetProductDraft = () => {
     setEditingProductId(null);
@@ -883,6 +999,9 @@ export default function QuoteForm() {
       const jobId = savedJob?.id || resumeJobId;
       if (!jobId) throw new Error("Quote could not be saved");
 
+      clearQuoteDraft(resumeJobId);
+      clearQuoteDraft(jobId);
+      clearQuoteDraftDirtyState();
       setResumeJobId(jobId);
       await utils.jobs.list.invalidate();
       const [freshJob, freshWalls] = await Promise.all([

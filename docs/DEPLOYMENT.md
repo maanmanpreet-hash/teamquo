@@ -18,7 +18,10 @@ Set these in the deployment environment:
 
 Production must have a real `DATABASE_URL`.
 
-If `DATABASE_URL` is missing, the app falls back to preview mode. Preview mode is only for local development and must not be used for deployment.
+Preview mode is only for local development and must not be used for deployment.
+
+Production startup now fails fast if `DATABASE_URL`, `JWT_SECRET`, `OAUTH_SERVER_URL`, or `VITE_APP_ID` are missing.
+Use `ALLOW_PREVIEW_MODE=true` only for local browser preview runs when you intentionally want preview mode.
 
 ## Build and start
 
@@ -27,6 +30,13 @@ If `DATABASE_URL` is missing, the app falls back to preview mode. Preview mode i
 - Start: `pnpm start`
 
 `pnpm start` runs the bundled server from `dist/index.js` with `NODE_ENV=production`.
+
+## Render
+
+- `render.yaml` is included for the web service build/start commands.
+- Set all required environment variables in the Render dashboard before the first deploy.
+- Attach a real persistent MySQL/TiDB database before traffic is sent to the service.
+- Do not set `ALLOW_PREVIEW_MODE` on Render.
 
 ## Pre-deploy checks
 
