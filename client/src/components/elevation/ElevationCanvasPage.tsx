@@ -13,15 +13,7 @@ export function ElevationCanvasPage({ document, pageIndex = 0 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const page = document.pages[pageIndex];
-  const plan = useMemo(() => {
-    if (!page) return null;
-
-    try {
-      return createElevationPagePlan(page, document);
-    } catch {
-      return null;
-    }
-  }, [document, page]);
+  const plan = useMemo(() => createElevationPagePlan(page, document), [document, page]);
 
   useEffect(() => {
     const node = containerRef.current;
@@ -30,23 +22,10 @@ export function ElevationCanvasPage({ document, pageIndex = 0 }: Props) {
     const update = () => setContainerWidth(node.clientWidth);
     update();
 
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", update);
-      return () => window.removeEventListener("resize", update);
-    }
-
     const observer = new ResizeObserver(update);
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
-
-  if (!page || !plan) {
-    return (
-      <div ref={containerRef} className="w-full bg-white p-6 text-sm text-slate-500">
-        Unable to render this setout page.
-      </div>
-    );
-  }
 
   const scale = containerWidth > 0 ? Math.min(containerWidth / plan.width, 1) : 1;
   const stageWidth = plan.width * scale;

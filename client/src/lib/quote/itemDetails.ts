@@ -104,6 +104,7 @@ export function buildItemDetails(product: WallProduct) {
     details.cabinetTopAfflMm = product.cabinetTopAfflMm;
     details.cabinetToTvGapMm = product.cabinetToTvGapMm;
     details.includeTvBracket = Boolean(product.includeTvBracket);
+    details.onsiteCarryoverNotes = product.onsiteCarryoverNotes;
   }
 
   if (["floating_cabinet", "side_tower", "shelving"].includes(product.productType)) {
@@ -116,6 +117,7 @@ export function buildItemDetails(product: WallProduct) {
     details.depthMm = product.cabinetDepthMm;
     details.heightFromFloorMm = product.cabinetHeightFromFloorMm;
     details.clientPreferenceNotes = product.clientPreferenceNotes;
+    details.onsiteCarryoverNotes = product.onsiteCarryoverNotes;
     details.sectionWidthsMm = sectionWidthsMm;
     details.shelfHeightsBySectionMm = shelfHeightsBySectionMm;
   }
@@ -154,6 +156,8 @@ export function applyItemDetailsToProduct(product: WallProduct, itemDetails: unk
     nextProduct.cabinetTopAfflMm = safeNumber(details.cabinetTopAfflMm);
     nextProduct.cabinetToTvGapMm = safeNumber(details.cabinetToTvGapMm);
     nextProduct.includeTvBracket = Boolean(details.includeTvBracket);
+    nextProduct.onsiteCarryoverNotes =
+      typeof details.onsiteCarryoverNotes === "string" ? details.onsiteCarryoverNotes : undefined;
   }
 
   if (["floating_cabinet", "side_tower", "shelving"].includes(product.productType)) {
@@ -177,6 +181,8 @@ export function applyItemDetailsToProduct(product: WallProduct, itemDetails: unk
     nextProduct.cabinetShelfHeightsBySectionMm = shelfHeightsBySectionMm;
     nextProduct.clientPreferenceNotes =
       product.clientPreferenceNotes ?? (typeof details.clientPreferenceNotes === "string" ? details.clientPreferenceNotes : undefined);
+    nextProduct.onsiteCarryoverNotes =
+      typeof details.onsiteCarryoverNotes === "string" ? details.onsiteCarryoverNotes : undefined;
   }
 
   if (product.productType === "custom_item") {

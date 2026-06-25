@@ -11,6 +11,8 @@ const Home = lazy(() => import("./pages/Home"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const PdfPreview = lazy(() => import("./pages/PdfPreview"));
 const QuoteForm = lazy(() => import("./pages/QuoteForm"));
+const OnsiteMode = lazy(() => import("./pages/OnsiteMode"));
+const OnsiteDrafts = lazy(() => import("./pages/OnsiteDrafts"));
 const AdminProducts = lazy(() => import("./pages/AdminProducts"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Setout = lazy(() => import("./pages/Setout"));
@@ -30,6 +32,8 @@ function Router() {
       <Switch>
         <Route path="/" component={Home} />
         <Route path="/dashboard" component={Dashboard} />
+        <Route path="/onsite/drafts" component={OnsiteDrafts} />
+        <Route path="/onsite" component={OnsiteMode} />
         <Route path="/print-preview/:token" component={PdfPreview} />
         <Route path="/quote/:jobId" component={QuoteForm} />
         <Route path="/setout/:jobId" component={Setout} />

@@ -22,20 +22,7 @@ export default function Setout() {
   const { data: job, isLoading: jobLoading } = trpc.jobs.getById.useQuery({ id: jobId }, { enabled: jobId > 0 && Boolean(user) });
   const { data: walls, isLoading: wallsLoading } = trpc.walls.getByJobId.useQuery({ jobId }, { enabled: jobId > 0 && Boolean(user) });
 
-  const { documents, generationError } = useMemo(() => {
-    if (!job || !walls) {
-      return { documents: [] as ElevationDocumentRecord[], generationError: "" };
-    }
-
-    try {
-      return { documents: buildElevationDocuments(job, walls), generationError: "" };
-    } catch (error: any) {
-      return {
-        documents: [] as ElevationDocumentRecord[],
-        generationError: error?.message || "Setout generation failed.",
-      };
-    }
-  }, [job, walls]);
+  const documents = useMemo(() => (job && walls ? buildElevationDocuments(job, walls) : []), [job, walls]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
   const selectedDocument =
     documents.find(document => document.id === selectedDocumentId) ||
@@ -148,11 +135,6 @@ export default function Setout() {
             </div>
           ) : !job ? (
             <div className="p-6 text-sm text-slate-600">Job not found.</div>
-          ) : generationError ? (
-            <div className="space-y-2 p-6 text-sm text-slate-600">
-              <p>Setout could not be prepared for this job.</p>
-              <p>{generationError}</p>
-            </div>
           ) : documents.length === 0 || !selectedDocument ? (
             <div className="space-y-2 p-6 text-sm text-slate-600">
               <p>No elevation document is ready for this job yet.</p>

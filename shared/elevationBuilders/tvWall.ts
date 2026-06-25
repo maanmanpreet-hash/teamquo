@@ -116,8 +116,8 @@ function buildWallSceneObjects(
       bottomMm: scene.tvBottomAfflMm,
       widthMm: scene.tvWidthMm,
       heightMm: scene.tvHeightMm,
-      fill: "#111827",
-      stroke: "#111827",
+      fill: "#d1d5db",
+      stroke: "#9ca3af",
       strokeWidth: 2,
     }),
   ];

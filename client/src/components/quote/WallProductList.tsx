@@ -87,6 +87,9 @@ export function WallProductList({
                   Cabinet top AFFL: {product.cabinetTopAfflMm} mm, gap: {product.cabinetToTvGapMm} mm
                 </p>
               )}
+              {product.onsiteCarryoverNotes && (
+                <p className="text-xs text-gray-600 whitespace-pre-line">Onsite notes: {product.onsiteCarryoverNotes}</p>
+              )}
               {product.productType === "tv_backdrop" && product.includeTvBracket && <p className="text-xs text-gray-600">TV bracket: included internally</p>}
               {product.productType === "acoustic_panel" && product.acousticFixingMethod && product.acousticFixingMethod !== "none" && <p className="text-xs text-gray-600">Fixing: {product.acousticFixingMethod.replace(/_/g, " ")}</p>}
               {product.manualReviewRequired && <p className="text-xs font-semibold text-amber-700">Manual review required</p>}

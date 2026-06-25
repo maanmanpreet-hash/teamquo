@@ -57,6 +57,7 @@ export interface WallProduct {
   cabinetToTvGapMm?: number;
   includeTvBracket?: boolean;
   customItemType?: CustomItemOption;
+  onsiteCarryoverNotes?: string;
   itemDetails?: string;
 }
 

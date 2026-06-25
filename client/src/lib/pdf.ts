@@ -1,5 +1,4 @@
 const PDF_PREVIEW_STORAGE_PREFIX = "pdf-preview:";
-const PDF_PREVIEW_LOCAL_TTL_MS = 24 * 60 * 60 * 1000;
 
 export type PdfPreviewPayload = {
   html: string;
@@ -7,7 +6,6 @@ export type PdfPreviewPayload = {
   backPath?: string;
   kind?: "customer-quote" | "generic";
   jobId?: number;
-  createdAt?: number;
 };
 
 function isFullHtmlDocument(html: string) {
@@ -15,7 +13,6 @@ function isFullHtmlDocument(html: string) {
 }
 
 function absolutizeRootRelativeImageSrc(html: string) {
-  if (typeof window === "undefined") return html;
   return html.replace(/(<img\b[^>]*\bsrc=["'])(\/[^"']*)(["'][^>]*>)/gi, (_, prefix: string, src: string, suffix: string) => {
     return `${prefix}${window.location.origin}${src}${suffix}`;
   });
@@ -34,10 +31,6 @@ function buildAutoPrintScript(pdfFilename: string) {
 }
 
 function normaliseQuoteHtml(html: string) {
-  if (typeof document === "undefined" || typeof window === "undefined") {
-    return isFullHtmlDocument(html) ? absolutizeRootRelativeImageSrc(html) : html;
-  }
-
   if (isFullHtmlDocument(html)) {
     return absolutizeRootRelativeImageSrc(html);
   }
@@ -58,51 +51,6 @@ function normaliseQuoteHtml(html: string) {
 function safePdfFilename(filename: string) {
   const base = filename.endsWith(".pdf") ? filename : `${filename}.pdf`;
   return base.replace(/[\\/:*?"<>|]+/g, "-");
-}
-
-function getSessionStorage() {
-  try {
-    return typeof sessionStorage === "undefined" ? null : sessionStorage;
-  } catch {
-    return null;
-  }
-}
-
-function getLocalStorage() {
-  try {
-    return typeof localStorage === "undefined" ? null : localStorage;
-  } catch {
-    return null;
-  }
-}
-
-function getPreviewStorageKey(token: string) {
-  return `${PDF_PREVIEW_STORAGE_PREFIX}${token}`;
-}
-
-function cleanupExpiredLocalPreviews(now = Date.now()) {
-  const storage = getLocalStorage();
-  if (!storage) return;
-
-  for (let index = storage.length - 1; index >= 0; index -= 1) {
-    const key = storage.key(index);
-    if (!key?.startsWith(PDF_PREVIEW_STORAGE_PREFIX)) continue;
-
-    try {
-      const parsed = JSON.parse(storage.getItem(key) || "null") as PdfPreviewPayload | null;
-      if (!parsed?.createdAt || now - parsed.createdAt > PDF_PREVIEW_LOCAL_TTL_MS) {
-        storage.removeItem(key);
-      }
-    } catch {
-      storage.removeItem(key);
-    }
-  }
-}
-
-function isValidPreviewPayload(payload: PdfPreviewPayload | null, now = Date.now()) {
-  if (!payload?.html || !payload?.filename) return false;
-  if (payload.createdAt && now - payload.createdAt > PDF_PREVIEW_LOCAL_TTL_MS) return false;
-  return true;
 }
 
 export function buildPrintHtml(content: string, pdfFilename: string, autoPrint = false) {
@@ -138,7 +86,6 @@ export function createPdfPreview(
   backPath?: string,
   options?: { kind?: "customer-quote" | "generic"; jobId?: number }
 ) {
-  cleanupExpiredLocalPreviews();
   const token = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const payload: PdfPreviewPayload = {
     html: normaliseQuoteHtml(html),
@@ -146,50 +93,27 @@ export function createPdfPreview(
     backPath,
     kind: options?.kind || "generic",
     jobId: options?.jobId,
-    createdAt: Date.now(),
   };
-  const serialized = JSON.stringify(payload);
-  const key = getPreviewStorageKey(token);
-  getSessionStorage()?.setItem(key, serialized);
-  getLocalStorage()?.setItem(key, serialized);
+  sessionStorage.setItem(`${PDF_PREVIEW_STORAGE_PREFIX}${token}`, JSON.stringify(payload));
   return token;
 }
 
 export function readPdfPreview(token: string) {
-  const key = getPreviewStorageKey(token);
-  const now = Date.now();
-
   try {
-    const storages = [getSessionStorage(), getLocalStorage()].filter((value): value is Storage => Boolean(value));
-
-    for (const storage of storages) {
-      const raw = storage.getItem(key);
-      if (!raw) continue;
-
-      const parsed = JSON.parse(raw) as PdfPreviewPayload;
-      if (isValidPreviewPayload(parsed, now)) {
-        return parsed;
-      }
-
-      clearPdfPreview(token);
-      return null;
-    }
-
-    return null;
+    const raw = sessionStorage.getItem(`${PDF_PREVIEW_STORAGE_PREFIX}${token}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PdfPreviewPayload;
+    return parsed?.html && parsed?.filename ? parsed : null;
   } catch {
-    clearPdfPreview(token);
     return null;
   }
 }
 
 export function clearPdfPreview(token: string) {
-  const key = getPreviewStorageKey(token);
-  getSessionStorage()?.removeItem(key);
-  getLocalStorage()?.removeItem(key);
+  sessionStorage.removeItem(`${PDF_PREVIEW_STORAGE_PREFIX}${token}`);
 }
 
 export function downloadBase64Pdf(base64: string, filename: string) {
-  if (typeof window === "undefined" || typeof document === "undefined") return;
   const binary = window.atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index++) {
